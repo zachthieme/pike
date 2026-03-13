@@ -87,9 +87,19 @@ func formatTaskLine(task model.Task, tagColors map[string]string, linkColor stri
 			if color == "" {
 				continue
 			}
+			style := TagStyle(color)
+			var styled string
+			if tag.Value != "" {
+				// Render prefix, value, and closing paren separately so that
+				// ANSI resets from link styling inside the value don't prevent
+				// the closing paren from being colored.
+				styled = style.Render("@"+tag.Name+"(") + style.Render(tag.Value) + style.Render(")")
+			} else {
+				styled = style.Render(token)
+			}
 			replacements = append(replacements, tagReplacement{
 				token:  token,
-				styled: TagStyle(color).Render(token),
+				styled: styled,
 			})
 		}
 		// Sort by token length descending so longer tokens (e.g. @delegated(John))
