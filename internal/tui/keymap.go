@@ -65,7 +65,7 @@ func DefaultKeyMap() KeyMap {
 		),
 		AllTasks: key.NewBinding(
 			key.WithKeys("a"),
-			key.WithHelp("a", "all tasks"),
+			key.WithHelp("a", "all open tasks"),
 		),
 		TagSearch: key.NewBinding(
 			key.WithKeys("t"),

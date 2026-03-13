@@ -259,7 +259,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.filterInput.SetValue("")
 		m.filterText = ""
 		m.filterInput.Prompt = "> "
-		m.filterInput.Placeholder = "search all tasks..."
+		m.filterInput.Placeholder = "search all open tasks..."
 		focusCmd := m.filterInput.Focus()
 		m.cursor = 0
 		m.rebuildSections()
@@ -418,9 +418,14 @@ func (m Model) visibleSections() []filter.ViewResult {
 
 // rebuildSections recomputes sections from allTasks, applying filter text.
 func (m *Model) rebuildSections() {
-	// In all-tasks mode, show every task in a single section.
+	// In all-tasks mode, show all open (non-completed) tasks in a single section.
 	if m.mode == modeAllTasks {
-		tasks := m.allTasks
+		var tasks []model.Task
+		for _, t := range m.allTasks {
+			if t.State != model.Completed {
+				tasks = append(tasks, t)
+			}
+		}
 
 		if m.filterText != "" {
 			tokens := strings.Fields(m.filterText)
@@ -434,7 +439,7 @@ func (m *Model) rebuildSections() {
 		}
 
 		sections := []filter.ViewResult{{
-			Title: "All Tasks",
+			Title: "All Open Tasks",
 			Color: "cyan",
 			Tasks: tasks,
 		}}
@@ -811,7 +816,7 @@ func (m Model) nowFunc() time.Time {
 	return time.Now()
 }
 
-// viewAllTasks renders all tasks in a single section with filter bar.
+// viewAllTasks renders all open tasks in a single section with filter bar.
 // Tasks are windowed to fit the terminal height, keeping the cursor visible.
 func (m Model) viewAllTasks() string {
 	var parts []string
@@ -915,7 +920,7 @@ func (m Model) handleTagSearchKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.filterText = "@" + selected
 			m.filterInput.SetValue("@" + selected)
 			m.filterInput.Prompt = "> "
-			m.filterInput.Placeholder = "search all tasks..."
+			m.filterInput.Placeholder = "search all open tasks..."
 			cmd := m.filterInput.Focus()
 			m.cursor = 0
 			m.rebuildSections()
