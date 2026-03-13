@@ -751,11 +751,11 @@ func (m Model) handleTagSearchKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case msg.Type == tea.KeyEnter:
-		// Select tag → switch to dashboard with filter set to @tag.
+		// Select tag → switch to all-tasks mode filtered to @tag.
 		tags := m.filteredTags()
 		if m.tagCursor < len(tags) {
 			selected := tags[m.tagCursor]
-			m.mode = modeDashboard
+			m.mode = modeAllTasks
 			m.filtering = true
 			m.filterText = "@" + selected
 			m.filterInput.SetValue("@" + selected)
