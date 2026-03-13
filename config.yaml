@@ -1,0 +1,66 @@
+notes_dir: ~/CloudDocs/Notes
+
+include:
+  - "**/*.md"
+
+exclude:
+  - "templates/**"
+  - "archive/**"
+  - "CLAUDE.md"
+  - "reviews/**"
+
+refresh_interval: 5s
+
+editor: hx
+
+link_color: blue
+
+tag_colors:
+  risk: red
+  due: red
+  today: green
+  completed: green
+  weekly: blue
+  monthly: blue
+  quarterly: blue
+  horizon: yellow
+  talk: magenta
+  _default: cyan
+
+views:
+  - title: "Overdue"
+    query: "open and @due < today"
+    sort: due_asc
+    color: red
+    order: 3
+
+  - title: "Next 3 Days"
+    query: "open and @due >= today and @due <= today+3d"
+    sort: due_asc
+    color: yellow
+    order: 4
+
+  - title: "Weekly"
+    query: "open and @weekly"
+    sort: due_asc
+    color: green
+    order: 1
+
+  - title: "Today"
+    query: "open and @today"
+    sort: due_asc
+    color: green
+    order: 2
+
+  - title: "Talk"
+    query: "open and @talk"
+    sort: file
+    color: magenta
+    order: 5
+
+  - title: "Horizon"
+    query: "@risk or @horizon"
+    sort: file
+    color: yellow
+    order: 6
+
