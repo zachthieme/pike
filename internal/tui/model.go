@@ -36,8 +36,9 @@ const (
 type Model struct {
 	config      *config.Config
 	allTasks    []model.Task
-	sections    []filter.ViewResult
-	cursor      int    // index into flat task list across all sections
+	sections     []filter.ViewResult
+	hiddenCounts []int // per-section count of @hidden tasks that were removed
+	cursor       int   // index into flat task list across all sections
 	focusedView string // "" = dashboard, otherwise title of focused section
 	showSummary bool
 	filterInput textinput.Model
@@ -46,6 +47,7 @@ type Model struct {
 	mode        viewMode
 	tagList     []string // unique tags for tag search mode
 	tagCursor   int      // cursor in tag list
+	showHidden  bool     // whether to show @hidden tasks
 	width       int
 	height      int
 	err         error
@@ -269,6 +271,12 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.tagCursor = 0
 		return m, nil
 
+	case key.Matches(msg, m.keys.ToggleHidden):
+		m.showHidden = !m.showHidden
+		m.rebuildSections()
+		m.clampCursor()
+		return m, nil
+
 	case key.Matches(msg, m.keys.Refresh):
 		return m, func() tea.Msg { return RefreshMsg{} }
 
@@ -417,11 +425,13 @@ func (m *Model) rebuildSections() {
 			tasks = filtered
 		}
 
-		m.sections = []filter.ViewResult{{
+		sections := []filter.ViewResult{{
 			Title: "All Tasks",
 			Color: "cyan",
 			Tasks: tasks,
 		}}
+		m.sections = sections
+		m.applyHiddenFilter()
 		return
 	}
 
@@ -454,6 +464,34 @@ func (m *Model) rebuildSections() {
 	}
 
 	m.sections = results
+	m.applyHiddenFilter()
+}
+
+// applyHiddenFilter strips @hidden tasks from each section when showHidden is
+// false, and populates hiddenCounts so the renderer can show a lock icon.
+func (m *Model) applyHiddenFilter() {
+	m.hiddenCounts = make([]int, len(m.sections))
+	if m.showHidden {
+		return
+	}
+	for i, sec := range m.sections {
+		var kept []model.Task
+		hidden := 0
+		for _, t := range sec.Tasks {
+			if t.HasTag("hidden") {
+				hidden++
+			} else {
+				kept = append(kept, t)
+			}
+		}
+		if hidden > 0 {
+			if kept == nil {
+				kept = []model.Task{}
+			}
+			m.sections[i].Tasks = kept
+			m.hiddenCounts[i] = hidden
+		}
+	}
 }
 
 // matchesFilter checks whether a task matches all filter tokens.
@@ -675,7 +713,8 @@ func (m Model) renderSections() (string, int) {
 		if len(sec.Tasks) == 0 {
 			continue
 		}
-		rendered := RenderSection(sec.Title, sec.Tasks, sec.Color, m.cursor, flatIdx, m.tagColors, m.width, m.config.LinkColor)
+		hiddenCount := m.hiddenCountFor(sec.Title)
+		rendered := RenderSection(sec.Title, sec.Tasks, sec.Color, m.cursor, flatIdx, m.tagColors, m.width, m.config.LinkColor, hiddenCount)
 		if rendered != "" {
 			parts = append(parts, rendered)
 		}
@@ -683,6 +722,16 @@ func (m Model) renderSections() (string, int) {
 	}
 
 	return strings.Join(parts, "\n"), flatIdx
+}
+
+// hiddenCountFor returns the number of hidden tasks for the section with the given title.
+func (m Model) hiddenCountFor(title string) int {
+	for i, sec := range m.sections {
+		if sec.Title == title && i < len(m.hiddenCounts) {
+			return m.hiddenCounts[i]
+		}
+	}
+	return 0
 }
 
 func (m Model) nowFunc() time.Time {

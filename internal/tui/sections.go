@@ -11,8 +11,10 @@ import (
 
 // RenderSection renders a single view section with a colored header and task list.
 // cursor is the global flat cursor index, sectionStart is the flat index of the
-// first task in this section. Returns empty string if tasks is empty.
-func RenderSection(title string, tasks []model.Task, color string, cursor int, sectionStart int, tagColors map[string]string, width int, linkColor string) string {
+// first task in this section. hiddenCount is the number of @hidden tasks stripped
+// from this section; when > 0 a lock icon is appended to the header.
+// Returns empty string if tasks is empty.
+func RenderSection(title string, tasks []model.Task, color string, cursor int, sectionStart int, tagColors map[string]string, width int, linkColor string, hiddenCount int) string {
 	if len(tasks) == 0 {
 		return ""
 	}
@@ -47,7 +49,11 @@ func RenderSection(title string, tasks []model.Task, color string, cursor int, s
 
 	content := strings.Join(lines, "\n")
 
-	headerText := headerStyle.Render(fmt.Sprintf(" %s ", title))
+	headerLabel := fmt.Sprintf(" %s ", title)
+	if hiddenCount > 0 {
+		headerLabel = fmt.Sprintf(" %s 🔒", title)
+	}
+	headerText := headerStyle.Render(headerLabel)
 	box := borderStyle.Render(content)
 
 	return headerText + "\n" + box
