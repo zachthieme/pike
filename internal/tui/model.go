@@ -52,7 +52,8 @@ type Model struct {
 	width       int
 	height      int
 	err         error
-	scanFunc    func() ([]model.Task, error) // injected for refresh
+	scanFunc    func() ([]model.Task, error)             // injected for refresh
+	configFunc  func() (*config.Config, error)            // injected for config reload
 	editorCmd   string
 	tagColors   map[string]string
 	keys        KeyMap
@@ -60,7 +61,7 @@ type Model struct {
 }
 
 // NewModel creates a new TUI model with the given configuration and initial tasks.
-func NewModel(cfg *config.Config, tasks []model.Task, scanFunc func() ([]model.Task, error)) Model {
+func NewModel(cfg *config.Config, tasks []model.Task, scanFunc func() ([]model.Task, error), configFunc ...func() (*config.Config, error)) Model {
 	ti := textinput.New()
 	ti.Placeholder = "type to filter..."
 	ti.CharLimit = 256
@@ -78,6 +79,9 @@ func NewModel(cfg *config.Config, tasks []model.Task, scanFunc func() ([]model.T
 		tagColors:   cfg.TagColors,
 		keys:        DefaultKeyMap(),
 		now:         time.Now,
+	}
+	if len(configFunc) > 0 {
+		m.configFunc = configFunc[0]
 	}
 
 	m.rebuildSections()
@@ -117,6 +121,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			nextTick = tea.Tick(m.config.RefreshInterval, func(time.Time) tea.Msg {
 				return RefreshMsg{}
 			})
+		}
+		// Hot-reload config (tag colors, views, etc.)
+		if m.configFunc != nil {
+			if cfg, err := m.configFunc(); err == nil {
+				m.config = cfg
+				m.tagColors = cfg.TagColors
+				m.editorCmd = cfg.Editor
+			}
 		}
 		if m.scanFunc != nil {
 			tasks, err := m.scanFunc()

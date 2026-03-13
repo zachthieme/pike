@@ -137,7 +137,7 @@ func run(args []string, stdout, stderr io.Writer) error {
 	case queryFlag != "":
 		return runQuery(stdout, tasks, queryFlag, sortFlag, cfg.TagColors, now, noColor)
 	default:
-		return runTUI(stdout, cfg, tasks, sc, viewFlag)
+		return runTUI(stdout, cfg, tasks, sc, viewFlag, configFlag)
 	}
 }
 
@@ -239,8 +239,11 @@ func runQuery(w io.Writer, tasks []model.Task, queryStr, sortOrder string, tagCo
 	return nil
 }
 
-func runTUI(_ io.Writer, cfg *config.Config, tasks []model.Task, sc *scanner.Scanner, viewFlag string) error {
-	m := tui.NewModel(cfg, tasks, sc.Refresh)
+func runTUI(_ io.Writer, cfg *config.Config, tasks []model.Task, sc *scanner.Scanner, viewFlag string, configPath string) error {
+	configReload := func() (*config.Config, error) {
+		return config.Load(configPath)
+	}
+	m := tui.NewModel(cfg, tasks, sc.Refresh, configReload)
 
 	// If --view flag is set, find and focus that section.
 	if viewFlag != "" {
