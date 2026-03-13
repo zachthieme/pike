@@ -1,8 +1,8 @@
 package filter
 
 import (
-	"tasks/internal/config"
-	"tasks/internal/model"
+	"pike/internal/config"
+	"pike/internal/model"
 	"testing"
 	"time"
 )

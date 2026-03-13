@@ -4,7 +4,7 @@ import (
 	"cmp"
 	"fmt"
 	"slices"
-	"tasks/internal/model"
+	"pike/internal/model"
 	"time"
 )
 

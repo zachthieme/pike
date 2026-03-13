@@ -5,10 +5,10 @@ import (
 	"strings"
 	"time"
 
-	"tasks/internal/config"
-	"tasks/internal/editor"
-	"tasks/internal/filter"
-	"tasks/internal/model"
+	"pike/internal/config"
+	"pike/internal/editor"
+	"pike/internal/filter"
+	"pike/internal/model"
 
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/textinput"

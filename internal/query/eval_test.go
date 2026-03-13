@@ -1,7 +1,7 @@
 package query
 
 import (
-	"tasks/internal/model"
+	"pike/internal/model"
 	"testing"
 	"time"
 )

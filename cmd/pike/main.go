@@ -12,20 +12,20 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"tasks/internal/config"
-	"tasks/internal/filter"
-	"tasks/internal/model"
-	"tasks/internal/render"
-	"tasks/internal/scanner"
-	"tasks/internal/tui"
+	"pike/internal/config"
+	"pike/internal/filter"
+	"pike/internal/model"
+	"pike/internal/render"
+	"pike/internal/scanner"
+	"pike/internal/tui"
 )
 
 var version = "dev"
 
-const usageText = `tasks — a terminal task dashboard for markdown notes
+const usageText = `pike — a terminal task dashboard for markdown notes
 
 Usage:
-  tasks [flags]
+  pike [flags]
 
 Flags:
   --dir, -d <path>       Notes directory (overrides config/env)
@@ -42,7 +42,7 @@ Flags:
 
 func main() {
 	if err := run(os.Args[1:], os.Stdout, os.Stderr); err != nil {
-		fmt.Fprintln(os.Stderr, "tasks:", err)
+		fmt.Fprintln(os.Stderr, "pike:", err)
 		os.Exit(1)
 	}
 }
@@ -51,7 +51,7 @@ func run(args []string, stdout, stderr io.Writer) error {
 	// Expand short flags to long forms before parsing.
 	expanded := expandShortFlags(args)
 
-	fs := flag.NewFlagSet("tasks", flag.ContinueOnError)
+	fs := flag.NewFlagSet("pike", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 
 	var (
@@ -88,7 +88,7 @@ func run(args []string, stdout, stderr io.Writer) error {
 		return nil
 	}
 	if versionFlag {
-		fmt.Fprintln(stdout, "tasks "+version)
+		fmt.Fprintln(stdout, "pike "+version)
 		return nil
 	}
 

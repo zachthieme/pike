@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"strings"
 
-	"tasks/internal/model"
+	"pike/internal/model"
 )
 
 // ANSI color escape codes.

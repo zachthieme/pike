@@ -1,27 +1,27 @@
-# tasks
+# pike
 
 A terminal dashboard for managing tasks scattered across markdown files. Scans your notes directory for checkbox items (`- [ ]`/`- [x]`) and tagged bullets (`- text @tag`), groups them into configurable views, and displays them in an interactive TUI.
 
 ## Installation
 
 ```bash
-go install ./cmd/tasks
+go install ./cmd/pike
 ```
 
 Or build locally:
 
 ```bash
-go build -o tasks ./cmd/tasks
+go build -o pike ./cmd/pike
 ```
 
 ## Quick Start
 
 ```bash
 # Point at your notes and launch the dashboard
-tasks --dir ~/notes
+pike --dir ~/notes
 
 # Or set it in config and just run
-tasks
+pike
 ```
 
 ## Task Format
@@ -57,7 +57,7 @@ Any other `@word` tag (e.g. `@today`, `@risk`, `@weekly`, `@talk`) is a plain ta
 ## Usage
 
 ```
-tasks [flags]
+pike [flags]
 ```
 
 ### Flags
@@ -79,19 +79,19 @@ tasks [flags]
 
 ```bash
 # Launch the TUI dashboard
-tasks
+pike
 
 # Show only overdue tasks
-tasks -q "open and @due < today"
+pike -q "open and @due < today"
 
 # List everything tagged @risk, sorted alphabetically
-tasks -q "@risk" --sort alpha
+pike -q "@risk" --sort alpha
 
 # Print a summary of open/overdue/due counts
-tasks --summary
+pike --summary
 
 # Start focused on the "Today" section
-tasks -v Today
+pike -v Today
 ```
 
 ## Configuration
@@ -99,9 +99,9 @@ tasks -v Today
 Config is loaded from (in order of precedence):
 
 1. `--config` flag
-2. `$TASKS_CONFIG` environment variable
-3. `$XDG_CONFIG_HOME/tasks/config.yaml`
-4. `~/.config/tasks/config.yaml`
+2. `$PIKE_CONFIG` environment variable
+3. `$XDG_CONFIG_HOME/pike/config.yaml`
+4. `~/.config/pike/config.yaml`
 5. Built-in defaults
 
 ### Config File
@@ -277,7 +277,16 @@ open and not @risk                      # open, excluding risk
 
 ### Filter Mode
 
-When the filter bar is active (`/`):
+When the filter bar is active (`/`), tokens are space-separated and ANDed:
+
+| Token | Meaning |
+|-------|---------|
+| `foo` | Text must contain "foo" |
+| `!bar` | Text must NOT contain "bar" |
+| `@tag` | Task must have `@tag` |
+| `!@tag` | Task must NOT have `@tag` |
+
+Example: `@talk foo !bob` shows tasks tagged `@talk` containing "foo" but not "bob".
 
 | Key | Action |
 |-----|--------|
@@ -327,7 +336,7 @@ When you press `Enter` on a task, the configured editor opens the file at the ta
 ## Project Structure
 
 ```
-cmd/tasks/main.go              CLI entrypoint and flag parsing
+cmd/pike/main.go               CLI entrypoint and flag parsing
 internal/
   model/task.go                Task, Tag, and TaskState types
   parser/parser.go             Markdown line parser

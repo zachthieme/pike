@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"tasks/internal/model"
+	"pike/internal/model"
 )
 
 func TestSingleFileMultipleTasks(t *testing.T) {

@@ -3,7 +3,7 @@ package parser
 import (
 	"regexp"
 	"strings"
-	"tasks/internal/model"
+	"pike/internal/model"
 	"time"
 )
 

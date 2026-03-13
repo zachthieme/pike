@@ -1,7 +1,7 @@
 package sort
 
 import (
-	"tasks/internal/model"
+	"pike/internal/model"
 	"testing"
 	"time"
 )

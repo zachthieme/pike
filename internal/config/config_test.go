@@ -339,8 +339,8 @@ func TestLoad_EnvVarFallback(t *testing.T) {
 		t.Fatalf("write temp config: %v", err)
 	}
 
-	// Set TASKS_CONFIG env var
-	t.Setenv("TASKS_CONFIG", cfgPath)
+	// Set PIKE_CONFIG env var
+	t.Setenv("PIKE_CONFIG", cfgPath)
 
 	// Load with empty path — should use env var
 	cfg, err := Load("")

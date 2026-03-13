@@ -45,8 +45,8 @@ type rawConfig struct {
 }
 
 // Load reads configuration from the given path. If path is empty, it checks
-// $TASKS_CONFIG, then $XDG_CONFIG_HOME/tasks/config.yaml, then
-// ~/.config/tasks/config.yaml. If no file is found at any path, defaults are
+// $PIKE_CONFIG, then $XDG_CONFIG_HOME/pike/config.yaml, then
+// ~/.config/pike/config.yaml. If no file is found at any path, defaults are
 // returned.
 func Load(path string) (*Config, error) {
 	path = resolveConfigPath(path)
@@ -81,13 +81,13 @@ func resolveConfigPath(path string) string {
 		return path
 	}
 
-	if env := os.Getenv("TASKS_CONFIG"); env != "" {
+	if env := os.Getenv("PIKE_CONFIG"); env != "" {
 		return env
 	}
 
 	xdg := os.Getenv("XDG_CONFIG_HOME")
 	if xdg != "" {
-		p := filepath.Join(xdg, "tasks", "config.yaml")
+		p := filepath.Join(xdg, "pike", "config.yaml")
 		if fileExists(p) {
 			return p
 		}
@@ -95,7 +95,7 @@ func resolveConfigPath(path string) string {
 
 	home, err := os.UserHomeDir()
 	if err == nil {
-		p := filepath.Join(home, ".config", "tasks", "config.yaml")
+		p := filepath.Join(home, ".config", "pike", "config.yaml")
 		if fileExists(p) {
 			return p
 		}

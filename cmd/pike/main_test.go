@@ -16,8 +16,8 @@ func TestVersionFlag(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	out := stdout.String()
-	if !strings.Contains(out, "tasks "+version) {
-		t.Errorf("expected version output containing %q, got %q", "tasks "+version, out)
+	if !strings.Contains(out, "pike "+version) {
+		t.Errorf("expected version output containing %q, got %q", "pike "+version, out)
 	}
 }
 
@@ -53,7 +53,7 @@ func TestHelpShortFlag(t *testing.T) {
 
 func TestMissingNotesDir(t *testing.T) {
 	t.Setenv("NOTES", "")
-	t.Setenv("TASKS_CONFIG", "")
+	t.Setenv("PIKE_CONFIG", "")
 
 	var stdout, stderr bytes.Buffer
 	err := run([]string{"--config", "/dev/null"}, &stdout, &stderr)

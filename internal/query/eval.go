@@ -2,7 +2,7 @@ package query
 
 import (
 	"regexp"
-	"tasks/internal/model"
+	"pike/internal/model"
 	"time"
 )
 

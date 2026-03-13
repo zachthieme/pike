@@ -5,9 +5,9 @@ import (
 	"testing"
 	"time"
 
-	"tasks/internal/config"
-	"tasks/internal/filter"
-	"tasks/internal/model"
+	"pike/internal/config"
+	"pike/internal/filter"
+	"pike/internal/model"
 
 	tea "github.com/charmbracelet/bubbletea"
 )

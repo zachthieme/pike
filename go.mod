@@ -1,4 +1,4 @@
-module tasks
+module pike
 
 go 1.25.5
 

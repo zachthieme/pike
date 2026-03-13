@@ -10,8 +10,8 @@ import (
 
 	"github.com/bmatcuk/doublestar/v4"
 
-	"tasks/internal/model"
-	"tasks/internal/parser"
+	"pike/internal/model"
+	"pike/internal/parser"
 )
 
 // Scanner walks a directory tree, finds files matching include/exclude globs,

@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"tasks/internal/model"
+	"pike/internal/model"
 )
 
 const (

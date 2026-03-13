@@ -1,10 +1,10 @@
 package filter
 
 import (
-	"tasks/internal/config"
-	"tasks/internal/model"
-	"tasks/internal/query"
-	tasksort "tasks/internal/sort"
+	"pike/internal/config"
+	"pike/internal/model"
+	"pike/internal/query"
+	tasksort "pike/internal/sort"
 	"time"
 )
 

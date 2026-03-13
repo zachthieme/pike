@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"tasks/internal/model"
+	"pike/internal/model"
 
 	"github.com/charmbracelet/lipgloss"
 )
