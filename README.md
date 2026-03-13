@@ -271,13 +271,15 @@ open and not @risk                      # open, excluding risk
 |-----|--------|
 | `Enter` | Open task in editor at the correct line |
 | `/` | Activate filter bar |
+| `a` | All tasks — show every task with search |
+| `t` | Tag search — browse and pick a tag |
 | `s` | Toggle summary overlay |
 | `r` | Refresh (re-scan files) |
 | `q` | Quit |
 
 ### Filter Mode
 
-When the filter bar is active (`/`), tokens are space-separated and ANDed:
+When the filter bar is active (`/` or `a`), tokens are space-separated and ANDed:
 
 | Token | Meaning |
 |-------|---------|
@@ -296,6 +298,18 @@ Example: `@talk foo !bob` shows tasks tagged `@talk` containing "foo" but not "b
 | `Tab` | Jump to next section |
 | `Enter` | Open selected task in editor |
 | `Esc` | Clear filter and exit filter mode |
+
+### Tag Search Mode
+
+Press `t` to browse all tags found in your notes. Type to narrow the list, navigate with arrows, and press `Enter` to select a tag — returns to the dashboard filtered to that tag.
+
+| Key | Action |
+|-----|--------|
+| Type | Filter tag list |
+| `Up` / `Ctrl+P` | Move cursor up |
+| `Down` / `Ctrl+N` | Move cursor down |
+| `Enter` | Select tag and filter dashboard |
+| `Esc` | Cancel and return to dashboard |
 
 ## Display
 

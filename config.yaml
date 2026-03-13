@@ -13,21 +13,33 @@ refresh_interval: 5s
 
 editor: hx
 
-link_color: blue
+link_color: "#6CB4EE"
 
 tag_colors:
-  risk: red
-  due: red
+  risk: "#FF6B6B"
+  due: "#FF6B6B"
   today: green
   completed: green
-  weekly: blue
-  monthly: blue
-  quarterly: blue
-  horizon: yellow
+  weekly: "#5B9BD5"
+  monthly: "#7B68EE"
+  quarterly: "#9370DB"
+  horizon: "#FFD93D"
   talk: magenta
   _default: cyan
 
 views:
+  - title: "Weekly"
+    query: "open and @weekly"
+    sort: due_asc
+    color: "#4EC9B0"
+    order: 1
+
+  - title: "Today"
+    query: "open and @today"
+    sort: due_asc
+    color: green
+    order: 2
+
   - title: "Overdue"
     query: "open and @due < today"
     sort: due_asc
@@ -40,18 +52,6 @@ views:
     color: yellow
     order: 4
 
-  - title: "Weekly"
-    query: "open and @weekly"
-    sort: due_asc
-    color: green
-    order: 1
-
-  - title: "Today"
-    query: "open and @today"
-    sort: due_asc
-    color: green
-    order: 2
-
   - title: "Talk"
     query: "open and @talk"
     sort: file
@@ -61,6 +61,6 @@ views:
   - title: "Horizon"
     query: "@risk or @horizon"
     sort: file
-    color: yellow
+    color: "#DBA04D"
     order: 6
 

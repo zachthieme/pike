@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	gosort "sort"
 	"strings"
 	"time"
 
@@ -21,6 +22,15 @@ type RefreshMsg struct{}
 // EditorFinishedMsg is sent after the editor process exits.
 type EditorFinishedMsg struct{ Err error }
 
+// viewMode tracks the current display mode.
+type viewMode int
+
+const (
+	modeDashboard viewMode = iota
+	modeAllTasks
+	modeTagSearch
+)
+
 // Model is the main Bubbletea model for the tasks TUI.
 type Model struct {
 	config      *config.Config
@@ -32,6 +42,9 @@ type Model struct {
 	filterInput textinput.Model
 	filtering   bool
 	filterText  string
+	mode        viewMode
+	tagList     []string // unique tags for tag search mode
+	tagCursor   int      // cursor in tag list
 	width       int
 	height      int
 	err         error
@@ -114,6 +127,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	// Tag search mode: navigate/filter tag list.
+	if m.mode == modeTagSearch {
+		return m.handleTagSearchKey(msg)
+	}
+
 	// If filtering, handle text input first.
 	if m.filtering {
 		switch {
@@ -122,6 +140,9 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.filterText = ""
 			m.filterInput.SetValue("")
 			m.filterInput.Blur()
+			if m.mode == modeAllTasks {
+				m.mode = modeDashboard
+			}
 			m.rebuildSections()
 			m.clampCursor()
 			return m, nil
@@ -159,9 +180,13 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, tea.Quit
 
 	case key.Matches(msg, m.keys.Escape):
-		// Escape priority: dismiss summary -> exit focus -> do nothing
+		// Escape priority: dismiss summary -> exit mode -> exit focus -> do nothing
 		if m.showSummary {
 			m.showSummary = false
+		} else if m.mode != modeDashboard {
+			m.mode = modeDashboard
+			m.rebuildSections()
+			m.clampCursor()
 		} else if m.focusedView >= 0 {
 			m.focusedView = -1
 			m.rebuildSections()
@@ -208,6 +233,27 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case key.Matches(msg, m.keys.Filter):
 		m.filtering = true
 		m.filterInput.Focus()
+		return m, nil
+
+	case key.Matches(msg, m.keys.AllTasks):
+		m.mode = modeAllTasks
+		m.filtering = true
+		m.filterInput.SetValue("")
+		m.filterText = ""
+		m.filterInput.Focus()
+		m.cursor = 0
+		m.rebuildSections()
+		m.clampCursor()
+		return m, nil
+
+	case key.Matches(msg, m.keys.TagSearch):
+		m.mode = modeTagSearch
+		m.buildTagList()
+		m.filterInput.SetValue("")
+		m.filterText = ""
+		m.filterInput.Focus()
+		m.filtering = true
+		m.tagCursor = 0
 		return m, nil
 
 	case key.Matches(msg, m.keys.Refresh):
@@ -258,6 +304,13 @@ func (m Model) openEditor() (tea.Model, tea.Cmd) {
 func (m Model) View() string {
 	if m.showSummary {
 		return m.viewSummary()
+	}
+
+	switch m.mode {
+	case modeAllTasks:
+		return m.viewAllTasks()
+	case modeTagSearch:
+		return m.viewTagSearch()
 	}
 
 	if m.focusedView >= 0 {
@@ -367,6 +420,30 @@ func (m Model) visibleSections() []filter.ViewResult {
 
 // rebuildSections recomputes sections from allTasks, applying filter text.
 func (m *Model) rebuildSections() {
+	// In all-tasks mode, show every task in a single section.
+	if m.mode == modeAllTasks {
+		all := make([]model.Task, len(m.allTasks))
+		copy(all, m.allTasks)
+
+		if m.filterText != "" {
+			tokens := strings.Fields(m.filterText)
+			var filtered []model.Task
+			for _, t := range all {
+				if matchesFilter(t, tokens) {
+					filtered = append(filtered, t)
+				}
+			}
+			all = filtered
+		}
+
+		m.sections = []filter.ViewResult{{
+			Title: "All Tasks",
+			Color: "cyan",
+			Tasks: all,
+		}}
+		return
+	}
+
 	now := m.nowFunc()
 	results, err := filter.ApplyViews(m.allTasks, m.config.Views, now)
 	if err != nil {
@@ -598,5 +675,141 @@ func (m Model) nowFunc() time.Time {
 		return m.now()
 	}
 	return time.Now()
+}
+
+// viewAllTasks renders all tasks in a single section with filter bar.
+func (m Model) viewAllTasks() string {
+	var parts []string
+
+	if m.filtering {
+		parts = append(parts, m.filterInput.View())
+		parts = append(parts, "")
+	}
+
+	sections := m.displaySections()
+	flatIdx := 0
+	for _, sec := range sections {
+		if len(sec.Tasks) == 0 {
+			continue
+		}
+		rendered := RenderSection(sec.Title, sec.Tasks, sec.Color, m.cursor, flatIdx, m.tagColors, m.width, m.config.LinkColor)
+		if rendered != "" {
+			parts = append(parts, rendered)
+		}
+		flatIdx += len(sec.Tasks)
+	}
+
+	if flatIdx == 0 {
+		parts = append(parts, "  No matching tasks")
+	}
+
+	return strings.Join(parts, "\n")
+}
+
+// viewTagSearch renders the tag picker with filter bar.
+func (m Model) viewTagSearch() string {
+	var parts []string
+
+	parts = append(parts, m.filterInput.View())
+	parts = append(parts, "")
+
+	tags := m.filteredTags()
+	if len(tags) == 0 {
+		parts = append(parts, "  No matching tags")
+	} else {
+		for i, tag := range tags {
+			line := fmt.Sprintf("  @%s", tag)
+			if i == m.tagCursor {
+				line = TaskStyle(true).Render(fmt.Sprintf("▸ @%s", tag))
+			}
+			parts = append(parts, line)
+		}
+	}
+
+	return strings.Join(parts, "\n")
+}
+
+// handleTagSearchKey handles key events in tag search mode.
+func (m Model) handleTagSearchKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch {
+	case key.Matches(msg, m.keys.Escape):
+		m.mode = modeDashboard
+		m.filtering = false
+		m.filterText = ""
+		m.filterInput.SetValue("")
+		m.filterInput.Blur()
+		m.rebuildSections()
+		m.clampCursor()
+		return m, nil
+
+	case key.Matches(msg, m.keys.Quit):
+		return m, tea.Quit
+
+	case msg.Type == tea.KeyDown || msg.Type == tea.KeyCtrlN:
+		tags := m.filteredTags()
+		if m.tagCursor < len(tags)-1 {
+			m.tagCursor++
+		}
+		return m, nil
+
+	case msg.Type == tea.KeyUp || msg.Type == tea.KeyCtrlP:
+		if m.tagCursor > 0 {
+			m.tagCursor--
+		}
+		return m, nil
+
+	case msg.Type == tea.KeyEnter:
+		// Select tag → switch to dashboard with filter set to @tag.
+		tags := m.filteredTags()
+		if m.tagCursor < len(tags) {
+			selected := tags[m.tagCursor]
+			m.mode = modeDashboard
+			m.filtering = true
+			m.filterText = "@" + selected
+			m.filterInput.SetValue("@" + selected)
+			m.filterInput.Focus()
+			m.cursor = 0
+			m.rebuildSections()
+			m.clampCursor()
+		}
+		return m, nil
+
+	default:
+		var cmd tea.Cmd
+		m.filterInput, cmd = m.filterInput.Update(msg)
+		m.filterText = m.filterInput.Value()
+		m.tagCursor = 0
+		return m, cmd
+	}
+}
+
+// buildTagList extracts unique tag names from all tasks, sorted alphabetically.
+func (m *Model) buildTagList() {
+	seen := make(map[string]bool)
+	for _, t := range m.allTasks {
+		for _, tag := range t.Tags {
+			seen[tag.Name] = true
+		}
+	}
+	m.tagList = make([]string, 0, len(seen))
+	for name := range seen {
+		m.tagList = append(m.tagList, name)
+	}
+	gosort.Strings(m.tagList)
+}
+
+// filteredTags returns the tag list filtered by current filter text.
+func (m Model) filteredTags() []string {
+	if m.filterText == "" {
+		return m.tagList
+	}
+	lower := strings.ToLower(m.filterText)
+	var result []string
+	for _, tag := range m.tagList {
+		if strings.Contains(strings.ToLower(tag), lower) {
+			result = append(result, tag)
+		}
+	}
+	return result
 }
 

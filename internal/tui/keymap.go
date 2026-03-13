@@ -7,8 +7,9 @@ type KeyMap struct {
 	Up, Down, Top, Bottom    key.Binding
 	NextSection, PrevSection key.Binding
 	FocusSection             [9]key.Binding // 1-9
-	Enter, Quit, Summary     key.Binding
-	Filter, Escape, Refresh  key.Binding
+	Enter, Quit, Summary        key.Binding
+	Filter, Escape, Refresh     key.Binding
+	AllTasks, TagSearch         key.Binding
 }
 
 // DefaultKeyMap returns the default key bindings.
@@ -61,6 +62,14 @@ func DefaultKeyMap() KeyMap {
 		Refresh: key.NewBinding(
 			key.WithKeys("r"),
 			key.WithHelp("r", "refresh"),
+		),
+		AllTasks: key.NewBinding(
+			key.WithKeys("a"),
+			key.WithHelp("a", "all tasks"),
+		),
+		TagSearch: key.NewBinding(
+			key.WithKeys("t"),
+			key.WithHelp("t", "search tags"),
 		),
 	}
 
