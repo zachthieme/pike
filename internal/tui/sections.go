@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 
 	"pike/internal/model"
@@ -71,8 +72,18 @@ func formatTaskLine(task model.Task, tagColors map[string]string, linkColor stri
 
 	// Colorize tags in the text.
 	if tagColors != nil {
+		type tagReplacement struct {
+			token  string
+			styled string
+		}
+		seen := make(map[string]bool)
+		var replacements []tagReplacement
 		for _, tag := range task.Tags {
 			token := tagToken(tag)
+			if seen[token] {
+				continue
+			}
+			seen[token] = true
 			color, ok := tagColors[tag.Name]
 			if !ok {
 				color = tagColors["_default"]
@@ -80,8 +91,18 @@ func formatTaskLine(task model.Task, tagColors map[string]string, linkColor stri
 			if color == "" {
 				continue
 			}
-			styled := TagStyle(color).Render(token)
-			text = strings.ReplaceAll(text, token, styled)
+			replacements = append(replacements, tagReplacement{
+				token:  token,
+				styled: TagStyle(color).Render(token),
+			})
+		}
+		// Sort by token length descending so longer tokens (e.g. @delegated(John))
+		// are replaced before shorter prefixes (e.g. @delegated).
+		sort.Slice(replacements, func(i, j int) bool {
+			return len(replacements[i].token) > len(replacements[j].token)
+		})
+		for _, r := range replacements {
+			text = strings.Replace(text, r.token, r.styled, 1)
 		}
 	}
 
