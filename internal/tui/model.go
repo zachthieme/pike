@@ -108,6 +108,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 			m.allTasks = tasks
+			if m.mode == modeTagSearch {
+				m.buildTagList()
+			}
 			m.rebuildSections()
 			m.clampCursor()
 		}
@@ -136,10 +139,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if m.filtering {
 		switch {
 		case key.Matches(msg, m.keys.Escape):
-			m.filtering = false
-			m.filterText = ""
-			m.filterInput.SetValue("")
-			m.filterInput.Blur()
+			m.clearFilter()
 			if m.mode == modeAllTasks {
 				m.mode = modeDashboard
 			}
@@ -321,54 +321,20 @@ func (m Model) View() string {
 }
 
 func (m Model) viewDashboard() string {
-	var parts []string
+	body, _ := m.renderSections()
 
-	// Filter input at top when active
-	if m.filtering {
-		parts = append(parts, m.filterInput.View())
-		parts = append(parts, "")
-	}
-
-	flatIdx := 0
-	sections := m.displaySections()
-	for _, sec := range sections {
-		if len(sec.Tasks) == 0 {
-			continue
-		}
-		rendered := RenderSection(sec.Title, sec.Tasks, sec.Color, m.cursor, flatIdx, m.tagColors, m.width, m.config.LinkColor)
-		if rendered != "" {
-			parts = append(parts, rendered)
-		}
-		flatIdx += len(sec.Tasks)
-	}
-
-	// Footer
 	openCount := m.countOpen()
 	footer := FooterStyle().Render(fmt.Sprintf("%s %d open", strings.Repeat("\u2500", max(0, m.width-10)), openCount))
-	parts = append(parts, footer)
 
-	return strings.Join(parts, "\n")
+	return body + "\n" + footer
 }
 
 func (m Model) viewFocused() string {
-	var parts []string
-
-	// Filter input at top when active
-	if m.filtering {
-		parts = append(parts, m.filterInput.View())
-		parts = append(parts, "")
+	body, count := m.renderSections()
+	if count == 0 {
+		return body + "\nNo tasks"
 	}
-
-	sections := m.displaySections()
-	if len(sections) == 0 {
-		return strings.Join(parts, "\n") + "No tasks"
-	}
-
-	sec := sections[0]
-	rendered := RenderSection(sec.Title, sec.Tasks, sec.Color, m.cursor, 0, m.tagColors, m.width, m.config.LinkColor)
-	parts = append(parts, rendered)
-
-	return strings.Join(parts, "\n")
+	return body
 }
 
 func (m Model) viewSummary() string {
@@ -422,24 +388,23 @@ func (m Model) visibleSections() []filter.ViewResult {
 func (m *Model) rebuildSections() {
 	// In all-tasks mode, show every task in a single section.
 	if m.mode == modeAllTasks {
-		all := make([]model.Task, len(m.allTasks))
-		copy(all, m.allTasks)
+		tasks := m.allTasks
 
 		if m.filterText != "" {
 			tokens := strings.Fields(m.filterText)
 			var filtered []model.Task
-			for _, t := range all {
+			for _, t := range tasks {
 				if matchesFilter(t, tokens) {
 					filtered = append(filtered, t)
 				}
 			}
-			all = filtered
+			tasks = filtered
 		}
 
 		m.sections = []filter.ViewResult{{
 			Title: "All Tasks",
 			Color: "cyan",
-			Tasks: all,
+			Tasks: tasks,
 		}}
 		return
 	}
@@ -670,15 +635,17 @@ func (m Model) countCompletedThisWeek() int {
 	return count
 }
 
-func (m Model) nowFunc() time.Time {
-	if m.now != nil {
-		return m.now()
-	}
-	return time.Now()
+// clearFilter resets filter state and blurs the input.
+func (m *Model) clearFilter() {
+	m.filtering = false
+	m.filterText = ""
+	m.filterInput.SetValue("")
+	m.filterInput.Blur()
 }
 
-// viewAllTasks renders all tasks in a single section with filter bar.
-func (m Model) viewAllTasks() string {
+// renderSections renders the filter bar (if active) and all non-empty sections.
+// Returns the rendered string and the total number of tasks rendered.
+func (m Model) renderSections() (string, int) {
 	var parts []string
 
 	if m.filtering {
@@ -699,11 +666,23 @@ func (m Model) viewAllTasks() string {
 		flatIdx += len(sec.Tasks)
 	}
 
-	if flatIdx == 0 {
-		parts = append(parts, "  No matching tasks")
-	}
+	return strings.Join(parts, "\n"), flatIdx
+}
 
-	return strings.Join(parts, "\n")
+func (m Model) nowFunc() time.Time {
+	if m.now != nil {
+		return m.now()
+	}
+	return time.Now()
+}
+
+// viewAllTasks renders all tasks in a single section with filter bar.
+func (m Model) viewAllTasks() string {
+	body, count := m.renderSections()
+	if count == 0 {
+		return body + "\n  No matching tasks"
+	}
+	return body
 }
 
 // viewTagSearch renders the tag picker with filter bar.
@@ -734,10 +713,7 @@ func (m Model) handleTagSearchKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch {
 	case key.Matches(msg, m.keys.Escape):
 		m.mode = modeDashboard
-		m.filtering = false
-		m.filterText = ""
-		m.filterInput.SetValue("")
-		m.filterInput.Blur()
+		m.clearFilter()
 		m.rebuildSections()
 		m.clampCursor()
 		return m, nil
