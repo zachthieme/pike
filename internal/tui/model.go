@@ -15,6 +15,7 @@ import (
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 )
 
 // RefreshMsg triggers a re-scan of task files.
@@ -64,6 +65,8 @@ func NewModel(cfg *config.Config, tasks []model.Task, scanFunc func() ([]model.T
 	ti.Placeholder = "type to filter..."
 	ti.CharLimit = 256
 	ti.Prompt = "/ "
+	ti.PromptStyle = lipgloss.NewStyle().Bold(true)
+	ti.PlaceholderStyle = lipgloss.NewStyle().Faint(true).Foreground(lipgloss.Color("7"))
 
 	m := Model{
 		config:      cfg,
@@ -247,29 +250,33 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	case key.Matches(msg, m.keys.Filter):
 		m.filtering = true
-		m.filterInput.Focus()
-		return m, nil
+		cmd := m.filterInput.Focus()
+		return m, cmd
 
 	case key.Matches(msg, m.keys.AllTasks):
 		m.mode = modeAllTasks
 		m.filtering = true
 		m.filterInput.SetValue("")
 		m.filterText = ""
-		m.filterInput.Focus()
+		m.filterInput.Prompt = "> "
+		m.filterInput.Placeholder = "search all tasks..."
+		focusCmd := m.filterInput.Focus()
 		m.cursor = 0
 		m.rebuildSections()
 		m.clampCursor()
-		return m, nil
+		return m, tea.Batch(focusCmd, func() tea.Msg { return tea.ClearScreen() })
 
 	case key.Matches(msg, m.keys.TagSearch):
 		m.mode = modeTagSearch
 		m.buildTagList()
 		m.filterInput.SetValue("")
 		m.filterText = ""
-		m.filterInput.Focus()
+		m.filterInput.Prompt = "> "
+		m.filterInput.Placeholder = "search tags..."
+		focusCmd := m.filterInput.Focus()
 		m.filtering = true
 		m.tagCursor = 0
-		return m, nil
+		return m, tea.Batch(focusCmd, func() tea.Msg { return tea.ClearScreen() })
 
 	case key.Matches(msg, m.keys.ToggleHidden):
 		m.showHidden = !m.showHidden
@@ -695,6 +702,8 @@ func (m *Model) clearFilter() {
 	m.filtering = false
 	m.filterText = ""
 	m.filterInput.SetValue("")
+	m.filterInput.Prompt = "/ "
+	m.filterInput.Placeholder = "type to filter..."
 	m.filterInput.Blur()
 }
 
@@ -739,26 +748,42 @@ func (m Model) hiddenCountFor(title string) int {
 // It finds the line containing the cursor marker (reverse video) and shows a
 // window of m.height lines centered on it.
 func (m Model) truncateView(s string) string {
+	return m.truncateViewPinTop(s, 0)
+}
+
+// truncateViewPinTop ensures the rendered output fits within the terminal
+// height, keeping the first pinnedTop lines always visible. The remaining
+// lines scroll to keep the cursor-selected line on screen.
+func (m Model) truncateViewPinTop(s string, pinnedTop int) string {
 	if m.height <= 0 {
 		return s
 	}
 	lines := strings.Split(s, "\n")
-	maxLines := m.height - 1 // reserve 1 line for bubbletea's trailing newline
+	maxLines := m.height - 1
 	if len(lines) <= maxLines {
 		return s
 	}
 
-	// Find the line with the selected cursor (contains reverse-video escape).
-	cursorLine := 0
-	for i, line := range lines {
+	if pinnedTop >= maxLines {
+		pinnedTop = 0
+	}
+
+	top := lines[:pinnedTop]
+	rest := lines[pinnedTop:]
+
+	// Find the line with the selected cursor (reverse-video escape).
+	cursorIdx := 0
+	for i, line := range rest {
 		if strings.Contains(line, "\x1b[7m") {
-			cursorLine = i
+			cursorIdx = i
 			break
 		}
 	}
 
-	start, end := scrollWindow(cursorLine, len(lines), maxLines)
-	return strings.Join(lines[start:end], "\n")
+	available := maxLines - pinnedTop
+	start, end := scrollWindow(cursorIdx, len(rest), available)
+	result := append(top, rest[start:end]...)
+	return strings.Join(result, "\n")
 }
 
 // scrollWindow computes the start/end indices of a task window of size
@@ -791,10 +816,9 @@ func (m Model) nowFunc() time.Time {
 func (m Model) viewAllTasks() string {
 	var parts []string
 
-	if m.filtering {
-		parts = append(parts, m.filterInput.View())
-		parts = append(parts, "")
-	}
+	// Always show the search bar in all-tasks mode.
+	parts = append(parts, m.filterInput.View())
+	parts = append(parts, "")
 
 	sections := m.displaySections()
 	if len(sections) == 0 || len(sections[0].Tasks) == 0 {
@@ -806,12 +830,10 @@ func (m Model) viewAllTasks() string {
 	tasks := sec.Tasks
 
 	// Calculate available lines for task rows inside the border box.
-	// Overhead: section header (1) + border top (1) + border bottom (1)
-	//           + scroll footer (1) + bubbletea trailing newline (1) = 5
-	overhead := 5
-	if m.filtering {
-		overhead += 2 // filter input + blank line
-	}
+	// Overhead: search bar (1) + blank line (1) + section header (1)
+	//           + border top (1) + border bottom (1)
+	//           + scroll footer (1) + bubbletea rendering (2) = 8
+	overhead := 8
 
 	maxVisible := m.height - overhead
 	if maxVisible < 3 {
@@ -830,7 +852,8 @@ func (m Model) viewAllTasks() string {
 		parts = append(parts, FooterStyle().Render(fmt.Sprintf("  %d–%d of %d tasks", start+1, end, len(tasks))))
 	}
 
-	return strings.Join(parts, "\n")
+	// Pin the search bar (first 2 lines) and truncate the rest to fit.
+	return m.truncateViewPinTop(strings.Join(parts, "\n"), 2)
 }
 
 // viewTagSearch renders the tag picker with filter bar.
@@ -891,10 +914,13 @@ func (m Model) handleTagSearchKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.filtering = true
 			m.filterText = "@" + selected
 			m.filterInput.SetValue("@" + selected)
-			m.filterInput.Focus()
+			m.filterInput.Prompt = "> "
+			m.filterInput.Placeholder = "search all tasks..."
+			cmd := m.filterInput.Focus()
 			m.cursor = 0
 			m.rebuildSections()
 			m.clampCursor()
+			return m, cmd
 		}
 		return m, nil
 
