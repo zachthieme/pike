@@ -63,14 +63,10 @@ func RenderSection(title string, tasks []model.Task, color string, cursor int, s
 // formatTaskLine formats a single task line with colorized tags and styled links.
 // When selected is true, the leading marker is highlighted with reverse video.
 func formatTaskLine(task model.Task, tagColors map[string]string, linkColor string, selected bool) string {
-	var text string
-	if linkColor != "" {
-		text = prettifyAndStyleLinks(task.Text, LinkStyle(linkColor))
-	} else {
-		text = prettifyText(task.Text)
-	}
+	text := task.Text
 
-	// Colorize tags in the text.
+	// Colorize tags first (before prettify, which may transform wiki-links
+	// inside tag values like @delegated([[slug|Name]])).
 	if tagColors != nil {
 		type tagReplacement struct {
 			token  string
@@ -104,6 +100,14 @@ func formatTaskLine(task model.Task, tagColors map[string]string, linkColor stri
 		for _, r := range replacements {
 			text = strings.Replace(text, r.token, r.styled, 1)
 		}
+	}
+
+	// Prettify links after tag coloring so wiki-links inside tag values
+	// are transformed without breaking the tag token match.
+	if linkColor != "" {
+		text = prettifyAndStyleLinks(text, LinkStyle(linkColor))
+	} else {
+		text = prettifyText(text)
 	}
 
 	var marker string
