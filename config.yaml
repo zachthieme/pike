@@ -58,9 +58,15 @@ views:
     color: magenta
     order: 5
 
+  - title: "Delegated"
+    query: "open and @delegated"
+    sort: file
+    color: "#DBA04D"
+    order: 6
+    
   - title: "Horizon"
     query: "@risk or @horizon"
     sort: file
     color: "#DBA04D"
-    order: 6
+    order: 7
 
