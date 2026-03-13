@@ -1,6 +1,14 @@
 # pike
 
-A terminal dashboard for managing tasks scattered across markdown files. Scans your notes directory for checkbox items (`- [ ]`/`- [x]`) and tagged bullets (`- text @tag`), groups them into configurable views, and displays them in an interactive TUI.
+> **pike** /pa&#618;k/ *n.* — a long pointed tool, used to pick through things quickly and with precision.
+>
+> Your tasks are scattered across dozens of markdown files, buried between meeting notes and half-finished paragraphs. Pike reaches in and pulls them out.
+
+---
+
+Your notes are already in markdown. Your tasks are already in your notes. You don't need another app, another inbox, another tab. You need something that reads what you've already written and shows you what matters — in your terminal, where you already are.
+
+Pike scans your notes directory for checkbox items (`- [ ]`/`- [x]`) and tagged bullets (`- text @tag`), groups them into configurable views via a query DSL, and renders them in an interactive TUI dashboard. No syncing, no database, no account. Just your files.
 
 ## Installation
 
