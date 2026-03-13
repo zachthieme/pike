@@ -67,8 +67,9 @@ func ParseLine(line string, file string, lineNum int) *model.Task {
 			Value: tagValue,
 		}
 
-		// For date tags, try to parse the value; if invalid, clear the value
-		if tagValue != "" {
+		// For date tags (due, completed), try to parse the value; if invalid, clear it.
+		// For other tags, preserve the value as-is.
+		if tagValue != "" && (tagName == "due" || tagName == "completed") {
 			_, err := time.Parse("2006-01-02", tagValue)
 			if err != nil {
 				tag.Value = ""
@@ -83,7 +84,9 @@ func ParseLine(line string, file string, lineNum int) *model.Task {
 			task.Due = &t
 		}
 		if tagName == "completed" {
-			task.State = model.Completed
+			if !task.HasCheckbox {
+				task.State = model.Completed
+			}
 			if tag.Value != "" {
 				t, _ := time.Parse("2006-01-02", tag.Value)
 				task.Completed = &t

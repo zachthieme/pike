@@ -1,6 +1,9 @@
 package query
 
-import "time"
+import (
+	"regexp"
+	"time"
+)
 
 // Node is the interface for all AST nodes in the query DSL.
 type Node interface {
@@ -40,7 +43,8 @@ func (n *DateCmpNode) nodeType() string { return "datecmp" }
 
 // RegexNode matches tasks whose text matches a regex pattern.
 type RegexNode struct {
-	Pattern string
+	Pattern    string
+	CompiledRe *regexp.Regexp
 }
 
 func (n *RegexNode) nodeType() string { return "regex" }

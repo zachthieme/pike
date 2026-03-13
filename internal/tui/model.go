@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"path/filepath"
 	gosort "sort"
 	"strings"
 	"time"
@@ -36,8 +37,8 @@ type Model struct {
 	config      *config.Config
 	allTasks    []model.Task
 	sections    []filter.ViewResult
-	cursor      int // index into flat task list across all sections
-	focusedView int // -1 = dashboard, 0+ = focused on section N
+	cursor      int    // index into flat task list across all sections
+	focusedView string // "" = dashboard, otherwise title of focused section
 	showSummary bool
 	filterInput textinput.Model
 	filtering   bool
@@ -65,7 +66,7 @@ func NewModel(cfg *config.Config, tasks []model.Task, scanFunc func() ([]model.T
 	m := Model{
 		config:      cfg,
 		allTasks:    tasks,
-		focusedView: -1,
+		focusedView: "",
 		filterInput: ti,
 		scanFunc:    scanFunc,
 		editorCmd:   cfg.Editor,
@@ -80,15 +81,20 @@ func NewModel(cfg *config.Config, tasks []model.Task, scanFunc func() ([]model.T
 	return m
 }
 
-// SetFocusedView sets the focused view index and rebuilds sections.
-func (m *Model) SetFocusedView(idx int) {
-	m.focusedView = idx
+// SetFocusedView sets the focused view by section title and rebuilds sections.
+func (m *Model) SetFocusedView(title string) {
+	m.focusedView = title
 	m.rebuildSections()
 	m.clampCursor()
 }
 
 // Init implements tea.Model.
 func (m Model) Init() tea.Cmd {
+	if m.config != nil && m.config.RefreshInterval > 0 {
+		return tea.Tick(m.config.RefreshInterval, func(time.Time) tea.Msg {
+			return RefreshMsg{}
+		})
+	}
 	return nil
 }
 
@@ -101,11 +107,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case RefreshMsg:
+		var nextTick tea.Cmd
+		if m.config != nil && m.config.RefreshInterval > 0 {
+			nextTick = tea.Tick(m.config.RefreshInterval, func(time.Time) tea.Msg {
+				return RefreshMsg{}
+			})
+		}
 		if m.scanFunc != nil {
 			tasks, err := m.scanFunc()
 			if err != nil {
 				m.err = err
-				return m, nil
+				return m, nextTick
 			}
 			m.allTasks = tasks
 			if m.mode == modeTagSearch {
@@ -114,7 +126,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.rebuildSections()
 			m.clampCursor()
 		}
-		return m, nil
+		return m, nextTick
 
 	case EditorFinishedMsg:
 		if msg.Err != nil {
@@ -123,6 +135,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, func() tea.Msg { return RefreshMsg{} }
 
 	case tea.KeyMsg:
+		m.err = nil // clear error on any key press
 		return m.handleKey(msg)
 	}
 
@@ -187,8 +200,8 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.mode = modeDashboard
 			m.rebuildSections()
 			m.clampCursor()
-		} else if m.focusedView >= 0 {
-			m.focusedView = -1
+		} else if m.focusedView != "" {
+			m.focusedView = ""
 			m.rebuildSections()
 			m.clampCursor()
 		}
@@ -268,7 +281,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if key.Matches(msg, m.keys.FocusSection[i]) {
 			sections := m.visibleSections()
 			if i < len(sections) {
-				m.focusedView = i
+				m.focusedView = sections[i].Title
 				m.rebuildSections()
 				m.cursor = 0
 			}
@@ -291,7 +304,7 @@ func (m Model) openEditor() (tea.Model, tea.Cmd) {
 
 	filePath := task.File
 	if m.config != nil && m.config.NotesDir != "" {
-		filePath = m.config.NotesDir + "/" + task.File
+		filePath = filepath.Join(m.config.NotesDir, task.File)
 	}
 
 	cmd := editor.Command(editorName, filePath, task.Line)
@@ -302,22 +315,27 @@ func (m Model) openEditor() (tea.Model, tea.Cmd) {
 
 // View implements tea.Model.
 func (m Model) View() string {
+	var errLine string
+	if m.err != nil {
+		errLine = ErrorStyle().Render("Error: "+m.err.Error()) + "\n"
+	}
+
 	if m.showSummary {
-		return m.viewSummary()
+		return errLine + m.viewSummary()
 	}
 
 	switch m.mode {
 	case modeAllTasks:
-		return m.viewAllTasks()
+		return errLine + m.viewAllTasks()
 	case modeTagSearch:
-		return m.viewTagSearch()
+		return errLine + m.viewTagSearch()
 	}
 
-	if m.focusedView >= 0 {
-		return m.viewFocused()
+	if m.focusedView != "" {
+		return errLine + m.viewFocused()
 	}
 
-	return m.viewDashboard()
+	return errLine + m.viewDashboard()
 }
 
 func (m Model) viewDashboard() string {
@@ -348,20 +366,18 @@ func (m Model) viewSummary() string {
 
 // displaySections returns the sections to display based on focus mode.
 func (m Model) displaySections() []filter.ViewResult {
-	if m.focusedView >= 0 {
-		// Return only the focused section. We index into the original
-		// visible sections (before any filter narrowing within focused view).
-		allVisible := m.visibleSections()
-		if m.focusedView < len(allVisible) {
-			title := allVisible[m.focusedView].Title
-			color := allVisible[m.focusedView].Color
-			// Find the matching section in m.sections (which may be filtered).
-			for _, sec := range m.sections {
-				if sec.Title == title && sec.Color == color {
-					return []filter.ViewResult{sec}
-				}
+	if m.focusedView != "" {
+		// Find the matching section in m.sections (which may be filtered) by title.
+		for _, sec := range m.sections {
+			if sec.Title == m.focusedView {
+				return []filter.ViewResult{sec}
 			}
-			return []filter.ViewResult{allVisible[m.focusedView]}
+		}
+		// Fallback: check the unfiltered visible sections.
+		for _, sec := range m.visibleSections() {
+			if sec.Title == m.focusedView {
+				return []filter.ViewResult{sec}
+			}
 		}
 		return nil
 	}
@@ -788,4 +804,3 @@ func (m Model) filteredTags() []string {
 	}
 	return result
 }
-

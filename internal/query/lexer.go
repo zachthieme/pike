@@ -140,19 +140,27 @@ func Lex(input string) ([]Token, error) {
 			continue
 		}
 
-		// Regex: /pattern/
+		// Regex: /pattern/ (supports \/ to escape a literal /)
 		if ch == '/' {
 			i++ // skip opening /
 			start := i
+			var pattern []rune
 			for i < len(runes) && runes[i] != '/' {
-				i++
+				if runes[i] == '\\' && i+1 < len(runes) && runes[i+1] == '/' {
+					pattern = append(pattern, '/')
+					i += 2
+				} else {
+					pattern = append(pattern, runes[i])
+					i++
+				}
 			}
 			if i >= len(runes) {
 				return nil, fmt.Errorf("unterminated regex starting at position %d", start-1)
 			}
-			pattern := string(runes[start:i])
+			patternStr := string(pattern)
+			raw := string(runes[start:i])
 			i++ // skip closing /
-			tokens = append(tokens, Token{Type: TokRegex, Value: "/" + pattern + "/", TagName: pattern})
+			tokens = append(tokens, Token{Type: TokRegex, Value: "/" + raw + "/", TagName: patternStr})
 			continue
 		}
 

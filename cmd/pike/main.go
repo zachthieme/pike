@@ -92,6 +92,16 @@ func run(args []string, stdout, stderr io.Writer) error {
 		return nil
 	}
 
+	// Warn if both --color and --no-color are specified.
+	if colorFlag && noColorFlag {
+		fmt.Fprintf(stderr, "warning: both --color and --no-color specified; using --no-color\n")
+	}
+
+	// Warn if --sort is provided without --query.
+	if sortFlag != "file" && queryFlag == "" {
+		fmt.Fprintf(stderr, "warning: --sort is only used with --query\n")
+	}
+
 	// Determine color mode.
 	noColor := resolveColorMode(colorFlag, noColorFlag, stdout)
 
@@ -109,7 +119,10 @@ func run(args []string, stdout, stderr io.Writer) error {
 	cfg.NotesDir = notesDir
 
 	// Scan files.
-	sc := scanner.New(cfg.NotesDir, cfg.Include, cfg.Exclude)
+	sc, err := scanner.New(cfg.NotesDir, cfg.Include, cfg.Exclude)
+	if err != nil {
+		return fmt.Errorf("invalid glob patterns: %w", err)
+	}
 	tasks, err := sc.Scan()
 	if err != nil {
 		return fmt.Errorf("scanning: %w", err)
@@ -231,11 +244,16 @@ func runTUI(_ io.Writer, cfg *config.Config, tasks []model.Task, sc *scanner.Sca
 
 	// If --view flag is set, find and focus that section.
 	if viewFlag != "" {
-		for i, v := range cfg.Views {
+		found := false
+		for _, v := range cfg.Views {
 			if strings.EqualFold(v.Title, viewFlag) {
-				m.SetFocusedView(i)
+				m.SetFocusedView(v.Title)
+				found = true
 				break
 			}
+		}
+		if !found {
+			return fmt.Errorf("unknown view %q", viewFlag)
 		}
 	}
 

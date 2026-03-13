@@ -86,6 +86,22 @@ func TestCommand(t *testing.T) {
 			wantPath: "/usr/local/bin/hx",
 			wantArgs: []string{"/usr/local/bin/hx", "todo.md:15"},
 		},
+		{
+			name:     "multi-word editor splits on spaces",
+			editor:   "code --wait",
+			file:     "notes.md",
+			line:     10,
+			wantPath: "code",
+			wantArgs: []string{"code", "--wait", "--goto", "notes.md:10"},
+		},
+		{
+			name:     "multi-word unknown editor splits on spaces",
+			editor:   "subl --wait",
+			file:     "readme.md",
+			line:     5,
+			wantPath: "subl",
+			wantArgs: []string{"subl", "--wait", "readme.md"},
+		},
 	}
 
 	for _, tt := range tests {
@@ -108,38 +124,32 @@ func TestCommand(t *testing.T) {
 
 func TestResolveEditor(t *testing.T) {
 	tests := []struct {
-		name    string
-		editor  string
-		envVar  string
-		want    string
+		name   string
+		editor string
+		want   string
 	}{
 		{
 			name:   "explicit editor takes precedence",
 			editor: "nvim",
-			envVar: "code",
 			want:   "nvim",
 		},
 		{
-			name:   "falls back to EDITOR env var",
+			name:   "falls back to hx when empty",
 			editor: "",
-			envVar: "vim",
-			want:   "vim",
+			want:   "hx",
 		},
 		{
-			name:   "falls back to hx when both empty",
-			editor: "",
-			envVar: "",
-			want:   "hx",
+			name:   "multi-word editor passed through",
+			editor: "code --wait",
+			want:   "code --wait",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			t.Setenv("EDITOR", tt.envVar)
-
 			got := ResolveEditor(tt.editor)
 			if got != tt.want {
-				t.Errorf("ResolveEditor(%q) = %q, want %q (EDITOR=%q)", tt.editor, got, tt.want, tt.envVar)
+				t.Errorf("ResolveEditor(%q) = %q, want %q", tt.editor, got, tt.want)
 			}
 		})
 	}

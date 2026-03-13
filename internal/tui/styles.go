@@ -66,3 +66,10 @@ func FooterStyle() lipgloss.Style {
 	return lipgloss.NewStyle().
 		Faint(true)
 }
+
+// ErrorStyle returns a style for rendering error messages.
+func ErrorStyle() lipgloss.Style {
+	return lipgloss.NewStyle().
+		Foreground(resolveColor("red")).
+		Bold(true)
+}

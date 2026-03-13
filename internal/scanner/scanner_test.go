@@ -21,7 +21,7 @@ Some random text
 `
 	writeFile(t, dir, "notes.md", content)
 
-	s := New(dir, []string{"**/*.md"}, nil)
+	s := newScanner(t, dir, []string{"**/*.md"}, nil)
 	tasks, err := s.Scan()
 	if err != nil {
 		t.Fatalf("Scan() error: %v", err)
@@ -46,7 +46,7 @@ func TestMultipleFilesNestedDirectories(t *testing.T) {
 	writeFile(t, dir, "sub/project.md", "- [ ] Sub task\n")
 	writeFile(t, dir, "sub/deep/notes.md", "- [x] Deep task\n")
 
-	s := New(dir, []string{"**/*.md"}, nil)
+	s := newScanner(t, dir, []string{"**/*.md"}, nil)
 	tasks, err := s.Scan()
 	if err != nil {
 		t.Fatalf("Scan() error: %v", err)
@@ -84,7 +84,7 @@ func TestIncludeGlobs(t *testing.T) {
 	writeFile(t, dir, "notes.txt", "- [ ] Text task\n")
 	writeFile(t, dir, "data.csv", "- [ ] CSV task\n")
 
-	s := New(dir, []string{"**/*.md"}, nil)
+	s := newScanner(t, dir, []string{"**/*.md"}, nil)
 	tasks, err := s.Scan()
 	if err != nil {
 		t.Fatalf("Scan() error: %v", err)
@@ -105,7 +105,7 @@ func TestExcludeGlobs(t *testing.T) {
 	writeFile(t, dir, "archive/old.md", "- [ ] Archived task\n")
 	writeFile(t, dir, "archive/deep/ancient.md", "- [ ] Ancient task\n")
 
-	s := New(dir, []string{"**/*.md"}, []string{"archive/**"})
+	s := newScanner(t, dir, []string{"**/*.md"}, []string{"archive/**"})
 	tasks, err := s.Scan()
 	if err != nil {
 		t.Fatalf("Scan() error: %v", err)
@@ -124,7 +124,7 @@ func TestRelativePaths(t *testing.T) {
 
 	writeFile(t, dir, "sub/dir/file.md", "- [ ] Some task\n")
 
-	s := New(dir, []string{"**/*.md"}, nil)
+	s := newScanner(t, dir, []string{"**/*.md"}, nil)
 	tasks, err := s.Scan()
 	if err != nil {
 		t.Fatalf("Scan() error: %v", err)
@@ -151,7 +151,7 @@ func TestIncrementalRefreshMtime(t *testing.T) {
 	writeFile(t, dir, "a.md", "- [ ] Task A original\n")
 	writeFile(t, dir, "b.md", "- [ ] Task B unchanged\n")
 
-	s := New(dir, []string{"**/*.md"}, nil)
+	s := newScanner(t, dir, []string{"**/*.md"}, nil)
 	tasks, err := s.Scan()
 	if err != nil {
 		t.Fatalf("Scan() error: %v", err)
@@ -206,7 +206,7 @@ func TestDeletedFileHandling(t *testing.T) {
 	writeFile(t, dir, "keep.md", "- [ ] Keep this\n")
 	writeFile(t, dir, "delete.md", "- [ ] Delete this\n")
 
-	s := New(dir, []string{"**/*.md"}, nil)
+	s := newScanner(t, dir, []string{"**/*.md"}, nil)
 	tasks, err := s.Scan()
 	if err != nil {
 		t.Fatalf("Scan() error: %v", err)
@@ -249,7 +249,7 @@ Some more text.
 `
 	writeFile(t, dir, "mixed.md", content)
 
-	s := New(dir, []string{"**/*.md"}, nil)
+	s := newScanner(t, dir, []string{"**/*.md"}, nil)
 	tasks, err := s.Scan()
 	if err != nil {
 		t.Fatalf("Scan() error: %v", err)
@@ -266,7 +266,7 @@ Some more text.
 func TestEmptyDirectory(t *testing.T) {
 	dir := t.TempDir()
 
-	s := New(dir, []string{"**/*.md"}, nil)
+	s := newScanner(t, dir, []string{"**/*.md"}, nil)
 	tasks, err := s.Scan()
 	if err != nil {
 		t.Fatalf("Scan() error: %v", err)
@@ -278,6 +278,15 @@ func TestEmptyDirectory(t *testing.T) {
 }
 
 // --- helpers ---
+
+func newScanner(t *testing.T, root string, include, exclude []string) *Scanner {
+	t.Helper()
+	s, err := New(root, include, exclude)
+	if err != nil {
+		t.Fatalf("New() error: %v", err)
+	}
+	return s
+}
 
 func writeFile(t *testing.T, dir, relPath, content string) {
 	t.Helper()

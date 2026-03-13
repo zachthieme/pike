@@ -1,7 +1,6 @@
 package query
 
 import (
-	"regexp"
 	"pike/internal/model"
 	"time"
 )
@@ -19,11 +18,7 @@ func Eval(node Node, task *model.Task, now time.Time) bool {
 	case *DateCmpNode:
 		return evalDateCmp(n, task, now)
 	case *RegexNode:
-		re, err := regexp.Compile(n.Pattern)
-		if err != nil {
-			return false
-		}
-		return re.MatchString(task.Text)
+		return n.CompiledRe.MatchString(task.Text)
 	case *AndNode:
 		return Eval(n.Left, task, now) && Eval(n.Right, task, now)
 	case *OrNode:

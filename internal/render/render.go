@@ -2,6 +2,7 @@ package render
 
 import (
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -62,8 +63,19 @@ func FormatTask(task model.Task, tagColors map[string]string, noColor bool) stri
 
 	// Colorize tags if color is enabled and tagColors is provided.
 	if !noColor && tagColors != nil {
+		// Build a deduplicated list of tag tokens to colorize.
+		type tagReplacement struct {
+			token   string
+			colored string
+		}
+		seen := make(map[string]bool)
+		var replacements []tagReplacement
 		for _, tag := range task.Tags {
 			token := tagToken(tag)
+			if seen[token] {
+				continue
+			}
+			seen[token] = true
 			color, ok := tagColors[tag.Name]
 			if !ok {
 				color = tagColors["_default"]
@@ -75,8 +87,18 @@ func FormatTask(task model.Task, tagColors map[string]string, noColor bool) stri
 			if code == "" {
 				continue
 			}
-			colored := code + token + ansiReset
-			text = strings.ReplaceAll(text, token, colored)
+			replacements = append(replacements, tagReplacement{
+				token:   token,
+				colored: code + token + ansiReset,
+			})
+		}
+		// Sort by token length descending so longer tokens (e.g. @due(2026-03-15))
+		// are replaced before shorter prefixes (e.g. @due).
+		sort.Slice(replacements, func(i, j int) bool {
+			return len(replacements[i].token) > len(replacements[j].token)
+		})
+		for _, r := range replacements {
+			text = strings.Replace(text, r.token, r.colored, 1)
 		}
 	}
 

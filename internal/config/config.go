@@ -49,7 +49,7 @@ type rawConfig struct {
 // ~/.config/pike/config.yaml. If no file is found at any path, defaults are
 // returned.
 func Load(path string) (*Config, error) {
-	path = resolveConfigPath(path)
+	path, explicit := resolveConfigPath(path)
 
 	if path == "" {
 		return applyDefaults(&rawConfig{})
@@ -57,7 +57,7 @@ func Load(path string) (*Config, error) {
 
 	data, err := os.ReadFile(path)
 	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
+		if errors.Is(err, os.ErrNotExist) && !explicit {
 			return applyDefaults(&rawConfig{})
 		}
 		return nil, err
@@ -76,20 +76,20 @@ func LoadBytes(data []byte) (*Config, error) {
 	return applyDefaults(&raw)
 }
 
-func resolveConfigPath(path string) string {
+func resolveConfigPath(path string) (string, bool) {
 	if path != "" {
-		return path
+		return path, true
 	}
 
 	if env := os.Getenv("PIKE_CONFIG"); env != "" {
-		return env
+		return env, true
 	}
 
 	xdg := os.Getenv("XDG_CONFIG_HOME")
 	if xdg != "" {
 		p := filepath.Join(xdg, "pike", "config.yaml")
 		if fileExists(p) {
-			return p
+			return p, false
 		}
 	}
 
@@ -97,11 +97,11 @@ func resolveConfigPath(path string) string {
 	if err == nil {
 		p := filepath.Join(home, ".config", "pike", "config.yaml")
 		if fileExists(p) {
-			return p
+			return p, false
 		}
 	}
 
-	return ""
+	return "", false
 }
 
 func fileExists(path string) bool {
@@ -188,6 +188,9 @@ func expandTilde(path string) string {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return path
+	}
+	if path == "~" {
+		return home
 	}
 	return filepath.Join(home, path[2:])
 }

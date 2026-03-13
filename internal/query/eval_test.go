@@ -2,6 +2,7 @@ package query
 
 import (
 	"pike/internal/model"
+	"regexp"
 	"testing"
 	"time"
 )
@@ -157,10 +158,10 @@ func TestEvalRegex(t *testing.T) {
 	task := &model.Task{
 		Text: "Review meeting notes @today",
 	}
-	if !Eval(&RegexNode{Pattern: "meeting"}, task, now) {
+	if !Eval(&RegexNode{Pattern: "meeting", CompiledRe: regexp.MustCompile("meeting")}, task, now) {
 		t.Error("regex 'meeting' should match")
 	}
-	if Eval(&RegexNode{Pattern: "budget"}, task, now) {
+	if Eval(&RegexNode{Pattern: "budget", CompiledRe: regexp.MustCompile("budget")}, task, now) {
 		t.Error("regex 'budget' should not match")
 	}
 }

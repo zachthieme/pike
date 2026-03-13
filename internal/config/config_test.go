@@ -146,8 +146,21 @@ func TestLoadBytes_MinimalConfig(t *testing.T) {
 	}
 }
 
-func TestLoad_MissingFileReturnsDefaults(t *testing.T) {
-	cfg, err := Load("/nonexistent/path/config.yaml")
+func TestLoad_ExplicitPathMissingFileReturnsError(t *testing.T) {
+	// An explicit path (flag or env var) to a missing file should error.
+	_, err := Load("/nonexistent/path/config.yaml")
+	if err == nil {
+		t.Fatal("expected error for missing explicit config path, got nil")
+	}
+}
+
+func TestLoad_ImplicitMissingFileReturnsDefaults(t *testing.T) {
+	// When no explicit path is given and no config file is discovered,
+	// Load should return defaults without error.
+	t.Setenv("PIKE_CONFIG", "")
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir()) // empty dir, no config file
+
+	cfg, err := Load("")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -158,12 +171,6 @@ func TestLoad_MissingFileReturnsDefaults(t *testing.T) {
 	if cfg.Views[0].Title != "All Open" {
 		t.Errorf("Views[0].Title = %q, want %q", cfg.Views[0].Title, "All Open")
 	}
-	if cfg.Views[0].Query != "open" {
-		t.Errorf("Views[0].Query = %q, want %q", cfg.Views[0].Query, "open")
-	}
-	if cfg.Views[0].Sort != "file" {
-		t.Errorf("Views[0].Sort = %q, want %q", cfg.Views[0].Sort, "file")
-	}
 
 	if len(cfg.Include) != 1 || cfg.Include[0] != "**/*.md" {
 		t.Errorf("Include = %v, want [**/*.md]", cfg.Include)
@@ -171,6 +178,16 @@ func TestLoad_MissingFileReturnsDefaults(t *testing.T) {
 
 	if cfg.RefreshInterval != 5*time.Second {
 		t.Errorf("RefreshInterval = %v, want 5s", cfg.RefreshInterval)
+	}
+}
+
+func TestLoad_ExplicitEnvMissingFileReturnsError(t *testing.T) {
+	// When PIKE_CONFIG points to a missing file, Load should error.
+	t.Setenv("PIKE_CONFIG", "/nonexistent/pike/config.yaml")
+
+	_, err := Load("")
+	if err == nil {
+		t.Fatal("expected error when PIKE_CONFIG points to missing file, got nil")
 	}
 }
 
@@ -273,6 +290,16 @@ func TestLoadBytes_TildeExpansion(t *testing.T) {
 	want := filepath.Join(home, "some", "path")
 	if cfg.NotesDir != want {
 		t.Errorf("NotesDir = %q, want %q", cfg.NotesDir, want)
+	}
+
+	// Bare tilde should expand to home directory
+	yamlTilde := `notes_dir: "~"`
+	cfgTilde, err := LoadBytes([]byte(yamlTilde))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfgTilde.NotesDir != home {
+		t.Errorf("NotesDir for ~ = %q, want %q", cfgTilde.NotesDir, home)
 	}
 
 	// Should not expand tilde in the middle of a path

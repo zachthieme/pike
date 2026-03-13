@@ -2,6 +2,7 @@ package query
 
 import (
 	"fmt"
+	"regexp"
 	"time"
 )
 
@@ -12,6 +13,10 @@ func Parse(input string) (Node, error) {
 		return nil, err
 	}
 	p := &parser{tokens: tokens, pos: 0}
+	// Empty input (just EOF) means "no filter" — return nil, nil.
+	if p.current().Type == TokEOF {
+		return nil, nil
+	}
 	node, err := p.parseExpr()
 	if err != nil {
 		return nil, err
@@ -121,7 +126,11 @@ func (p *parser) parseAtom() (Node, error) {
 
 	case TokRegex:
 		p.advance()
-		return &RegexNode{Pattern: tok.TagName}, nil
+		re, err := regexp.Compile(tok.TagName)
+		if err != nil {
+			return nil, fmt.Errorf("invalid regex %q: %w", tok.TagName, err)
+		}
+		return &RegexNode{Pattern: tok.TagName, CompiledRe: re}, nil
 
 	case TokLParen:
 		p.advance() // consume "("
@@ -148,6 +157,10 @@ func (p *parser) parseTagOrDateCmp() (Node, error) {
 	// Check if next token is a comparison operator
 	next := p.current()
 	if next.Type == TokLT || next.Type == TokGT || next.Type == TokLTE || next.Type == TokGTE {
+		// Only @due and @completed support date comparisons
+		if tagName != "due" && tagName != "completed" {
+			return nil, fmt.Errorf("unsupported date field @%s; only @due and @completed support date comparisons", tagName)
+		}
 		opTok := p.advance() // consume the operator
 		op := opTok.Value
 

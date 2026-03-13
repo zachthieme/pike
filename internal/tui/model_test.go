@@ -174,8 +174,9 @@ func TestFocusSectionByNumber(t *testing.T) {
 
 	updated, _ := sendKey(m, "1")
 	m2 := updated.(Model)
-	if m2.focusedView != 0 {
-		t.Errorf("expected focusedView 0 after pressing '1', got %d", m2.focusedView)
+	// The first visible section title is "Overdue".
+	if m2.focusedView != "Overdue" {
+		t.Errorf("expected focusedView %q after pressing '1', got %q", "Overdue", m2.focusedView)
 	}
 }
 
@@ -305,12 +306,12 @@ func TestEscapeDismissesSummary(t *testing.T) {
 
 func TestEscapeExitsFocus(t *testing.T) {
 	m := testModel(testTasks(), testViews())
-	m.focusedView = 0
+	m.focusedView = "Overdue"
 
 	updated, _ := sendSpecialKey(m, tea.KeyEscape)
 	m2 := updated.(Model)
-	if m2.focusedView != -1 {
-		t.Errorf("expected focusedView -1 after Esc, got %d", m2.focusedView)
+	if m2.focusedView != "" {
+		t.Errorf("expected focusedView %q after Esc, got %q", "", m2.focusedView)
 	}
 }
 

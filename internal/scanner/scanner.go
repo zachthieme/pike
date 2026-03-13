@@ -2,6 +2,7 @@ package scanner
 
 import (
 	"bufio"
+	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -18,32 +19,43 @@ import (
 // and parses them for task lines.
 type Scanner struct {
 	root    string
-	include []string            // glob patterns like "**/*.md"
-	exclude []string            // glob patterns like "archive/**"
-	mtimes  map[string]time.Time // relPath -> last mtime
+	include []string               // glob patterns like "**/*.md"
+	exclude []string               // glob patterns like "archive/**"
+	mtimes  map[string]time.Time   // relPath -> last mtime
 	tasks   map[string][]model.Task // relPath -> tasks from that file
 }
 
 // New creates a Scanner for the given root directory with include and exclude
-// glob patterns.
-func New(root string, include, exclude []string) *Scanner {
+// glob patterns. Returns an error if any glob pattern is invalid.
+func New(root string, include, exclude []string) (*Scanner, error) {
+	// Validate all glob patterns up front.
+	for _, pattern := range include {
+		if !doublestar.ValidatePattern(pattern) {
+			return nil, fmt.Errorf("invalid include glob pattern: %q", pattern)
+		}
+	}
+	for _, pattern := range exclude {
+		if !doublestar.ValidatePattern(pattern) {
+			return nil, fmt.Errorf("invalid exclude glob pattern: %q", pattern)
+		}
+	}
 	return &Scanner{
 		root:    root,
 		include: include,
 		exclude: exclude,
 		mtimes:  make(map[string]time.Time),
 		tasks:   make(map[string][]model.Task),
-	}
+	}, nil
 }
 
 // Scan performs a full scan of all matching files. Returns all tasks found.
 func (s *Scanner) Scan() ([]model.Task, error) {
-	s.mtimes = make(map[string]time.Time)
-	s.tasks = make(map[string][]model.Task)
+	mtimes := make(map[string]time.Time)
+	tasks := make(map[string][]model.Task)
 
 	err := filepath.WalkDir(s.root, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
-			return err
+			return nil // skip problematic entries, continue scanning
 		}
 		if d.IsDir() {
 			return nil
@@ -63,11 +75,20 @@ func (s *Scanner) Scan() ([]model.Task, error) {
 			return nil
 		}
 
-		return s.parseFile(path, relPath)
+		info, err := d.Info()
+		if err != nil {
+			return nil // skip problematic entries
+		}
+		mtime := info.ModTime()
+
+		return s.parseFileInto(path, relPath, mtime, mtimes, tasks)
 	})
 	if err != nil {
 		return nil, err
 	}
+
+	s.mtimes = mtimes
+	s.tasks = tasks
 
 	return s.allTasks(), nil
 }
@@ -80,7 +101,7 @@ func (s *Scanner) Refresh() ([]model.Task, error) {
 
 	err := filepath.WalkDir(s.root, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
-			return err
+			return nil // skip problematic entries, continue scanning
 		}
 		if d.IsDir() {
 			return nil
@@ -104,14 +125,14 @@ func (s *Scanner) Refresh() ([]model.Task, error) {
 		// Check mtime
 		info, err := d.Info()
 		if err != nil {
-			return err
+			return nil // skip problematic entries
 		}
 		mtime := info.ModTime()
 
 		prevMtime, seen := s.mtimes[relPath]
 		if !seen || mtime.After(prevMtime) {
 			// File is new or modified — re-parse
-			return s.parseFile(path, relPath)
+			return s.parseFileInto(path, relPath, mtime, s.mtimes, s.tasks)
 		}
 
 		return nil
@@ -131,40 +152,39 @@ func (s *Scanner) Refresh() ([]model.Task, error) {
 	return s.allTasks(), nil
 }
 
-// parseFile reads a file, extracts tasks, and stores the results.
-func (s *Scanner) parseFile(absPath, relPath string) error {
+// parseFileInto reads a file, extracts tasks, and stores the results into the
+// provided maps. The modTime parameter is the file's modification time obtained
+// during the directory walk, avoiding a TOCTOU race from re-statting the file.
+func (s *Scanner) parseFileInto(absPath, relPath string, modTime time.Time, mtimes map[string]time.Time, tasks map[string][]model.Task) error {
 	f, err := os.Open(absPath)
 	if err != nil {
 		return err
 	}
 	defer f.Close()
 
-	info, err := f.Stat()
-	if err != nil {
-		return err
-	}
-
-	var tasks []model.Task
-	scanner := bufio.NewScanner(f)
+	var fileTasks []model.Task
+	sc := bufio.NewScanner(f)
+	sc.Buffer(make([]byte, 0, bufio.MaxScanTokenSize), 1024*1024) // allow lines up to 1MB
 	lineNum := 0
-	for scanner.Scan() {
+	for sc.Scan() {
 		lineNum++
-		line := scanner.Text()
+		line := sc.Text()
 		task := parser.ParseLine(line, relPath, lineNum)
 		if task != nil {
-			tasks = append(tasks, *task)
+			fileTasks = append(fileTasks, *task)
 		}
 	}
-	if err := scanner.Err(); err != nil {
+	if err := sc.Err(); err != nil {
 		return err
 	}
 
-	s.tasks[relPath] = tasks
-	s.mtimes[relPath] = info.ModTime()
+	tasks[relPath] = fileTasks
+	mtimes[relPath] = modTime
 	return nil
 }
 
 // matchesInclude returns true if the relPath matches any include pattern.
+// Patterns are validated at Scanner creation time, so errors are not expected.
 func (s *Scanner) matchesInclude(relPath string) bool {
 	for _, pattern := range s.include {
 		matched, _ := doublestar.Match(pattern, relPath)
@@ -176,6 +196,7 @@ func (s *Scanner) matchesInclude(relPath string) bool {
 }
 
 // matchesExclude returns true if the relPath matches any exclude pattern.
+// Patterns are validated at Scanner creation time, so errors are not expected.
 func (s *Scanner) matchesExclude(relPath string) bool {
 	for _, pattern := range s.exclude {
 		matched, _ := doublestar.Match(pattern, relPath)
