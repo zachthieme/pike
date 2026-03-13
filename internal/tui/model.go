@@ -743,7 +743,8 @@ func (m Model) truncateView(s string) string {
 		return s
 	}
 	lines := strings.Split(s, "\n")
-	if len(lines) <= m.height {
+	maxLines := m.height - 1 // reserve 1 line for bubbletea's trailing newline
+	if len(lines) <= maxLines {
 		return s
 	}
 
@@ -756,7 +757,7 @@ func (m Model) truncateView(s string) string {
 		}
 	}
 
-	start, end := scrollWindow(cursorLine, len(lines), m.height)
+	start, end := scrollWindow(cursorLine, len(lines), maxLines)
 	return strings.Join(lines[start:end], "\n")
 }
 
@@ -805,8 +806,9 @@ func (m Model) viewAllTasks() string {
 	tasks := sec.Tasks
 
 	// Calculate available lines for task rows inside the border box.
-	// Overhead: section header (1) + border top (1) + border bottom (1) + footer (1).
-	overhead := 4
+	// Overhead: section header (1) + border top (1) + border bottom (1)
+	//           + scroll footer (1) + bubbletea trailing newline (1) = 5
+	overhead := 5
 	if m.filtering {
 		overhead += 2 // filter input + blank line
 	}
