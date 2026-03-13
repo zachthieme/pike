@@ -59,6 +59,7 @@ Tags follow the format `@name` or `@name(value)`.
 | `@due(YYYY-MM-DD)` | Sets the task's due date for date comparisons |
 | `@completed` | Marks the task as completed (with or without a date) |
 | `@completed(YYYY-MM-DD)` | Marks completed and records the completion date |
+| `@hidden` | Hides the task from all views by default (toggle with `h`) |
 
 Any other `@word` tag (e.g. `@today`, `@risk`, `@weekly`, `@talk`) is a plain tag used for filtering and categorization.
 
@@ -281,6 +282,7 @@ open and not @risk                      # open, excluding risk
 | `/` | Activate filter bar |
 | `a` | All tasks — show every task with search |
 | `t` | Tag search — browse and pick a tag |
+| `h` | Toggle hidden tasks (show/hide `@hidden` tasks) |
 | `s` | Toggle summary overlay |
 | `r` | Refresh (re-scan files) |
 | `q` | Quit |
@@ -318,6 +320,12 @@ Press `t` to browse all tags found in your notes. Type to narrow the list, navig
 | `Down` / `Ctrl+N` | Move cursor down |
 | `Enter` | Select tag and filter dashboard |
 | `Esc` | Cancel and return to dashboard |
+
+### Hidden Tasks
+
+Tasks tagged `@hidden` are excluded from all views by default. Sections that contain hidden tasks display a 🔒 icon next to their title. Press `h` to toggle visibility — when enabled, hidden tasks appear normally and the lock icons disappear.
+
+This is useful for tasks you want to keep in your notes but don't need to see day-to-day (e.g., deferred items, low-priority backlog, sensitive tasks).
 
 ## Display
 
