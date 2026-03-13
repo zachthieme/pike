@@ -352,7 +352,8 @@ func (m Model) viewDashboard() string {
 	openCount := m.countOpen()
 	footer := FooterStyle().Render(fmt.Sprintf("%s %d open", strings.Repeat("\u2500", max(0, m.width-10)), openCount))
 
-	return body + "\n" + footer
+	full := body + "\n" + footer
+	return m.truncateView(full)
 }
 
 func (m Model) viewFocused() string {
@@ -360,7 +361,7 @@ func (m Model) viewFocused() string {
 	if count == 0 {
 		return body + "\nNo tasks"
 	}
-	return body
+	return m.truncateView(body)
 }
 
 func (m Model) viewSummary() string {
@@ -734,6 +735,49 @@ func (m Model) hiddenCountFor(title string) int {
 	return 0
 }
 
+// truncateView ensures the rendered output fits within the terminal height.
+// It finds the line containing the cursor marker (reverse video) and shows a
+// window of m.height lines centered on it.
+func (m Model) truncateView(s string) string {
+	if m.height <= 0 {
+		return s
+	}
+	lines := strings.Split(s, "\n")
+	if len(lines) <= m.height {
+		return s
+	}
+
+	// Find the line with the selected cursor (contains reverse-video escape).
+	cursorLine := 0
+	for i, line := range lines {
+		if strings.Contains(line, "\x1b[7m") {
+			cursorLine = i
+			break
+		}
+	}
+
+	start, end := scrollWindow(cursorLine, len(lines), m.height)
+	return strings.Join(lines[start:end], "\n")
+}
+
+// scrollWindow computes the start/end indices of a task window of size
+// maxVisible, centered on cursor. Clamps to [0, total).
+func scrollWindow(cursor, total, maxVisible int) (start, end int) {
+	start = cursor - maxVisible/2
+	if start < 0 {
+		start = 0
+	}
+	end = start + maxVisible
+	if end > total {
+		end = total
+		start = end - maxVisible
+		if start < 0 {
+			start = 0
+		}
+	}
+	return
+}
+
 func (m Model) nowFunc() time.Time {
 	if m.now != nil {
 		return m.now()
@@ -742,12 +786,49 @@ func (m Model) nowFunc() time.Time {
 }
 
 // viewAllTasks renders all tasks in a single section with filter bar.
+// Tasks are windowed to fit the terminal height, keeping the cursor visible.
 func (m Model) viewAllTasks() string {
-	body, count := m.renderSections()
-	if count == 0 {
-		return body + "\n  No matching tasks"
+	var parts []string
+
+	if m.filtering {
+		parts = append(parts, m.filterInput.View())
+		parts = append(parts, "")
 	}
-	return body
+
+	sections := m.displaySections()
+	if len(sections) == 0 || len(sections[0].Tasks) == 0 {
+		parts = append(parts, "  No matching tasks")
+		return strings.Join(parts, "\n")
+	}
+
+	sec := sections[0]
+	tasks := sec.Tasks
+
+	// Calculate available lines for task rows inside the border box.
+	// Overhead: section header (1) + border top (1) + border bottom (1) + footer (1).
+	overhead := 4
+	if m.filtering {
+		overhead += 2 // filter input + blank line
+	}
+
+	maxVisible := m.height - overhead
+	if maxVisible < 3 {
+		maxVisible = 3
+	}
+
+	hiddenCount := m.hiddenCountFor(sec.Title)
+
+	if len(tasks) <= maxVisible {
+		rendered := RenderSection(sec.Title, tasks, sec.Color, m.cursor, 0, m.tagColors, m.width, m.config.LinkColor, hiddenCount)
+		parts = append(parts, rendered)
+	} else {
+		start, end := scrollWindow(m.cursor, len(tasks), maxVisible)
+		rendered := RenderSection(sec.Title, tasks[start:end], sec.Color, m.cursor, start, m.tagColors, m.width, m.config.LinkColor, hiddenCount)
+		parts = append(parts, rendered)
+		parts = append(parts, FooterStyle().Render(fmt.Sprintf("  %d–%d of %d tasks", start+1, end, len(tasks))))
+	}
+
+	return strings.Join(parts, "\n")
 }
 
 // viewTagSearch renders the tag picker with filter bar.
