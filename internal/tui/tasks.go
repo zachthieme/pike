@@ -100,7 +100,7 @@ func (m *Model) rebuildSections() {
 	if m.filterText != "" {
 		now := m.nowFunc()
 		node, err := query.Parse(m.filterText)
-		if err == nil {
+		if err == nil && node != nil {
 			m.queryErr = nil
 			opts := query.EvalOptions{PartialTags: true}
 			for i := range results {
@@ -181,7 +181,11 @@ func (m *Model) applyHiddenFilter() {
 // hasDSLTokens checks if input contains DSL-specific tokens that distinguish
 // it from a plain text search. Uses word-boundary matching for keywords.
 func hasDSLTokens(input string) bool {
-	if strings.ContainsAny(input, "@<>/") {
+	if strings.ContainsAny(input, "@<>") {
+		return true
+	}
+	// Detect /regex/ patterns (paired slashes)
+	if strings.Count(input, "/") >= 2 {
 		return true
 	}
 	for _, word := range strings.Fields(input) {
