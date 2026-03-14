@@ -4,6 +4,8 @@ import (
 	"path/filepath"
 
 	"pike/internal/editor"
+	"pike/internal/model"
+	"pike/internal/toggle"
 
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
@@ -51,6 +53,8 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		case key.Matches(msg, m.keys.PrevSection):
 			m.jumpToPrevSection()
 			return m, nil
+		case key.Matches(msg, m.keys.Toggle):
+			return m.toggleTask()
 		default:
 			var cmd tea.Cmd
 			m.filterInput, cmd = m.filterInput.Update(msg)
@@ -154,6 +158,9 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	case key.Matches(msg, m.keys.Enter):
 		return m.openEditor()
+
+	case key.Matches(msg, m.keys.Toggle):
+		return m.toggleTask()
 	}
 
 	// Check focus section keys 1-9.
@@ -191,6 +198,37 @@ func (m Model) openEditor() (tea.Model, tea.Cmd) {
 	return m, tea.ExecProcess(cmd, func(err error) tea.Msg {
 		return EditorFinishedMsg{Err: err}
 	})
+}
+
+// toggleTask completes or uncompletes the task at the cursor.
+func (m Model) toggleTask() (tea.Model, tea.Cmd) {
+	flatTasks := m.flatTasks()
+	if len(flatTasks) == 0 || m.cursor >= len(flatTasks) {
+		return m, nil
+	}
+	task := flatTasks[m.cursor]
+	if !task.HasCheckbox {
+		return m, nil
+	}
+
+	filePath := task.File
+	if m.config != nil && m.config.NotesDir != "" {
+		filePath = filepath.Join(m.config.NotesDir, task.File)
+	}
+
+	var err error
+	if task.State == model.Open {
+		now := m.nowFunc()
+		err = toggle.Complete(filePath, task.Line, now)
+	} else {
+		err = toggle.Uncomplete(filePath, task.Line)
+	}
+	if err != nil {
+		m.err = err
+		return m, func() tea.Msg { return RefreshMsg{} }
+	}
+
+	return m, func() tea.Msg { return RefreshMsg{} }
 }
 
 // handleTagSearchKey handles key events in tag search mode.
