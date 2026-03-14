@@ -102,8 +102,8 @@ func (m Model) viewAllTasks() string {
 	hiddenCount := m.hiddenCountFor(sec.Title)
 
 	// Available terminal lines for the section + footer.
-	// Subtract: search bar (1) + blank line (1) + footer (1) + bubbletea (1) = 4
-	available := m.height - 4
+	// Subtract: search bar (1) + footer (1) + bubbletea (1) = 3
+	available := m.height - 3
 	if available < 5 {
 		available = 5
 	}
@@ -117,9 +117,9 @@ func (m Model) viewAllTasks() string {
 		}
 	}
 
-	// Binary search for how many tasks fit in the available space.
 	// Start from a reasonable estimate and shrink if needed.
-	maxTasks := available - 4 // section header + borders
+	// Section chrome: header (1) + header newline (1) + border top (1) + border bottom (1) = 4
+	maxTasks := available - 4
 	if maxTasks > len(tasks) {
 		maxTasks = len(tasks)
 	}
