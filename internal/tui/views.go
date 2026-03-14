@@ -102,8 +102,8 @@ func (m Model) viewAllTasks() string {
 	// Calculate available lines for task rows inside the border box.
 	// Overhead: search bar (1) + blank line (1) + section header (1)
 	//           + border top (1) + border bottom (1)
-	//           + scroll footer (1) + bubbletea rendering (2) = 8
-	overhead := 8
+	//           + scroll footer (1) + bubbletea final line (1) = 7
+	overhead := 7
 
 	maxVisible := m.height - overhead
 	if maxVisible < 3 {
@@ -122,8 +122,7 @@ func (m Model) viewAllTasks() string {
 		parts = append(parts, FooterStyle().Render(fmt.Sprintf("  %d–%d of %d tasks", start+1, end, len(tasks))))
 	}
 
-	// Pin the search bar (first 2 lines) and truncate the rest to fit.
-	return m.truncateViewPinTop(strings.Join(parts, "\n"), 2)
+	return strings.Join(parts, "\n")
 }
 
 // viewTagSearch renders the tag picker with filter bar.
