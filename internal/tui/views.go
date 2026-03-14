@@ -215,8 +215,8 @@ func flowWrap(parts []string, delim string, maxWidth int) string {
 
 	delimVisible := visibleLen(delim)
 	var lines []string
-	currentLine := "  " // indent
-	currentWidth := 2
+	currentLine := ""
+	currentWidth := 0
 
 	for i, part := range parts {
 		partWidth := visibleLen(part)
@@ -229,8 +229,8 @@ func flowWrap(parts []string, delim string, maxWidth int) string {
 
 		if needsDelim && currentWidth+addedWidth > maxWidth {
 			lines = append(lines, currentLine)
-			currentLine = "  " + part
-			currentWidth = 2 + partWidth
+			currentLine = part
+			currentWidth = partWidth
 		} else {
 			if needsDelim {
 				currentLine += delim
@@ -240,8 +240,13 @@ func flowWrap(parts []string, delim string, maxWidth int) string {
 			currentWidth += partWidth
 		}
 	}
-	if currentLine != "  " {
+	if currentLine != "" {
 		lines = append(lines, currentLine)
+	}
+
+	// Center each line within maxWidth.
+	for i, line := range lines {
+		lines[i] = lipgloss.PlaceHorizontal(maxWidth, lipgloss.Center, line)
 	}
 
 	return strings.Join(lines, "\n")
