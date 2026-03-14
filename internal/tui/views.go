@@ -5,7 +5,6 @@ import (
 	"strings"
 
 	"pike/internal/filter"
-	"pike/internal/style"
 
 	"github.com/charmbracelet/lipgloss"
 )
@@ -196,10 +195,8 @@ func flowWrap(parts []string, delim string, maxWidth int) string {
 		maxWidth = 80
 	}
 
-	// Strip ANSI to measure visible width.
-	visibleLen := func(s string) int {
-		return len(style.StripANSI(s))
-	}
+	// Use lipgloss width measurement which handles ANSI correctly.
+	visibleLen := lipgloss.Width
 
 	delimVisible := visibleLen(delim)
 	var lines []string
