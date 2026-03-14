@@ -612,13 +612,13 @@ func TestBackspaceToEmptyReturnsToTagSearch(t *testing.T) {
 	}
 }
 
-func TestNegationWithPartialTag(t *testing.T) {
+func TestNegationWithDSL(t *testing.T) {
 	m := testModel(testTasks(), testViews())
 
-	// Activate filter and type "!@du" — should exclude tasks with @due.
+	// Activate filter and type "not @du" — DSL negation with partial tag.
 	updated, _ := sendKey(m, "/")
 	m = updated.(Model)
-	for _, ch := range "!@du" {
+	for _, ch := range "not @du" {
 		updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{ch}})
 		m = updated.(Model)
 	}
@@ -626,7 +626,7 @@ func TestNegationWithPartialTag(t *testing.T) {
 	flat := m.flatTasks()
 	for _, task := range flat {
 		if task.HasTag("due") {
-			t.Errorf("expected !@du to exclude tasks with @due, but found %q", task.Text)
+			t.Errorf("expected 'not @du' to exclude tasks with @due, but found %q", task.Text)
 		}
 	}
 }

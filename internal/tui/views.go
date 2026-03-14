@@ -42,6 +42,10 @@ func (m Model) viewDashboard() string {
 	lineWidth := max(0, m.width-lipgloss.Width(label))
 	footer := FooterStyle().Render(strings.Repeat("\u2500", lineWidth) + label)
 
+	if m.queryErr != nil {
+		footer += "\n" + FooterStyle().Render("  "+m.queryErr.Error())
+	}
+
 	full := body + "\n" + footer
 	return m.truncateView(full)
 }
@@ -90,6 +94,10 @@ func (m Model) viewAllTasks() string {
 
 	// Always show the search bar in all-tasks mode.
 	parts = append(parts, m.filterInput.View())
+
+	if m.queryErr != nil {
+		parts = append(parts, FooterStyle().Render("  "+m.queryErr.Error()))
+	}
 
 	sections := m.displaySections()
 	if len(sections) == 0 || len(sections[0].Tasks) == 0 {

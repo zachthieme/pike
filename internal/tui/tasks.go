@@ -7,6 +7,7 @@ import (
 
 	"pike/internal/filter"
 	"pike/internal/model"
+	"pike/internal/query"
 	tasksort "pike/internal/sort"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -29,14 +30,16 @@ func (m *Model) rebuildSections() {
 		}
 
 		if m.filterText != "" {
-			tokens := parseFilterTokens(strings.Fields(m.filterText))
-			var filtered []model.Task
-			for _, t := range tasks {
-				if matchesFilter(t, tokens) {
-					filtered = append(filtered, t)
-				}
+			now := m.nowFunc()
+			filtered, err := applyQueryFilter(tasks, m.filterText, now)
+			if err != nil {
+				m.queryErr = err
+				return // preserve existing sections
 			}
+			m.queryErr = nil
 			tasks = filtered
+		} else {
+			m.queryErr = nil
 		}
 
 		tasks = tasksort.StablePartitionPinned(tasks)
@@ -62,25 +65,56 @@ func (m *Model) rebuildSections() {
 		return
 	}
 
-	// Apply text filter if active. Tokens are space-separated and ANDed:
-	//   "foo bar"  → must contain both "foo" and "bar"
-	//   "!bob"     → must NOT contain "bob"
-	//   "@tag"     → must have a tag named "tag"
-	//   "!@tag"    → must NOT have a tag named "tag"
+	// Apply query filter if active. Supports full DSL syntax with fallback
+	// to simple substring matching for plain text.
 	if m.filterText != "" {
-		tokens := parseFilterTokens(strings.Fields(m.filterText))
-		for i := range results {
-			var filtered []model.Task
-			for _, t := range results[i].Tasks {
-				if matchesFilter(t, tokens) {
-					filtered = append(filtered, t)
+		now := m.nowFunc()
+		node, err := query.Parse(m.filterText)
+		if err == nil {
+			m.queryErr = nil
+			opts := query.EvalOptions{PartialTags: true}
+			for i := range results {
+				var filtered []model.Task
+				for _, t := range results[i].Tasks {
+					if query.EvalWithOptions(node, &t, now, opts) {
+						filtered = append(filtered, t)
+					}
 				}
+				if filtered == nil {
+					filtered = []model.Task{}
+				}
+				results[i].Tasks = filtered
 			}
-			if filtered == nil {
-				filtered = []model.Task{}
+		} else if hasDSLTokens(m.filterText) {
+			m.queryErr = err
+			return // preserve existing sections
+		} else {
+			m.queryErr = nil
+			// Fallback: simple substring matching
+			tokens := strings.Fields(strings.ToLower(m.filterText))
+			for i := range results {
+				var filtered []model.Task
+				for _, t := range results[i].Tasks {
+					lower := strings.ToLower(t.Text)
+					match := true
+					for _, tok := range tokens {
+						if !strings.Contains(lower, tok) {
+							match = false
+							break
+						}
+					}
+					if match {
+						filtered = append(filtered, t)
+					}
+				}
+				if filtered == nil {
+					filtered = []model.Task{}
+				}
+				results[i].Tasks = filtered
 			}
-			results[i].Tasks = filtered
 		}
+	} else {
+		m.queryErr = nil
 	}
 
 	m.sections = results
@@ -114,61 +148,61 @@ func (m *Model) applyHiddenFilter() {
 	}
 }
 
-// filterToken is a pre-processed filter term.
-type filterToken struct {
-	negate bool
-	isTag  bool   // true if @-prefixed tag match
-	term   string // lowercased search term (tag name without @, or text substring)
-}
-
-// parseFilterTokens pre-processes raw filter tokens once per filter pass.
-func parseFilterTokens(raw []string) []filterToken {
-	tokens := make([]filterToken, 0, len(raw))
-	for _, tok := range raw {
-		ft := filterToken{}
-		term := tok
-		if strings.HasPrefix(term, "!") {
-			ft.negate = true
-			term = term[1:]
-		}
-		if term == "" {
-			continue
-		}
-		if strings.HasPrefix(term, "@") {
-			ft.isTag = true
-			ft.term = strings.ToLower(term[1:])
-		} else {
-			ft.term = strings.ToLower(term)
-		}
-		tokens = append(tokens, ft)
+// hasDSLTokens checks if input contains DSL-specific tokens that distinguish
+// it from a plain text search. Uses word-boundary matching for keywords.
+func hasDSLTokens(input string) bool {
+	if strings.ContainsAny(input, "@<>/") {
+		return true
 	}
-	return tokens
+	for _, word := range strings.Fields(input) {
+		lower := strings.ToLower(word)
+		if lower == "and" || lower == "or" || lower == "not" || lower == "open" || lower == "completed" {
+			return true
+		}
+	}
+	return false
 }
 
-// matchesFilter checks whether a task matches all filter tokens.
-func matchesFilter(t model.Task, tokens []filterToken) bool {
-	lower := strings.ToLower(t.Text)
-	for _, ft := range tokens {
-		var match bool
-		if ft.isTag {
-			for _, tag := range t.Tags {
-				if strings.Contains(strings.ToLower(tag.Name), ft.term) {
-					match = true
-					break
-				}
+// applyQueryFilter filters tasks using DSL parsing with fallback to substring matching.
+// Returns (filtered tasks, parse error or nil).
+// When DSL parsing fails and input has DSL tokens, returns (nil, error) to signal
+// the caller should preserve existing sections.
+func applyQueryFilter(tasks []model.Task, filterText string, now time.Time) ([]model.Task, error) {
+	// Try DSL parsing first
+	node, err := query.Parse(filterText)
+	if err == nil {
+		opts := query.EvalOptions{PartialTags: true}
+		var filtered []model.Task
+		for _, t := range tasks {
+			if query.EvalWithOptions(node, &t, now, opts) {
+				filtered = append(filtered, t)
 			}
-		} else {
-			match = strings.Contains(lower, ft.term)
 		}
+		return filtered, nil
+	}
 
-		if ft.negate && match {
-			return false
+	// DSL parse failed — check if input looks like DSL
+	if hasDSLTokens(filterText) {
+		return nil, err // signal to preserve existing sections
+	}
+
+	// Fallback: simple substring matching (space-separated tokens, ANDed)
+	tokens := strings.Fields(strings.ToLower(filterText))
+	var filtered []model.Task
+	for _, t := range tasks {
+		lower := strings.ToLower(t.Text)
+		match := true
+		for _, tok := range tokens {
+			if !strings.Contains(lower, tok) {
+				match = false
+				break
+			}
 		}
-		if !ft.negate && !match {
-			return false
+		if match {
+			filtered = append(filtered, t)
 		}
 	}
-	return true
+	return filtered, nil
 }
 
 // flatTasks returns all tasks across displayed sections in order.
@@ -413,7 +447,7 @@ func (m *Model) enterAllTasksMode(showAll bool, initialFilter string) tea.Cmd {
 	m.filtering = true
 	m.filterInput.SetValue(initialFilter)
 	m.filterText = initialFilter
-	m.filterInput.Prompt = "> "
+	m.filterInput.Prompt = "/ "
 	m.filterInput.Placeholder = "search tasks..."
 	m.cursor = 0
 	m.rebuildSections()
@@ -429,7 +463,7 @@ func (m *Model) enterTagSearchMode() tea.Cmd {
 	m.filtering = true
 	m.filterInput.SetValue("")
 	m.filterText = ""
-	m.filterInput.Prompt = "> "
+	m.filterInput.Prompt = "/ "
 	m.filterInput.Placeholder = "search tags..."
 	m.tagCursor = 0
 	return m.filterInput.Focus()
