@@ -1,0 +1,7 @@
+edge-cases.md:3  - [ ] No tags at all
+edge-cases.md:4  - [ ] Tag at start [32m@today[0m of the line
+edge-cases.md:5  - [ ] Multiple same tag [31m@risk[0m and @risk again
+edge-cases.md:6  - [ ] Empty parens [36m@note[0m()
+edge-cases.md:7  - [ ] Unicode text 日本語タスク [32m@today[0m
+edge-cases.md:8  - [ ] Very long tag value [33m@delegated([0m[33msome very long person name here[0m[33m)[0m
+edge-cases.md:9  - [ ] Nested parens in text (not a tag) [31m@due([0m[31m2026-04-01[0m[31m)[0m

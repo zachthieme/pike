@@ -73,3 +73,10 @@ func ErrorStyle() lipgloss.Style {
 		Foreground(resolveColor("red")).
 		Bold(true)
 }
+
+// LinkStyle returns a bold style with the given color for rendering links.
+func LinkStyle(color string) lipgloss.Style {
+	return lipgloss.NewStyle().
+		Bold(true).
+		Foreground(resolveColor(color))
+}

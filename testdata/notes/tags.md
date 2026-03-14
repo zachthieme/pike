@@ -1,0 +1,11 @@
+# Tagged Tasks
+
+- [ ] Review PR @today
+- [ ] Submit report @due(2026-03-15)
+- [x] Write docs @completed(2026-03-10)
+- [ ] Deploy service @risk @today
+- [ ] Escalate issue @delegated(zach)
+- [ ] Fix authentication @blocked
+- Research spike @risk
+- [ ] Hidden task @hidden
+- [ ] Multiple dates @due(2026-03-20) with @risk

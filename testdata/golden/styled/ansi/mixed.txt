@@ -1,0 +1,4 @@
+High priority bug [31m@risk[0m [31m@due([0m[31m2026-03-14[0m[31m)[0m see https://github.com/org/repo/issues/456
+Completed review [32m@completed([0m[32m2026-03-12[0m[32m)[0m [32m@today[0m
+Ask [[alice-bob|Alice Bob]] about [the plan](https://example.com/plan) [33m@delegated([0m[33malice[0m[33m)[0m
+Regular bullet with [36m@tag[0m makes it a task

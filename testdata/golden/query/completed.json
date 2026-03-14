@@ -1,0 +1,41 @@
+[
+  {
+    "text": "Clean the kitchen",
+    "state": "completed",
+    "file": "basic.md",
+    "line": 4,
+    "tags": null,
+    "has_checkbox": true
+  },
+  {
+    "text": "Ship the package",
+    "state": "completed",
+    "file": "basic.md",
+    "line": 7,
+    "tags": null,
+    "has_checkbox": true
+  },
+  {
+    "text": "Completed review @completed(2026-03-12) @today",
+    "state": "completed",
+    "file": "mixed.md",
+    "line": 6,
+    "tags": [
+      "@completed(2026-03-12)",
+      "@today"
+    ],
+    "completed": "2026-03-12",
+    "has_checkbox": true
+  },
+  {
+    "text": "Write docs @completed(2026-03-10)",
+    "state": "completed",
+    "file": "tags.md",
+    "line": 5,
+    "tags": [
+      "@completed(2026-03-10)"
+    ],
+    "completed": "2026-03-10",
+    "has_checkbox": true
+  }
+]

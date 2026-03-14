@@ -85,7 +85,7 @@ func TestFormatTask(t *testing.T) {
 			},
 			tagColors: tagColors,
 			noColor:   false,
-			want:      fmt.Sprintf("work/tasks.md:3  - [ ] Submit report %s@due(2026-03-15)%s", red, reset),
+			want:      fmt.Sprintf("work/tasks.md:3  - [ ] Submit report %s@due(%s%s2026-03-15%s%s)%s", red, reset, red, reset, red, reset),
 		},
 		{
 			name: "no-color mode skips ANSI codes",
@@ -127,7 +127,7 @@ func TestFormatTask(t *testing.T) {
 			},
 			tagColors: tagColors,
 			noColor:   false,
-			want:      fmt.Sprintf("notes/done.md:8  - [x] Write tests %s@completed(2026-03-10)%s", green, reset),
+			want:      fmt.Sprintf("notes/done.md:8  - [x] Write tests %s@completed(%s%s2026-03-10%s%s)%s", green, reset, green, reset, green, reset),
 		},
 		{
 			name: "unknown tag uses _default color",

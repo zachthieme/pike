@@ -1,0 +1,50 @@
+[
+  {
+    "text": "Talk to [[zach-thieme|Zach Thieme]] about deployment @today",
+    "state": "open",
+    "file": "links.md",
+    "line": 3,
+    "tags": [
+      "@today"
+    ],
+    "has_checkbox": true
+  },
+  {
+    "text": "Read [migration guide](https://example.com/docs/migration) @risk",
+    "state": "open",
+    "file": "links.md",
+    "line": 4,
+    "tags": [
+      "@risk"
+    ],
+    "has_checkbox": true
+  },
+  {
+    "text": "Check https://github.com/org/repo/pull/123 @today",
+    "state": "open",
+    "file": "links.md",
+    "line": 5,
+    "tags": [
+      "@today"
+    ],
+    "has_checkbox": true
+  },
+  {
+    "text": "Delegate to [[jeff-roache]] @delegated([[jeff-roache]])",
+    "state": "open",
+    "file": "links.md",
+    "line": 6,
+    "tags": [
+      "@delegated([[jeff-roache]])"
+    ],
+    "has_checkbox": true
+  },
+  {
+    "text": "Review https://docs.example.com/guide/setup.html",
+    "state": "open",
+    "file": "links.md",
+    "line": 7,
+    "tags": null,
+    "has_checkbox": true
+  }
+]

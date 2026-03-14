@@ -1,0 +1,72 @@
+[
+  {
+    "text": "No tags at all",
+    "state": "open",
+    "file": "edge-cases.md",
+    "line": 3,
+    "tags": null,
+    "has_checkbox": true
+  },
+  {
+    "text": "Tag at start @today of the line",
+    "state": "open",
+    "file": "edge-cases.md",
+    "line": 4,
+    "tags": [
+      "@today"
+    ],
+    "has_checkbox": true
+  },
+  {
+    "text": "Multiple same tag @risk and @risk again",
+    "state": "open",
+    "file": "edge-cases.md",
+    "line": 5,
+    "tags": [
+      "@risk",
+      "@risk"
+    ],
+    "has_checkbox": true
+  },
+  {
+    "text": "Empty parens @note()",
+    "state": "open",
+    "file": "edge-cases.md",
+    "line": 6,
+    "tags": [
+      "@note"
+    ],
+    "has_checkbox": true
+  },
+  {
+    "text": "Unicode text 日本語タスク @today",
+    "state": "open",
+    "file": "edge-cases.md",
+    "line": 7,
+    "tags": [
+      "@today"
+    ],
+    "has_checkbox": true
+  },
+  {
+    "text": "Very long tag value @delegated(some very long person name here)",
+    "state": "open",
+    "file": "edge-cases.md",
+    "line": 8,
+    "tags": [
+      "@delegated(some very long person name here)"
+    ],
+    "has_checkbox": true
+  },
+  {
+    "text": "Nested parens in text (not a tag) @due(2026-04-01)",
+    "state": "open",
+    "file": "edge-cases.md",
+    "line": 9,
+    "tags": [
+      "@due(2026-04-01)"
+    ],
+    "due": "2026-04-01",
+    "has_checkbox": true
+  }
+]
