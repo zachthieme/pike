@@ -41,10 +41,10 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		case msg.Type == tea.KeyCtrlD:
 			m.pageScroll(1)
-			return m, nil
+			return m, tea.ClearScreen
 		case msg.Type == tea.KeyCtrlU:
 			m.pageScroll(-1)
-			return m, nil
+			return m, tea.ClearScreen
 		case key.Matches(msg, m.keys.NextSection):
 			m.jumpToNextSection()
 			return m, nil
@@ -111,11 +111,11 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	case msg.Type == tea.KeyCtrlD:
 		m.pageScroll(1)
-		return m, nil
+		return m, tea.ClearScreen
 
 	case msg.Type == tea.KeyCtrlU:
 		m.pageScroll(-1)
-		return m, nil
+		return m, tea.ClearScreen
 
 	case key.Matches(msg, m.keys.NextSection):
 		m.jumpToNextSection()
