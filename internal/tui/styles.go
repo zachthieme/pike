@@ -6,6 +6,10 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
+// reverseVideoEsc is the ANSI SGR escape for reverse video, used by
+// TaskStyle(true) via lipgloss. Used to locate the cursor line in rendered output.
+const reverseVideoEsc = "\x1b[7m"
+
 // namedColorMap maps color names to lipgloss ANSI color codes.
 var namedColorMap = map[string]string{
 	"red":     "1",

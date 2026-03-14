@@ -14,7 +14,7 @@ func RenderSummary(open, overdue, dueThisWeek, completedThisWeek int, width int)
 
 	formatLine := func(label string, count int, style lipgloss.Style) string {
 		countStr := fmt.Sprintf("%d", count)
-		padding := labelWidth - len(label)
+		padding := labelWidth - lipgloss.Width(label)
 		if padding < 1 {
 			padding = 1
 		}

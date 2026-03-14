@@ -38,7 +38,9 @@ func (m Model) viewDashboard() string {
 	body, _ := m.renderSections()
 
 	openCount := m.countOpen()
-	footer := FooterStyle().Render(fmt.Sprintf("%s %d open tasks", strings.Repeat("\u2500", max(0, m.width-16)), openCount))
+	label := fmt.Sprintf(" %d open tasks", openCount)
+	lineWidth := max(0, m.width-lipgloss.Width(label))
+	footer := FooterStyle().Render(strings.Repeat("\u2500", lineWidth) + label)
 
 	full := body + "\n" + footer
 	return m.truncateView(full)
@@ -288,7 +290,7 @@ func (m Model) truncateViewPinTop(s string, pinnedTop int) string {
 	// Find the line with the selected cursor (reverse-video escape).
 	cursorIdx := 0
 	for i, line := range rest {
-		if strings.Contains(line, "\x1b[7m") {
+		if strings.Contains(line, reverseVideoEsc) {
 			cursorIdx = i
 			break
 		}
