@@ -90,7 +90,6 @@ func (m Model) viewAllTasks() string {
 
 	// Always show the search bar in all-tasks mode.
 	parts = append(parts, m.filterInput.View())
-	parts = append(parts, "")
 
 	sections := m.displaySections()
 	if len(sections) == 0 || len(sections[0].Tasks) == 0 {
