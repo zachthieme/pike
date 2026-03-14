@@ -16,7 +16,11 @@ func (m *Model) rebuildSections() {
 	if m.mode == modeAllTasks {
 		var tasks []model.Task
 		for _, t := range m.allTasks {
-			if m.showAll || t.State != model.Completed {
+			if m.showAll {
+				// From tag search: include all tasks (checkbox + tagged bullets, any state).
+				tasks = append(tasks, t)
+			} else if t.HasCheckbox && t.State != model.Completed {
+				// From 'a' key: only open checkbox tasks.
 				tasks = append(tasks, t)
 			}
 		}
