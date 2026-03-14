@@ -1,12 +1,12 @@
 package tui
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 	"time"
 
 	"pike/internal/config"
-	"pike/internal/filter"
 	"pike/internal/model"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -679,4 +679,75 @@ func TestFlowWrap(t *testing.T) {
 	}
 }
 
-var _ filter.ViewResult
+func TestScrollWindow(t *testing.T) {
+	tests := []struct {
+		name       string
+		cursor     int
+		total      int
+		maxVisible int
+		wantStart  int
+		wantEnd    int
+	}{
+		{"cursor at start", 0, 50, 20, 0, 20},
+		{"cursor at end", 49, 50, 20, 30, 50},
+		{"cursor in middle", 25, 50, 20, 15, 35},
+		{"maxVisible > total", 5, 10, 20, 0, 10},
+		{"maxVisible = 1", 5, 10, 1, 5, 6},
+		{"total = 1", 0, 1, 20, 0, 1},
+		{"cursor = total-1", 9, 10, 5, 5, 10},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			start, end := scrollWindow(tt.cursor, tt.total, tt.maxVisible)
+			if start != tt.wantStart || end != tt.wantEnd {
+				t.Errorf("scrollWindow(%d, %d, %d) = (%d, %d), want (%d, %d)",
+					tt.cursor, tt.total, tt.maxVisible, start, end, tt.wantStart, tt.wantEnd)
+			}
+		})
+	}
+}
+
+func TestPageScroll(t *testing.T) {
+	// Create enough tasks to scroll through.
+	var tasks []model.Task
+	for i := 0; i < 60; i++ {
+		tasks = append(tasks, model.Task{
+			Text:        fmt.Sprintf("Task %d", i+1),
+			State:       model.Open,
+			File:        "test.md",
+			Line:        i + 1,
+			HasCheckbox: true,
+		})
+	}
+	views := []config.ViewConfig{
+		{Title: "All", Query: "open", Sort: "file", Color: "green", Order: 1},
+	}
+	m := testModel(tasks, views)
+	m.height = 30
+
+	// Scroll down
+	m.pageScroll(1)
+	if m.cursor <= 0 {
+		t.Errorf("expected cursor > 0 after pageScroll(1), got %d", m.cursor)
+	}
+	first := m.cursor
+
+	// Scroll down again
+	m.pageScroll(1)
+	if m.cursor <= first {
+		t.Errorf("expected cursor > %d after 2nd pageScroll(1), got %d", first, m.cursor)
+	}
+
+	// Scroll back up
+	m.pageScroll(-1)
+	if m.cursor != first {
+		t.Errorf("expected cursor back to %d after pageScroll(-1), got %d", first, m.cursor)
+	}
+
+	// Scroll up past top clamps to 0
+	m.cursor = 2
+	m.pageScroll(-1)
+	if m.cursor != 0 {
+		t.Errorf("expected cursor clamped to 0, got %d", m.cursor)
+	}
+}

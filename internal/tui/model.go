@@ -134,6 +134,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.allTasks = tasks
 			if m.mode == modeTagSearch {
 				m.buildTagList()
+				if tags := m.filteredTags(); len(tags) > 0 {
+					m.tagCursor = min(m.tagCursor, len(tags)-1)
+				} else {
+					m.tagCursor = 0
+				}
 			}
 			m.rebuildSections()
 			m.clampCursor()

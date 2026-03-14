@@ -179,13 +179,13 @@ func (m Model) flatTasks() []model.Task {
 	return tasks
 }
 
+// pageScrollChrome is the approximate number of non-task lines on screen:
+// search bar, section header, borders, footer, bubbletea chrome.
+const pageScrollChrome = 8
+
 // pageScroll moves the cursor by half the visible task window. direction is 1 for down, -1 for up.
 func (m *Model) pageScroll(direction int) {
-	// Approximate visible tasks: terminal height minus chrome, then halved.
-	visible := m.height - 8
-	if visible < 4 {
-		visible = 4
-	}
+	visible := max(4, m.height-pageScrollChrome)
 	m.cursor += direction * (visible / 2)
 	m.clampCursor()
 }
