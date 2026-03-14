@@ -54,9 +54,9 @@ func (m Model) renderSection(title string, tasks []model.Task, color string, sec
 
 	content := strings.Join(lines, "\n")
 
-	headerLabel := fmt.Sprintf(" %s ", title)
+	headerLabel := fmt.Sprintf(" %s (%d) ", title, len(tasks))
 	if hiddenCount > 0 {
-		headerLabel = fmt.Sprintf(" %s 🔒", title)
+		headerLabel = fmt.Sprintf(" %s (%d) 🔒", title, len(tasks))
 	}
 	headerText := headerStyle.Render(headerLabel)
 	box := borderStyle.Render(content)
