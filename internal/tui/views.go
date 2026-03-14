@@ -38,7 +38,7 @@ func (m Model) viewDashboard() string {
 	body, _ := m.renderSections()
 
 	openCount := m.countOpen()
-	footer := FooterStyle().Render(fmt.Sprintf("%s %d open", strings.Repeat("\u2500", max(0, m.width-10)), openCount))
+	footer := FooterStyle().Render(fmt.Sprintf("%s %d open tasks", strings.Repeat("\u2500", max(0, m.width-16)), openCount))
 
 	full := body + "\n" + footer
 	return m.truncateView(full)
