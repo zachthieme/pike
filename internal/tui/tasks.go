@@ -400,7 +400,7 @@ func (m *Model) enterAllTasksMode(showAll bool, initialFilter string) tea.Cmd {
 	m.filterInput.SetValue(initialFilter)
 	m.filterText = initialFilter
 	m.filterInput.Prompt = "> "
-	m.filterInput.Placeholder = "search tasks... (↑↓ to scroll)"
+	m.filterInput.Placeholder = "search tasks..."
 	m.cursor = 0
 	m.rebuildSections()
 	m.clampCursor()
