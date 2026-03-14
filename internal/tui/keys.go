@@ -49,6 +49,15 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			var cmd tea.Cmd
 			m.filterInput, cmd = m.filterInput.Update(msg)
 			m.filterText = m.filterInput.Value()
+			// If we came from tag search and filter is now empty, return to tag search.
+			if m.showAll && m.filterText == "" {
+				m.mode = modeTagSearch
+				m.showAll = false
+				m.filterInput.Prompt = "> "
+				m.filterInput.Placeholder = "search tags..."
+				m.tagCursor = 0
+				return m, cmd
+			}
 			m.rebuildSections()
 			m.clampCursor()
 			return m, cmd
