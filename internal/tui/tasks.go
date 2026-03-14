@@ -7,6 +7,8 @@ import (
 
 	"pike/internal/filter"
 	"pike/internal/model"
+
+	tea "github.com/charmbracelet/bubbletea"
 )
 
 // rebuildSections recomputes sections from allTasks, applying filter text.
@@ -26,7 +28,7 @@ func (m *Model) rebuildSections() {
 		}
 
 		if m.filterText != "" {
-			tokens := strings.Fields(m.filterText)
+			tokens := parseFilterTokens(strings.Fields(m.filterText))
 			var filtered []model.Task
 			for _, t := range tasks {
 				if matchesFilter(t, tokens) {
@@ -63,7 +65,7 @@ func (m *Model) rebuildSections() {
 	//   "@tag"     → must have a tag named "tag"
 	//   "!@tag"    → must NOT have a tag named "tag"
 	if m.filterText != "" {
-		tokens := strings.Fields(m.filterText)
+		tokens := parseFilterTokens(strings.Fields(m.filterText))
 		for i := range results {
 			var filtered []model.Task
 			for _, t := range results[i].Tasks {
@@ -109,40 +111,57 @@ func (m *Model) applyHiddenFilter() {
 	}
 }
 
-// matchesFilter checks whether a task matches all filter tokens.
-func matchesFilter(t model.Task, tokens []string) bool {
-	lower := strings.ToLower(t.Text)
-	for _, tok := range tokens {
-		negate := false
-		term := tok
+// filterToken is a pre-processed filter term.
+type filterToken struct {
+	negate bool
+	isTag  bool   // true if @-prefixed tag match
+	term   string // lowercased search term (tag name without @, or text substring)
+}
 
+// parseFilterTokens pre-processes raw filter tokens once per filter pass.
+func parseFilterTokens(raw []string) []filterToken {
+	tokens := make([]filterToken, 0, len(raw))
+	for _, tok := range raw {
+		ft := filterToken{}
+		term := tok
 		if strings.HasPrefix(term, "!") {
-			negate = true
+			ft.negate = true
 			term = term[1:]
 		}
 		if term == "" {
 			continue
 		}
-
-		var match bool
 		if strings.HasPrefix(term, "@") {
-			// Tag match: check parsed tags by name (partial substring match).
-			tagName := strings.ToLower(term[1:])
+			ft.isTag = true
+			ft.term = strings.ToLower(term[1:])
+		} else {
+			ft.term = strings.ToLower(term)
+		}
+		tokens = append(tokens, ft)
+	}
+	return tokens
+}
+
+// matchesFilter checks whether a task matches all filter tokens.
+func matchesFilter(t model.Task, tokens []filterToken) bool {
+	lower := strings.ToLower(t.Text)
+	for _, ft := range tokens {
+		var match bool
+		if ft.isTag {
 			for _, tag := range t.Tags {
-				if strings.Contains(strings.ToLower(tag.Name), tagName) {
+				if strings.Contains(strings.ToLower(tag.Name), ft.term) {
 					match = true
 					break
 				}
 			}
 		} else {
-			// Substring match on task text.
-			match = strings.Contains(lower, strings.ToLower(term))
+			match = strings.Contains(lower, ft.term)
 		}
 
-		if negate && match {
+		if ft.negate && match {
 			return false
 		}
-		if !negate && !match {
+		if !ft.negate && !match {
 			return false
 		}
 	}
@@ -370,6 +389,48 @@ func (m *Model) clearFilter() {
 	m.filterInput.Prompt = "/ "
 	m.filterInput.Placeholder = "type to filter..."
 	m.filterInput.Blur()
+}
+
+// enterAllTasksMode switches to all-tasks mode with a focused filter input.
+// When showAll is true (from tag search), completed tasks and tagged bullets are included.
+func (m *Model) enterAllTasksMode(showAll bool, initialFilter string) tea.Cmd {
+	m.mode = modeAllTasks
+	m.showAll = showAll
+	m.filtering = true
+	m.filterInput.SetValue(initialFilter)
+	m.filterText = initialFilter
+	m.filterInput.Prompt = "> "
+	m.filterInput.Placeholder = "search all open tasks..."
+	m.cursor = 0
+	m.rebuildSections()
+	m.clampCursor()
+	return m.filterInput.Focus()
+}
+
+// enterTagSearchMode switches to tag search mode with a focused filter input.
+func (m *Model) enterTagSearchMode() tea.Cmd {
+	m.mode = modeTagSearch
+	m.showAll = false
+	m.buildTagList()
+	m.filtering = true
+	m.filterInput.SetValue("")
+	m.filterText = ""
+	m.filterInput.Prompt = "> "
+	m.filterInput.Placeholder = "search tags..."
+	m.tagCursor = 0
+	return m.filterInput.Focus()
+}
+
+// resolveTagColor returns the configured color for a tag name, falling back to
+// "_default". Returns empty string if no color is configured.
+func (m Model) resolveTagColor(tagName string) string {
+	if color, ok := m.tagColors[tagName]; ok {
+		return color
+	}
+	if color, ok := m.tagColors["_default"]; ok {
+		return color
+	}
+	return ""
 }
 
 func (m Model) nowFunc() time.Time {

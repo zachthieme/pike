@@ -157,22 +157,20 @@ func (m Model) viewTagSearch() string {
 	// Matched tags are highlighted with their configured color.
 	// The selected tag (via Tab) gets reverse video.
 	// Non-matching tags are rendered faint.
-	delim := lipgloss.NewStyle().Faint(true).Render(" · ")
+	faintStyle := lipgloss.NewStyle().Faint(true)
+	delim := faintStyle.Render(" · ")
 	var tagParts []string
 	for _, tag := range m.tagList {
-		label := tag
 		if tag == selectedTag {
-			tagParts = append(tagParts, TaskStyle(true).Render(label))
+			tagParts = append(tagParts, TaskStyle(true).Render(tag))
 		} else if matchedSet[tag] {
-			if color, ok := m.tagColors[tag]; ok {
-				tagParts = append(tagParts, TagStyle(color).Render(label))
-			} else if color, ok := m.tagColors["_default"]; ok {
-				tagParts = append(tagParts, TagStyle(color).Render(label))
+			if color := m.resolveTagColor(tag); color != "" {
+				tagParts = append(tagParts, TagStyle(color).Render(tag))
 			} else {
-				tagParts = append(tagParts, label)
+				tagParts = append(tagParts, tag)
 			}
 		} else {
-			tagParts = append(tagParts, lipgloss.NewStyle().Faint(true).Render(label))
+			tagParts = append(tagParts, faintStyle.Render(tag))
 		}
 	}
 

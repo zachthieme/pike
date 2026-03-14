@@ -51,11 +51,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.filterText = m.filterInput.Value()
 			// If we came from tag search and filter is now empty, return to tag search.
 			if m.showAll && m.filterText == "" {
-				m.mode = modeTagSearch
-				m.showAll = false
-				m.filterInput.Prompt = "> "
-				m.filterInput.Placeholder = "search tags..."
-				m.tagCursor = 0
+				m.enterTagSearchMode()
 				return m, cmd
 			}
 			m.rebuildSections()
@@ -125,30 +121,11 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, cmd
 
 	case key.Matches(msg, m.keys.AllTasks):
-		m.mode = modeAllTasks
-		m.showAll = false
-		m.filtering = true
-		m.filterInput.SetValue("")
-		m.filterText = ""
-		m.filterInput.Prompt = "> "
-		m.filterInput.Placeholder = "search all open tasks..."
-		focusCmd := m.filterInput.Focus()
-		m.cursor = 0
-		m.rebuildSections()
-		m.clampCursor()
+		focusCmd := m.enterAllTasksMode(false, "")
 		return m, tea.Batch(focusCmd, func() tea.Msg { return tea.ClearScreen() })
 
 	case key.Matches(msg, m.keys.TagSearch):
-		m.mode = modeTagSearch
-		m.showAll = false
-		m.buildTagList()
-		m.filterInput.SetValue("")
-		m.filterText = ""
-		m.filterInput.Prompt = "> "
-		m.filterInput.Placeholder = "search tags..."
-		focusCmd := m.filterInput.Focus()
-		m.filtering = true
-		m.tagCursor = 0
+		focusCmd := m.enterTagSearchMode()
 		return m, tea.Batch(focusCmd, func() tea.Msg { return tea.ClearScreen() })
 
 	case key.Matches(msg, m.keys.ToggleHidden):
@@ -234,18 +211,7 @@ func (m Model) handleTagSearchKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		// Select tag → switch to all-tasks mode filtered to @tag (including completed).
 		tags := m.filteredTags()
 		if m.tagCursor < len(tags) {
-			selected := tags[m.tagCursor]
-			m.mode = modeAllTasks
-			m.showAll = true
-			m.filtering = true
-			m.filterText = "@" + selected
-			m.filterInput.SetValue("@" + selected)
-			m.filterInput.Prompt = "> "
-			m.filterInput.Placeholder = "search all open tasks..."
-			cmd := m.filterInput.Focus()
-			m.cursor = 0
-			m.rebuildSections()
-			m.clampCursor()
+			cmd := m.enterAllTasksMode(true, "@"+tags[m.tagCursor])
 			return m, cmd
 		}
 		return m, nil
