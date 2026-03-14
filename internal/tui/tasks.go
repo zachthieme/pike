@@ -7,6 +7,7 @@ import (
 
 	"pike/internal/filter"
 	"pike/internal/model"
+	tasksort "pike/internal/sort"
 
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -37,6 +38,8 @@ func (m *Model) rebuildSections() {
 			}
 			tasks = filtered
 		}
+
+		tasks = tasksort.StablePartitionPinned(tasks)
 
 		title := "All Open Tasks"
 		if m.showAll {

@@ -42,6 +42,8 @@ func Apply(tasks []model.Task, queryStr string, sortOrder string, now time.Time)
 		}
 	}
 
+	matched = tasksort.StablePartitionPinned(matched)
+
 	return matched, nil
 }
 

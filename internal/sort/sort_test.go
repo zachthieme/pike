@@ -221,3 +221,44 @@ func TestSort(t *testing.T) {
 		})
 	}
 }
+
+func TestStablePartitionPinned(t *testing.T) {
+	tasks := []model.Task{
+		{Text: "unpinned-a"},
+		{Text: "pinned-b", Tags: []model.Tag{{Name: "pin"}}},
+		{Text: "unpinned-c"},
+		{Text: "pinned-d", Tags: []model.Tag{{Name: "pin"}}},
+		{Text: "unpinned-e"},
+	}
+
+	result := StablePartitionPinned(tasks)
+
+	wantTexts := []string{"pinned-b", "pinned-d", "unpinned-a", "unpinned-c", "unpinned-e"}
+	if len(result) != len(wantTexts) {
+		t.Fatalf("got %d tasks, want %d", len(result), len(wantTexts))
+	}
+	for i, want := range wantTexts {
+		if result[i].Text != want {
+			t.Errorf("result[%d].Text = %q, want %q", i, result[i].Text, want)
+		}
+	}
+}
+
+func TestStablePartitionPinnedNoPins(t *testing.T) {
+	tasks := []model.Task{
+		{Text: "a"},
+		{Text: "b"},
+	}
+
+	result := StablePartitionPinned(tasks)
+	if result[0].Text != "a" || result[1].Text != "b" {
+		t.Error("expected order unchanged when no pins")
+	}
+}
+
+func TestStablePartitionPinnedEmpty(t *testing.T) {
+	result := StablePartitionPinned(nil)
+	if len(result) != 0 {
+		t.Errorf("expected empty result, got %d", len(result))
+	}
+}
