@@ -100,30 +100,53 @@ func (m Model) viewAllTasks() string {
 
 	sec := sections[0]
 	tasks := sec.Tasks
-
-	// Calculate available lines for task rows inside the border box.
-	// Overhead: search bar (1) + blank line (1) + section header (1)
-	//           + header-to-box newline (1) + border top (1) + border bottom (1)
-	//           + scroll footer (1) + bubbletea final line (1) = 8
-	overhead := 8
-
-	maxVisible := m.height - overhead
-	if maxVisible < 3 {
-		maxVisible = 3
-	}
-
 	hiddenCount := m.hiddenCountFor(sec.Title)
 
-	if len(tasks) <= maxVisible {
-		rendered := m.renderSection(sec.Title, tasks, sec.Color, 0, hiddenCount)
-		parts = append(parts, rendered)
-	} else {
-		start, end := scrollWindow(m.cursor, len(tasks), maxVisible)
-		rendered := m.renderSection(sec.Title, tasks[start:end], sec.Color, start, hiddenCount)
-		parts = append(parts, rendered)
-		parts = append(parts, FooterStyle().Render(fmt.Sprintf("  %d–%d of %d tasks", start+1, end, len(tasks))))
+	// Available terminal lines for the section + footer.
+	// Subtract: search bar (1) + blank line (1) + footer (1) + bubbletea (1) = 4
+	available := m.height - 4
+	if available < 5 {
+		available = 5
 	}
 
+	if len(tasks) <= available {
+		// Try rendering all tasks — if it fits, use it.
+		rendered := m.renderSection(sec.Title, tasks, sec.Color, 0, hiddenCount)
+		if lipgloss.Height(rendered) <= available {
+			parts = append(parts, rendered)
+			return strings.Join(parts, "\n")
+		}
+	}
+
+	// Binary search for how many tasks fit in the available space.
+	// Start from a reasonable estimate and shrink if needed.
+	maxTasks := available - 4 // section header + borders
+	if maxTasks > len(tasks) {
+		maxTasks = len(tasks)
+	}
+	if maxTasks < 1 {
+		maxTasks = 1
+	}
+
+	start, end := scrollWindow(m.cursor, len(tasks), maxTasks)
+
+	// Shrink window if rendered output is too tall (tasks with long text wrap).
+	for end-start > 1 {
+		rendered := m.renderSection(sec.Title, tasks[start:end], sec.Color, start, hiddenCount)
+		if lipgloss.Height(rendered)+1 <= available { // +1 for footer
+			parts = append(parts, rendered)
+			parts = append(parts, FooterStyle().Render(fmt.Sprintf("  %d–%d of %d tasks", start+1, end, len(tasks))))
+			return strings.Join(parts, "\n")
+		}
+		// Too tall — reduce window by 1 and re-center.
+		maxTasks--
+		start, end = scrollWindow(m.cursor, len(tasks), maxTasks)
+	}
+
+	// Minimal case: just 1 task.
+	rendered := m.renderSection(sec.Title, tasks[start:end], sec.Color, start, hiddenCount)
+	parts = append(parts, rendered)
+	parts = append(parts, FooterStyle().Render(fmt.Sprintf("  %d–%d of %d tasks", start+1, end, len(tasks))))
 	return strings.Join(parts, "\n")
 }
 

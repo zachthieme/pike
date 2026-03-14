@@ -181,14 +181,12 @@ func (m Model) flatTasks() []model.Task {
 
 // pageScroll moves the cursor by half the visible task window. direction is 1 for down, -1 for up.
 func (m *Model) pageScroll(direction int) {
-	// Use the visible task count (height minus overhead) rather than raw
-	// terminal height to avoid scrolling past the rendered window.
-	visible := m.height - 8 // match overhead in viewAllTasks
-	if visible < 6 {
-		visible = 6
+	// Approximate visible tasks: terminal height minus chrome, then halved.
+	visible := m.height - 8
+	if visible < 4 {
+		visible = 4
 	}
-	half := visible / 2
-	m.cursor += direction * half
+	m.cursor += direction * (visible / 2)
 	m.clampCursor()
 }
 
