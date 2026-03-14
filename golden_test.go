@@ -6,6 +6,7 @@ import (
 	"flag"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -77,28 +78,42 @@ func scanTestNotes(t *testing.T) map[string][]model.Task {
 			continue
 		}
 		fpath := filepath.Join("testdata", "notes", entry.Name())
-		f, err := os.Open(fpath)
-		if err != nil {
-			t.Fatalf("open %s: %v", fpath, err)
-		}
-		defer f.Close()
-
-		relPath := entry.Name()
-		scanner := bufio.NewScanner(f)
-		lineNum := 0
-		var tasks []model.Task
-		for scanner.Scan() {
-			lineNum++
-			task := parser.ParseLine(scanner.Text(), relPath, lineNum)
-			if task != nil {
-				tasks = append(tasks, *task)
-			}
-		}
+		tasks := parseNoteFile(t, fpath, entry.Name())
 		if len(tasks) > 0 {
-			result[relPath] = tasks
+			result[entry.Name()] = tasks
 		}
 	}
 	return result
+}
+
+func parseNoteFile(t *testing.T, fpath, relPath string) []model.Task {
+	t.Helper()
+	f, err := os.Open(fpath)
+	if err != nil {
+		t.Fatalf("open %s: %v", fpath, err)
+	}
+	defer f.Close()
+
+	scanner := bufio.NewScanner(f)
+	lineNum := 0
+	var tasks []model.Task
+	for scanner.Scan() {
+		lineNum++
+		task := parser.ParseLine(scanner.Text(), relPath, lineNum)
+		if task != nil {
+			tasks = append(tasks, *task)
+		}
+	}
+	return tasks
+}
+
+func sortedKeys[V any](m map[string]V) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
 }
 
 func allGoldenTasks(byFile map[string][]model.Task) []model.Task {
@@ -131,7 +146,8 @@ func goldenCompare(t *testing.T, goldenPath string, actual []byte) {
 func TestGoldenParsed(t *testing.T) {
 	byFile := scanTestNotes(t)
 
-	for filename, tasks := range byFile {
+	for _, filename := range sortedKeys(byFile) {
+		tasks := byFile[filename]
 		baseName := strings.TrimSuffix(filename, ".md")
 		t.Run(baseName, func(t *testing.T) {
 			var pts []parsedTask
@@ -153,7 +169,8 @@ func TestGoldenStyledANSI(t *testing.T) {
 	byFile := scanTestNotes(t)
 	sf := style.ANSIStyleFunc()
 
-	for filename, tasks := range byFile {
+	for _, filename := range sortedKeys(byFile) {
+		tasks := byFile[filename]
 		baseName := strings.TrimSuffix(filename, ".md")
 		t.Run(baseName, func(t *testing.T) {
 			var lines []string
@@ -172,7 +189,8 @@ func TestGoldenStyledPlain(t *testing.T) {
 	byFile := scanTestNotes(t)
 	sf := style.ANSIStyleFunc()
 
-	for filename, tasks := range byFile {
+	for _, filename := range sortedKeys(byFile) {
+		tasks := byFile[filename]
 		baseName := strings.TrimSuffix(filename, ".md")
 		t.Run(baseName, func(t *testing.T) {
 			var lines []string
@@ -191,7 +209,8 @@ func TestGoldenStyledRender(t *testing.T) {
 	cfg := loadGoldenConfig(t)
 	byFile := scanTestNotes(t)
 
-	for filename, tasks := range byFile {
+	for _, filename := range sortedKeys(byFile) {
+		tasks := byFile[filename]
 		baseName := strings.TrimSuffix(filename, ".md")
 		t.Run(baseName, func(t *testing.T) {
 			var lines []string
@@ -215,7 +234,8 @@ func TestGoldenQuery(t *testing.T) {
 		"completed":      "completed",
 	}
 
-	for name, queryStr := range queries {
+	for _, name := range sortedKeys(queries) {
+		queryStr := queries[name]
 		t.Run(name, func(t *testing.T) {
 			results, err := filter.Apply(all, queryStr, "file", goldenNow)
 			if err != nil {
