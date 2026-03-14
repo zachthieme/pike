@@ -155,3 +155,70 @@ func TestColorizeTags(t *testing.T) {
 		})
 	}
 }
+
+func TestPrettifyText(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		want  string
+	}{
+		{"wiki link with display name", "talk to [[zach-thieme|Zach Thieme]] about it", "talk to Zach Thieme about it"},
+		{"wiki link without display name", "talk to [[Zach Thieme]] about it", "talk to Zach Thieme about it"},
+		{"wiki link slug gets prettified", "see [[jeff-roache]] for details", "see Jeff Roache for details"},
+		{"markdown link shows text only", "check [the docs](https://example.com/docs/guide) first", "check the docs first"},
+		{"bare URL extracts document name", "see https://example.com/docs/migration-plan for details", "see migration-plan for details"},
+		{"bare URL with just host", "visit https://example.com/", "visit example.com"},
+		{"bare URL with numeric path includes parent", "fix https://github.com/org/repo/pull/123", "fix pull/123"},
+		{"bare URL strips .html extension", "read https://docs.example.com/guide/setup.html", "read setup"},
+		{"multiple wiki links", "[[alice-bob|Alice Bob]] and [[charlie-delta|Charlie Delta]]", "Alice Bob and Charlie Delta"},
+		{"mixed wiki link and bare URL", "ask [[zach-thieme|Zach Thieme]] about https://example.com/docs/auth-flow", "ask Zach Thieme about auth-flow"},
+		{"no links unchanged", "just a plain task @today", "just a plain task @today"},
+		{"empty string", "", ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := PrettifyText(tt.input); got != tt.want {
+				t.Errorf("PrettifyText(%q) = %q, want %q", tt.input, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestPrettifyLinks(t *testing.T) {
+	render := func(s string) string { return "[" + s + "]" }
+	tests := []struct {
+		name  string
+		input string
+		want  string
+	}{
+		{"wiki link styled", "see [[zach-thieme]] here", "see [Zach Thieme] here"},
+		{"markdown link styled", "check [docs](https://example.com) now", "check [docs] now"},
+		{"bare URL styled", "visit https://example.com/path/page", "visit [page]"},
+		{"no links unchanged", "plain text", "plain text"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := PrettifyLinks(tt.input, render); got != tt.want {
+				t.Errorf("PrettifyLinks() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestShortenURL(t *testing.T) {
+	tests := []struct {
+		input string
+		want  string
+	}{
+		{"https://example.com/", "example.com"},
+		{"https://github.com/org/repo/pull/123", "pull/123"},
+		{"https://docs.example.com/guide/setup.html", "setup"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			if got := ShortenURL(tt.input); got != tt.want {
+				t.Errorf("ShortenURL(%q) = %q, want %q", tt.input, got, tt.want)
+			}
+		})
+	}
+}

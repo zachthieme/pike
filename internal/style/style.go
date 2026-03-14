@@ -2,6 +2,8 @@ package style
 
 import (
 	"fmt"
+	"net/url"
+	"path"
 	"regexp"
 	"sort"
 	"strconv"
@@ -29,6 +31,12 @@ const ansiReset = "\033[0m"
 
 // ansiStripRe matches ANSI escape sequences.
 var ansiStripRe = regexp.MustCompile(`\x1b\[[0-9;]*m`)
+
+var (
+	wikiLinkRe = regexp.MustCompile(`\[\[([^\]|]+?)(?:\|([^\]]+?))?\]\]`)
+	mdLinkRe   = regexp.MustCompile(`\[([^\]]+)\]\([^)]+\)`)
+	bareURLRe  = regexp.MustCompile(`https?://\S+`)
+)
 
 // TagToken returns the string representation of a tag as it appears in task text.
 func TagToken(tag model.Tag) string {
@@ -123,4 +131,93 @@ func ANSIStyleFunc() StyleFunc {
 		}
 		return code + text + ansiReset
 	}
+}
+
+// PrettifyText cleans up markdown link syntax for plain display.
+func PrettifyText(s string) string {
+	s = wikiLinkRe.ReplaceAllStringFunc(s, func(match string) string {
+		sub := wikiLinkRe.FindStringSubmatch(match)
+		if sub[2] != "" {
+			return sub[2]
+		}
+		return prettifySlug(sub[1])
+	})
+	s = mdLinkRe.ReplaceAllString(s, "$1")
+	s = bareURLRe.ReplaceAllStringFunc(s, ShortenURL)
+	return s
+}
+
+// PrettifyLinks cleans up markdown link syntax and applies renderLink to the display text.
+func PrettifyLinks(s string, renderLink func(string) string) string {
+	s = wikiLinkRe.ReplaceAllStringFunc(s, func(match string) string {
+		sub := wikiLinkRe.FindStringSubmatch(match)
+		var display string
+		if sub[2] != "" {
+			display = sub[2]
+		} else {
+			display = prettifySlug(sub[1])
+		}
+		return renderLink(display)
+	})
+	s = mdLinkRe.ReplaceAllStringFunc(s, func(match string) string {
+		sub := mdLinkRe.FindStringSubmatch(match)
+		return renderLink(sub[1])
+	})
+	s = bareURLRe.ReplaceAllStringFunc(s, func(match string) string {
+		return renderLink(ShortenURL(match))
+	})
+	return s
+}
+
+// ShortenURL extracts a readable name from a URL.
+func ShortenURL(raw string) string {
+	u, err := url.Parse(raw)
+	if err != nil {
+		return truncate(raw, 25)
+	}
+	p := strings.TrimRight(u.Path, "/")
+	if p == "" {
+		return u.Host
+	}
+	name := path.Base(p)
+	if isNumeric(name) {
+		parent := path.Base(path.Dir(p))
+		if parent != "." && parent != "/" {
+			name = parent + "/" + name
+		}
+	}
+	for _, ext := range []string{".html", ".htm", ".md", ".pdf"} {
+		name = strings.TrimSuffix(name, ext)
+	}
+	if len(name) > 40 {
+		name = name[:37] + "..."
+	}
+	return name
+}
+
+func prettifySlug(slug string) string {
+	words := strings.Split(slug, "-")
+	for i, w := range words {
+		if len(w) > 0 {
+			words[i] = strings.ToUpper(w[:1]) + w[1:]
+		}
+	}
+	return strings.Join(words, " ")
+}
+
+func isNumeric(s string) bool {
+	for _, c := range s {
+		if c < '0' || c > '9' {
+			return false
+		}
+	}
+	return len(s) > 0
+}
+
+func truncate(s string, maxLen int) string {
+	runes := []rune(s)
+	if len(runes) <= maxLen {
+		return s
+	}
+	return string(runes[:maxLen-1]) + "\u2026"
 }
