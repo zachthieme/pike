@@ -267,6 +267,8 @@ open and not @risk                      # open, excluding risk
 |-----|--------|
 | `j` / `Down` | Move cursor down |
 | `k` / `Up` | Move cursor up |
+| `Ctrl+D` | Scroll down half page |
+| `Ctrl+U` | Scroll up half page |
 | `g` | Jump to top |
 | `G` | Jump to bottom |
 | `Tab` | Jump to next section |
@@ -295,10 +297,10 @@ When the filter bar is active (`/` or `a`), tokens are space-separated and ANDed
 |-------|---------|
 | `foo` | Text must contain "foo" |
 | `!bar` | Text must NOT contain "bar" |
-| `@tag` | Task must have `@tag` |
-| `!@tag` | Task must NOT have `@tag` |
+| `@tag` | Task must have `@tag` (partial match: `@du` matches `@due`) |
+| `!@tag` | Task must NOT have `@tag` (partial match) |
 
-Example: `@talk foo !bob` shows tasks tagged `@talk` containing "foo" but not "bob".
+Example: `@talk foo !bob` shows tasks tagged `@talk` containing "foo" but not "bob". Partial tags work too: `@du` matches tasks with `@due`.
 
 | Key | Action |
 |-----|--------|
@@ -311,14 +313,15 @@ Example: `@talk foo !bob` shows tasks tagged `@talk` containing "foo" but not "b
 
 ### Tag Search Mode
 
-Press `t` to browse all tags found in your notes. Type to narrow the list, navigate with arrows, and press `Enter` to select a tag — returns to the dashboard filtered to that tag.
+Press `t` to browse all tags found in your notes. Tags are displayed in a compact flow-wrapped line. Matched tags are highlighted with their configured color, the selected tag gets reverse video, and non-matching tags are faint. Type to narrow matches (the `@` prefix is optional — both `@due` and `due` work). Selecting a tag shows all tasks with that tag, including completed tasks and tagged bullets.
 
 | Key | Action |
 |-----|--------|
-| Type | Filter tag list |
-| `Up` / `Ctrl+P` | Move cursor up |
-| `Down` / `Ctrl+N` | Move cursor down |
-| `Enter` | Select tag and filter dashboard |
+| Type | Filter tag list (partial match, `@` optional) |
+| `Tab` / `Down` | Cycle forward through matched tags |
+| `Shift+Tab` / `Up` | Cycle backward through matched tags |
+| `Enter` | Select tag and show all matching tasks |
+| `Backspace` to empty | Return to tag search from filtered results |
 | `Esc` | Cancel and return to dashboard |
 
 ### Hidden Tasks
@@ -344,6 +347,7 @@ Markdown syntax is cleaned up for display:
 | Source | Display |
 |--------|---------|
 | `[[slug\|Display Name]]` | **Display Name** |
+| `[[slug#Display Name]]` | **Display Name** |
 | `[[Display Name]]` | **Display Name** |
 | `[[zach-thieme]]` | **Zach Thieme** |
 | `[link text](url)` | **link text** |
@@ -381,11 +385,16 @@ internal/
   filter/filter.go             Query + sort pipeline, view engine
   editor/editor.go             Editor command construction
   render/render.go             Non-interactive stdout formatting
+  style/style.go               Tag coloring, link prettification, ANSI helpers
   tui/
-    model.go                   Bubbletea Model (Init/Update/View)
+    model.go                   Bubbletea Model struct, Init, Update
+    keys.go                    Key handlers and mode transitions
+    views.go                   View rendering (dashboard, all-tasks, tag search)
+    tasks.go                   Task filtering, sections, cursor, counting
     sections.go                Section rendering with borders
     styles.go                  Lipgloss style helpers
     keymap.go                  Key bindings
     summary.go                 Summary overlay
-    prettify.go                Link/URL prettification
+testdata/                      Golden file test fixtures and expected outputs
+golden_test.go                 Golden file test runner
 ```
