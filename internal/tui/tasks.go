@@ -117,10 +117,10 @@ func matchesFilter(t model.Task, tokens []string) bool {
 
 		var match bool
 		if strings.HasPrefix(term, "@") {
-			// Tag match: check parsed tags by name.
+			// Tag match: check parsed tags by name (partial substring match).
 			tagName := strings.ToLower(term[1:])
 			for _, tag := range t.Tags {
-				if strings.ToLower(tag.Name) == tagName {
+				if strings.Contains(strings.ToLower(tag.Name), tagName) {
 					match = true
 					break
 				}
@@ -279,7 +279,8 @@ func (m Model) filteredTags() []string {
 	if m.filterText == "" {
 		return m.tagList
 	}
-	lower := strings.ToLower(m.filterText)
+	// Strip leading @ so users can type "@due" or "due" interchangeably.
+	lower := strings.ToLower(strings.TrimPrefix(m.filterText, "@"))
 	var result []string
 	for _, tag := range m.tagList {
 		if strings.Contains(strings.ToLower(tag), lower) {

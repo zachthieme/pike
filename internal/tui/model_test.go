@@ -413,4 +413,101 @@ func TestArrowKeys(t *testing.T) {
 	}
 }
 
+func TestFilterPartialTagMatch(t *testing.T) {
+	m := testModel(testTasks(), testViews())
+
+	// Activate filter and type partial tag "@du" (should match @due)
+	updated, _ := sendKey(m, "/")
+	m = updated.(Model)
+	for _, ch := range "@du" {
+		updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{ch}})
+		m = updated.(Model)
+	}
+
+	flat := m.flatTasks()
+	if len(flat) == 0 {
+		t.Fatal("expected partial tag @du to match tasks with @due, got 0 results")
+	}
+	for _, task := range flat {
+		if !task.HasTag("due") {
+			t.Errorf("expected all filtered tasks to have @due tag, got %q", task.Text)
+		}
+	}
+}
+
+func TestFilterFullTagMatch(t *testing.T) {
+	m := testModel(testTasks(), testViews())
+
+	// Activate filter and type full tag "@today"
+	updated, _ := sendKey(m, "/")
+	m = updated.(Model)
+	for _, ch := range "@today" {
+		updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{ch}})
+		m = updated.(Model)
+	}
+
+	flat := m.flatTasks()
+	if len(flat) == 0 {
+		t.Fatal("expected @today to match tasks, got 0 results")
+	}
+	for _, task := range flat {
+		if !task.HasTag("today") {
+			t.Errorf("expected all filtered tasks to have @today tag, got %q", task.Text)
+		}
+	}
+}
+
+func TestTagSearchWithAtPrefix(t *testing.T) {
+	m := testModel(testTasks(), testViews())
+
+	// Enter tag search mode
+	updated, _ := sendKey(m, "t")
+	m = updated.(Model)
+
+	// Type "@du" — should match "due" tag even with @ prefix
+	for _, ch := range "@du" {
+		updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{ch}})
+		m = updated.(Model)
+	}
+
+	tags := m.filteredTags()
+	if len(tags) == 0 {
+		t.Fatal("expected @du in tag search to match 'due', got 0 results")
+	}
+	found := false
+	for _, tag := range tags {
+		if tag == "due" {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("expected 'due' in filtered tags, got %v", tags)
+	}
+}
+
+func TestTagSearchWithoutAtPrefix(t *testing.T) {
+	m := testModel(testTasks(), testViews())
+
+	// Enter tag search mode
+	updated, _ := sendKey(m, "t")
+	m = updated.(Model)
+
+	// Type "tod" — should match "today" tag
+	for _, ch := range "tod" {
+		updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{ch}})
+		m = updated.(Model)
+	}
+
+	tags := m.filteredTags()
+	found := false
+	for _, tag := range tags {
+		if tag == "today" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("expected 'today' in filtered tags, got %v", tags)
+	}
+}
+
 var _ filter.ViewResult
