@@ -200,7 +200,7 @@ func hasDSLTokens(input string) bool {
 func applyQueryFilter(tasks []model.Task, filterText string, now time.Time) ([]model.Task, error) {
 	// Try DSL parsing first
 	node, err := query.Parse(filterText)
-	if err == nil {
+	if err == nil && node != nil {
 		opts := query.EvalOptions{PartialTags: true}
 		var filtered []model.Task
 		for _, t := range tasks {

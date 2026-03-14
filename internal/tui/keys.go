@@ -53,8 +53,6 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		case key.Matches(msg, m.keys.PrevSection):
 			m.jumpToPrevSection()
 			return m, nil
-		case key.Matches(msg, m.keys.Toggle):
-			return m.toggleTask()
 		default:
 			var cmd tea.Cmd
 			m.filterInput, cmd = m.filterInput.Update(msg)
