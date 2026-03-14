@@ -54,6 +54,9 @@ func (m Model) viewDashboard() string {
 
 func (m Model) viewFocused() string {
 	body, count := m.renderSections()
+	if m.queryErr != nil {
+		body += "\n" + FooterStyle().Render("  "+m.queryErr.Error())
+	}
 	if count == 0 {
 		return body + "\nNo tasks"
 	}

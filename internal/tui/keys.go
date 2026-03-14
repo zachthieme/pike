@@ -278,9 +278,8 @@ func (m Model) toggleTask() (tea.Model, tea.Cmd) {
 	}
 	if err != nil {
 		m.err = err
-		return m, func() tea.Msg { return RefreshMsg{} }
+		return m, nil
 	}
-
 	return m, func() tea.Msg { return RefreshMsg{} }
 }
 

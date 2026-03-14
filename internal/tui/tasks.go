@@ -77,7 +77,7 @@ func (m *Model) rebuildDashboard(now time.Time) {
 			if filtered == nil {
 				filtered = []model.Task{}
 			}
-			results[i].Tasks = filtered
+			results[i].Tasks = tasksort.StablePartitionPinned(filtered)
 		}
 	}
 
@@ -123,8 +123,7 @@ func hasDSLTokens(input string) bool {
 		return true
 	}
 	for _, word := range strings.Fields(input) {
-		lower := strings.ToLower(word)
-		if lower == "and" || lower == "or" || lower == "not" || lower == "open" || lower == "completed" {
+		if strings.EqualFold(word, "and") || strings.EqualFold(word, "or") || strings.EqualFold(word, "not") || strings.EqualFold(word, "open") || strings.EqualFold(word, "completed") {
 			return true
 		}
 	}

@@ -133,11 +133,7 @@ func (p *parser) parseAtom() (Node, error) {
 		}
 		return &RegexNode{Pattern: tok.TagName, CompiledRe: re}, nil
 
-	case TokWord:
-		p.advance()
-		return &TextNode{Pattern: tok.Value, LowerPattern: strings.ToLower(tok.Value)}, nil
-
-	case TokString:
+	case TokWord, TokString:
 		p.advance()
 		return &TextNode{Pattern: tok.Value, LowerPattern: strings.ToLower(tok.Value)}, nil
 
