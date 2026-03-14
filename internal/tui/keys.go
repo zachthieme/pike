@@ -316,7 +316,11 @@ func (m Model) handleTagSearchKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		// Select tag → switch to all-tasks mode filtered to @tag (including completed).
 		tags := m.filteredTags()
 		if m.tagCursor < len(tags) {
-			cmd := m.enterAllTasksMode(true, "@"+tags[m.tagCursor])
+			selectedTag := tags[m.tagCursor]
+			if selectedTag == "hidden" {
+				m.showHidden = true
+			}
+			cmd := m.enterAllTasksMode(true, "@"+selectedTag)
 			return m, cmd
 		}
 		return m, nil
