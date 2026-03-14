@@ -22,7 +22,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		switch {
 		case key.Matches(msg, m.keys.Escape):
 			m.clearFilter()
-			if m.mode == modeAllTasks {
+			if m.mode == modeAllTasks || m.mode == modeRecentlyCompleted {
 				m.mode = modeDashboard
 			}
 			m.rebuildSections()
@@ -60,7 +60,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.filterInput, cmd = m.filterInput.Update(msg)
 			m.filterText = m.filterInput.Value()
 			// If we came from tag search and filter is now empty, return to tag search.
-			if m.showAll && m.filterText == "" {
+			if m.showAll && m.filterText == "" && m.mode != modeRecentlyCompleted {
 				m.enterTagSearchMode()
 				return m, cmd
 			}
@@ -145,6 +145,13 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	case key.Matches(msg, m.keys.TagSearch):
 		focusCmd := m.enterTagSearchMode()
+		return m, tea.Batch(focusCmd, func() tea.Msg { return tea.ClearScreen() })
+
+	case key.Matches(msg, m.keys.RecentlyCompleted):
+		if m.mode == modeRecentlyCompleted {
+			return m, nil
+		}
+		focusCmd := m.enterRecentlyCompletedMode()
 		return m, tea.Batch(focusCmd, func() tea.Msg { return tea.ClearScreen() })
 
 	case key.Matches(msg, m.keys.ToggleHidden):

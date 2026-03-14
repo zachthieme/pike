@@ -25,6 +25,8 @@ func (m Model) View() string {
 		return errLine + m.viewAllTasks()
 	case modeTagSearch:
 		return errLine + m.viewTagSearch()
+	case modeRecentlyCompleted:
+		return errLine + m.viewAllTasks()
 	}
 
 	if m.focusedView != "" {

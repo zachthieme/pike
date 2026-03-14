@@ -25,6 +25,7 @@ const (
 	modeDashboard viewMode = iota
 	modeAllTasks
 	modeTagSearch
+	modeRecentlyCompleted
 )
 
 // Model is the main Bubbletea model for the tasks TUI.

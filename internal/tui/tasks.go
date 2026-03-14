@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"fmt"
 	"slices"
 	"strings"
 	"time"
@@ -51,6 +52,35 @@ func (m *Model) rebuildSections() {
 		sections := []filter.ViewResult{{
 			Title: title,
 			Color: "cyan",
+			Tasks: tasks,
+		}}
+		m.sections = sections
+		m.applyHiddenFilter()
+		return
+	}
+
+	if m.mode == modeRecentlyCompleted {
+		tasks := make([]model.Task, len(m.allTasks))
+		copy(tasks, m.allTasks)
+
+		if m.filterText != "" {
+			now := m.nowFunc()
+			filtered, err := applyQueryFilter(tasks, m.filterText, now)
+			if err != nil {
+				m.queryErr = err
+				return
+			}
+			m.queryErr = nil
+			tasks = filtered
+		} else {
+			m.queryErr = nil
+		}
+
+		tasks = tasksort.StablePartitionPinned(tasks)
+
+		sections := []filter.ViewResult{{
+			Title: "Recently Completed",
+			Color: "blue",
 			Tasks: tasks,
 		}}
 		m.sections = sections
@@ -466,6 +496,26 @@ func (m *Model) enterTagSearchMode() tea.Cmd {
 	m.filterInput.Prompt = "/ "
 	m.filterInput.Placeholder = "search tags..."
 	m.tagCursor = 0
+	return m.filterInput.Focus()
+}
+
+// enterRecentlyCompletedMode switches to recently-completed view with a pre-filled query.
+func (m *Model) enterRecentlyCompletedMode() tea.Cmd {
+	days := 7
+	if m.config != nil {
+		days = m.config.RecentlyCompletedDays
+	}
+	queryStr := fmt.Sprintf("completed and @completed >= today-%dd", days)
+
+	m.mode = modeRecentlyCompleted
+	m.filtering = true
+	m.filterInput.SetValue(queryStr)
+	m.filterText = queryStr
+	m.filterInput.Prompt = "/ "
+	m.filterInput.Placeholder = "type to filter..."
+	m.cursor = 0
+	m.rebuildSections()
+	m.clampCursor()
 	return m.filterInput.Focus()
 }
 

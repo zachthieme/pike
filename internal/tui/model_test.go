@@ -751,3 +751,48 @@ func TestPageScroll(t *testing.T) {
 		t.Errorf("expected cursor clamped to 0, got %d", m.cursor)
 	}
 }
+
+func TestRecentlyCompletedMode(t *testing.T) {
+	m := testModel(testTasks(), testViews())
+
+	updated, _ := sendKey(m, "c")
+	m = updated.(Model)
+
+	if m.mode != modeRecentlyCompleted {
+		t.Errorf("expected modeRecentlyCompleted, got %d", m.mode)
+	}
+	if !m.filtering {
+		t.Error("expected filtering to be true")
+	}
+	if !strings.Contains(m.filterText, "completed and @completed") {
+		t.Errorf("expected pre-filled query, got %q", m.filterText)
+	}
+}
+
+func TestRecentlyCompletedEscapeReturnsToDashboard(t *testing.T) {
+	m := testModel(testTasks(), testViews())
+
+	updated, _ := sendKey(m, "c")
+	m = updated.(Model)
+
+	updated, _ = sendSpecialKey(m, tea.KeyEscape)
+	m = updated.(Model)
+
+	if m.mode != modeDashboard {
+		t.Errorf("expected modeDashboard after Esc, got %d", m.mode)
+	}
+}
+
+func TestRecentlyCompletedNoOpWhenAlreadyActive(t *testing.T) {
+	m := testModel(testTasks(), testViews())
+
+	updated, _ := sendKey(m, "c")
+	m = updated.(Model)
+
+	// Press c again — should be no-op
+	updated, _ = sendKey(m, "c")
+	m2 := updated.(Model)
+	if m2.mode != modeRecentlyCompleted {
+		t.Errorf("expected to stay in modeRecentlyCompleted, got %d", m2.mode)
+	}
+}
