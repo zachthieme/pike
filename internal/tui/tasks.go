@@ -328,11 +328,11 @@ func (m Model) hiddenCountFor(title string) int {
 	return 0
 }
 
-// countOpen returns the total count of open tasks.
+// countOpen returns the total count of open checkbox tasks.
 func (m Model) countOpen() int {
 	count := 0
 	for _, t := range m.allTasks {
-		if t.State == model.Open {
+		if t.HasCheckbox && t.State == model.Open {
 			count++
 		}
 	}
