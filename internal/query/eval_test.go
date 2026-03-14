@@ -257,3 +257,47 @@ func TestEvalIntegrationRecentlyCompleted(t *testing.T) {
 		t.Error("old completed task should not match 'completed and @completed >= today-7d'")
 	}
 }
+
+func TestEvalWithOptionsPartialTagMatch(t *testing.T) {
+	task := &model.Task{
+		Text: "Task @due(2026-03-15) @duration(2h)",
+		Tags: []model.Tag{
+			{Name: "due", Value: "2026-03-15"},
+			{Name: "duration", Value: "2h"},
+		},
+	}
+	opts := EvalOptions{PartialTags: true}
+
+	// "du" should match both "due" and "duration"
+	if !EvalWithOptions(&TagNode{Name: "du"}, task, now, opts) {
+		t.Error("partial tag @du should match task with @due")
+	}
+
+	// Exact match still works
+	if !EvalWithOptions(&TagNode{Name: "due"}, task, now, opts) {
+		t.Error("exact tag @due should match")
+	}
+
+	// No match
+	if EvalWithOptions(&TagNode{Name: "risk"}, task, now, opts) {
+		t.Error("@risk should not match")
+	}
+}
+
+func TestEvalWithOptionsExactByDefault(t *testing.T) {
+	task := &model.Task{
+		Text: "Task @due(2026-03-15)",
+		Tags: []model.Tag{{Name: "due", Value: "2026-03-15"}},
+	}
+
+	// Without PartialTags, "du" should NOT match "due"
+	opts := EvalOptions{PartialTags: false}
+	if EvalWithOptions(&TagNode{Name: "du"}, task, now, opts) {
+		t.Error("without PartialTags, @du should not match @due")
+	}
+
+	// Original Eval should still be exact
+	if Eval(&TagNode{Name: "du"}, task, now) {
+		t.Error("Eval should use exact matching")
+	}
+}

@@ -2,6 +2,7 @@ package query
 
 import (
 	"pike/internal/model"
+	"strings"
 	"time"
 )
 
@@ -28,6 +29,49 @@ func Eval(node Node, task *model.Task, now time.Time) bool {
 	default:
 		return false
 	}
+}
+
+// EvalOptions configures evaluation behavior.
+type EvalOptions struct {
+	PartialTags bool // When true, @tag matches any tag containing the name as substring
+}
+
+// EvalWithOptions evaluates an AST node against a task with configurable options.
+func EvalWithOptions(node Node, task *model.Task, now time.Time, opts EvalOptions) bool {
+	switch n := node.(type) {
+	case *OpenNode:
+		return task.State == model.Open
+	case *CompletedNode:
+		return task.State == model.Completed
+	case *TagNode:
+		if opts.PartialTags {
+			return hasTagPartial(task, n.Name)
+		}
+		return task.HasTag(n.Name)
+	case *DateCmpNode:
+		return evalDateCmp(n, task, now)
+	case *RegexNode:
+		return n.CompiledRe.MatchString(task.Text)
+	case *AndNode:
+		return EvalWithOptions(n.Left, task, now, opts) && EvalWithOptions(n.Right, task, now, opts)
+	case *OrNode:
+		return EvalWithOptions(n.Left, task, now, opts) || EvalWithOptions(n.Right, task, now, opts)
+	case *NotNode:
+		return !EvalWithOptions(n.Expr, task, now, opts)
+	default:
+		return false
+	}
+}
+
+// hasTagPartial returns true if any tag name contains the query as a substring (case-insensitive).
+func hasTagPartial(task *model.Task, name string) bool {
+	lower := strings.ToLower(name)
+	for _, tag := range task.Tags {
+		if strings.Contains(strings.ToLower(tag.Name), lower) {
+			return true
+		}
+	}
+	return false
 }
 
 // evalDateCmp evaluates a date comparison node against a task.
