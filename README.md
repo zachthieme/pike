@@ -208,7 +208,7 @@ expr     = or_expr
 or_expr  = and_expr ("or" and_expr)*
 and_expr = not_expr ("and" not_expr)*
 not_expr = "not" not_expr | atom
-atom     = "open" | "completed" | @tag | @tag <op> <date> | /regex/ | ( expr )
+atom     = "open" | "completed" | @tag | @tag <op> <date> | /regex/ | "text" | word | ( expr )
 ```
 
 ### Atoms
@@ -221,6 +221,8 @@ atom     = "open" | "completed" | @tag | @tag <op> <date> | /regex/ | ( expr )
 | `@due < today` | Date comparison on the due field |
 | `@completed >= today-7d` | Date comparison on the completed field |
 | `/pattern/` | Regex match against task text |
+| `word` | Case-insensitive substring match against task text |
+| `"multi word"` | Quoted substring match against task text |
 
 ### Operators
 
@@ -249,7 +251,9 @@ open and @due >= today and @due <= today+3d   # due within 3 days
 completed and @completed >= today-7d    # completed in last week
 open and (@weekly or @today)            # tagged weekly or today
 open and not @risk                      # open, excluding risk
-/deploy/                                # text matches "deploy"
+/deploy/                                # regex matches "deploy"
+open and deploy                         # open tasks containing "deploy"
+open and "meeting notes"                # open tasks containing "meeting notes"
 ```
 
 ## Sort Orders

@@ -23,6 +23,8 @@ const (
 	TokToday                      // "today" (standalone, not part of offset)
 	TokOffset                     // today+3d or today-7d
 	TokRegex                      // /pattern/
+	TokString                     // "quoted text"
+	TokWord                       // bare word (not a keyword)
 	TokLParen                     // (
 	TokRParen                     // )
 	TokEOF
@@ -58,6 +60,10 @@ func (t TokenType) String() string {
 		return "TokOffset"
 	case TokRegex:
 		return "TokRegex"
+	case TokString:
+		return "TokString"
+	case TokWord:
+		return "TokWord"
 	case TokLParen:
 		return "TokLParen"
 	case TokRParen:
@@ -122,6 +128,22 @@ func Lex(input string) ([]Token, error) {
 				tokens = append(tokens, Token{Type: TokGT, Value: ">"})
 				i++
 			}
+			continue
+		}
+
+		// Quoted string: "text"
+		if ch == '"' {
+			i++ // skip opening quote
+			start := i
+			for i < len(runes) && runes[i] != '"' {
+				i++
+			}
+			if i >= len(runes) {
+				return nil, fmt.Errorf("unterminated string starting at position %d", start-1)
+			}
+			text := string(runes[start:i])
+			i++ // skip closing quote
+			tokens = append(tokens, Token{Type: TokString, Value: text})
 			continue
 		}
 
@@ -213,7 +235,7 @@ func Lex(input string) ([]Token, error) {
 					tokens = append(tokens, Token{Type: TokToday, Value: word})
 				}
 			default:
-				return nil, fmt.Errorf("unexpected word %q at position %d", word, start)
+				tokens = append(tokens, Token{Type: TokWord, Value: word})
 			}
 			continue
 		}

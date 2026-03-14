@@ -31,6 +31,8 @@ func EvalWithOptions(node Node, task *model.Task, now time.Time, opts EvalOption
 		return task.HasTag(n.Name)
 	case *DateCmpNode:
 		return evalDateCmp(n, task, now)
+	case *TextNode:
+		return strings.Contains(strings.ToLower(task.Text), strings.ToLower(n.Pattern))
 	case *RegexNode:
 		return n.CompiledRe.MatchString(task.Text)
 	case *AndNode:

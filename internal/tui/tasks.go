@@ -115,7 +115,7 @@ func (m *Model) applyHiddenFilter() {
 // hasDSLTokens checks if input contains DSL-specific tokens that distinguish
 // it from a plain text search. Uses word-boundary matching for keywords.
 func hasDSLTokens(input string) bool {
-	if strings.ContainsAny(input, "@<>") {
+	if strings.ContainsAny(input, "@<>\"") {
 		return true
 	}
 	// Detect /regex/ patterns (paired slashes)

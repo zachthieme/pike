@@ -301,3 +301,52 @@ func TestEvalWithOptionsExactByDefault(t *testing.T) {
 		t.Error("Eval should use exact matching")
 	}
 }
+
+func TestEvalTextNode(t *testing.T) {
+	task := &model.Task{Text: "Deploy the service to production"}
+
+	if !Eval(&TextNode{Pattern: "deploy"}, task, now) {
+		t.Error("TextNode should match case-insensitively")
+	}
+	if !Eval(&TextNode{Pattern: "service to"}, task, now) {
+		t.Error("TextNode should match multi-word substrings")
+	}
+	if Eval(&TextNode{Pattern: "staging"}, task, now) {
+		t.Error("TextNode should not match missing text")
+	}
+}
+
+func TestEvalIntegrationTextSearch(t *testing.T) {
+	// "open and deploy" should parse and match
+	node, err := Parse("open and deploy")
+	if err != nil {
+		t.Fatalf("Parse error: %v", err)
+	}
+
+	task := &model.Task{State: model.Open, Text: "Deploy the service"}
+	if !Eval(node, task, now) {
+		t.Error("'open and deploy' should match open task containing 'deploy'")
+	}
+
+	closedTask := &model.Task{State: model.Completed, Text: "Deploy the service"}
+	if Eval(node, closedTask, now) {
+		t.Error("'open and deploy' should not match completed task")
+	}
+}
+
+func TestEvalIntegrationQuotedText(t *testing.T) {
+	node, err := Parse(`open and "meeting notes"`)
+	if err != nil {
+		t.Fatalf("Parse error: %v", err)
+	}
+
+	task := &model.Task{State: model.Open, Text: "Review meeting notes from Monday"}
+	if !Eval(node, task, now) {
+		t.Error(`'open and "meeting notes"' should match`)
+	}
+
+	task2 := &model.Task{State: model.Open, Text: "Review meeting agenda"}
+	if Eval(node, task2, now) {
+		t.Error(`'open and "meeting notes"' should not match "meeting agenda"`)
+	}
+}

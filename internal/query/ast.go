@@ -71,3 +71,10 @@ type NotNode struct {
 }
 
 func (n *NotNode) nodeType() string { return "not" }
+
+// TextNode matches tasks whose text contains a substring (case-insensitive).
+type TextNode struct {
+	Pattern string // the text to search for
+}
+
+func (n *TextNode) nodeType() string { return "text" }

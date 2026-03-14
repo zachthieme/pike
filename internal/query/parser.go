@@ -132,6 +132,14 @@ func (p *parser) parseAtom() (Node, error) {
 		}
 		return &RegexNode{Pattern: tok.TagName, CompiledRe: re}, nil
 
+	case TokWord:
+		p.advance()
+		return &TextNode{Pattern: tok.Value}, nil
+
+	case TokString:
+		p.advance()
+		return &TextNode{Pattern: tok.Value}, nil
+
 	case TokLParen:
 		p.advance() // consume "("
 		expr, err := p.parseExpr()
