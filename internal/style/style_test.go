@@ -67,3 +67,91 @@ func TestANSIStyleFunc(t *testing.T) {
 		})
 	}
 }
+
+func TestColorizeTags(t *testing.T) {
+	sf := ANSIStyleFunc()
+	green := "\033[32m"
+	red := "\033[31m"
+	cyan := "\033[36m"
+	reset := "\033[0m"
+
+	tagColors := map[string]string{
+		"today":    "green",
+		"risk":     "red",
+		"due":      "red",
+		"_default": "cyan",
+	}
+
+	tests := []struct {
+		name      string
+		text      string
+		tags      []model.Tag
+		tagColors map[string]string
+		want      string
+	}{
+		{
+			name:      "bare tag",
+			text:      "Buy groceries @today",
+			tags:      []model.Tag{{Name: "today"}},
+			tagColors: tagColors,
+			want:      "Buy groceries " + green + "@today" + reset,
+		},
+		{
+			name:      "valued tag uses three-part render",
+			text:      "Submit report @due(2026-03-15)",
+			tags:      []model.Tag{{Name: "due", Value: "2026-03-15"}},
+			tagColors: tagColors,
+			want:      "Submit report " + red + "@due(" + reset + red + "2026-03-15" + reset + red + ")" + reset,
+		},
+		{
+			name:      "multiple tags",
+			text:      "Deploy service @risk @today",
+			tags:      []model.Tag{{Name: "risk"}, {Name: "today"}},
+			tagColors: tagColors,
+			want:      "Deploy service " + red + "@risk" + reset + " " + green + "@today" + reset,
+		},
+		{
+			name:      "unknown tag uses _default",
+			text:      "Research @someothertag",
+			tags:      []model.Tag{{Name: "someothertag"}},
+			tagColors: tagColors,
+			want:      "Research " + cyan + "@someothertag" + reset,
+		},
+		{
+			name:      "no matching color skips tag",
+			text:      "Task @unknown",
+			tags:      []model.Tag{{Name: "unknown"}},
+			tagColors: map[string]string{},
+			want:      "Task @unknown",
+		},
+		{
+			name:      "duplicate tag tokens deduplicated",
+			text:      "Task @today @today",
+			tags:      []model.Tag{{Name: "today"}, {Name: "today"}},
+			tagColors: tagColors,
+			want:      "Task " + green + "@today" + reset + " @today",
+		},
+		{
+			name:      "longer token replaced before shorter",
+			text:      "Task @due(2026-03-15) and also @due sometime",
+			tags:      []model.Tag{{Name: "due", Value: "2026-03-15"}, {Name: "due"}},
+			tagColors: tagColors,
+			want:      "Task " + red + "@due(" + reset + red + "2026-03-15" + reset + red + ")" + reset + " and also " + red + "@due" + reset + " sometime",
+		},
+		{
+			name:      "nil tagColors returns text unchanged",
+			text:      "Task @today",
+			tags:      []model.Tag{{Name: "today"}},
+			tagColors: nil,
+			want:      "Task @today",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := ColorizeTags(tt.text, tt.tags, tt.tagColors, sf)
+			if got != tt.want {
+				t.Errorf("ColorizeTags() =\n  %q\nwant:\n  %q", got, tt.want)
+			}
+		})
+	}
+}

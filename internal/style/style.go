@@ -3,6 +3,7 @@ package style
 import (
 	"fmt"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -56,6 +57,61 @@ func colorCode(color string) string {
 		}
 	}
 	return ""
+}
+
+// ColorizeTags replaces tag tokens in text with colored versions.
+func ColorizeTags(text string, tags []model.Tag, tagColors map[string]string, sf StyleFunc) string {
+	if tagColors == nil {
+		return text
+	}
+
+	type tagReplacement struct {
+		token  string
+		styled string
+	}
+	seen := make(map[string]bool)
+	var replacements []tagReplacement
+	for _, tag := range tags {
+		token := TagToken(tag)
+		if seen[token] {
+			continue
+		}
+		seen[token] = true
+		color, ok := tagColors[tag.Name]
+		if !ok {
+			color = tagColors["_default"]
+		}
+		if color == "" {
+			continue
+		}
+		var styled string
+		if tag.Value != "" {
+			styled = sf("@"+tag.Name+"(", color) + sf(tag.Value, color) + sf(")", color)
+		} else {
+			styled = sf(token, color)
+		}
+		replacements = append(replacements, tagReplacement{
+			token:  token,
+			styled: styled,
+		})
+	}
+	sort.Slice(replacements, func(i, j int) bool {
+		return len(replacements[i].token) > len(replacements[j].token)
+	})
+	// Two-pass replacement: first substitute tokens with unique placeholders,
+	// then replace placeholders with styled text. This prevents shorter tokens
+	// (e.g., @due) from matching inside already-styled longer tokens
+	// (e.g., the styled output of @due(2026-03-15) which contains "@due" literally).
+	placeholders := make([]string, len(replacements))
+	for i, r := range replacements {
+		ph := fmt.Sprintf("\x00PH%d\x00", i)
+		placeholders[i] = ph
+		text = strings.Replace(text, r.token, ph, 1)
+	}
+	for i, r := range replacements {
+		text = strings.Replace(text, placeholders[i], r.styled, 1)
+	}
+	return text
 }
 
 // ANSIStyleFunc returns a StyleFunc that wraps text in raw ANSI color codes.
