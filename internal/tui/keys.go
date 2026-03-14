@@ -140,6 +140,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	case key.Matches(msg, m.keys.TagSearch):
 		m.mode = modeTagSearch
+		m.showAll = false
 		m.buildTagList()
 		m.filterInput.SetValue("")
 		m.filterText = ""
