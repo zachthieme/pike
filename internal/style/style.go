@@ -1,11 +1,12 @@
 package style
 
 import (
+	"cmp"
 	"fmt"
 	"net/url"
 	"path"
 	"regexp"
-	"sort"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -103,8 +104,8 @@ func ColorizeTags(text string, tags []model.Tag, tagColors map[string]string, sf
 			styled: styled,
 		})
 	}
-	sort.Slice(replacements, func(i, j int) bool {
-		return len(replacements[i].token) > len(replacements[j].token)
+	slices.SortFunc(replacements, func(a, b tagReplacement) int {
+		return cmp.Compare(len(b.token), len(a.token)) // descending by length
 	})
 	// Two-pass replacement: first substitute tokens with unique placeholders,
 	// then replace placeholders with styled text. This prevents shorter tokens

@@ -1,7 +1,7 @@
 package tui
 
 import (
-	gosort "sort"
+	"slices"
 	"strings"
 	"time"
 
@@ -309,7 +309,7 @@ func (m *Model) buildTagList() {
 	for name := range seen {
 		m.tagList = append(m.tagList, name)
 	}
-	gosort.Strings(m.tagList)
+	slices.Sort(m.tagList)
 }
 
 // filteredTags returns the tag list filtered by current filter text.

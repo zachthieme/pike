@@ -6,7 +6,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-	"sort"
+	"slices"
 	"time"
 
 	"github.com/bmatcuk/doublestar/v4"
@@ -214,7 +214,7 @@ func (s *Scanner) allTasks() []model.Task {
 	for p := range s.tasks {
 		paths = append(paths, p)
 	}
-	sort.Strings(paths)
+	slices.Sort(paths)
 
 	var all []model.Task
 	for _, p := range paths {

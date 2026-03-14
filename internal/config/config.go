@@ -1,10 +1,11 @@
 package config
 
 import (
+	"cmp"
 	"errors"
 	"os"
 	"path/filepath"
-	"sort"
+	"slices"
 	"strings"
 	"time"
 
@@ -164,8 +165,8 @@ func applyDefaults(raw *rawConfig) (*Config, error) {
 	if len(raw.Views) > 0 {
 		cfg.Views = raw.Views
 		// Sort views by Order (stable to preserve list position for equal orders)
-		sort.SliceStable(cfg.Views, func(i, j int) bool {
-			return cfg.Views[i].Order < cfg.Views[j].Order
+		slices.SortStableFunc(cfg.Views, func(a, b ViewConfig) int {
+			return cmp.Compare(a.Order, b.Order)
 		})
 	} else {
 		cfg.Views = []ViewConfig{
