@@ -203,16 +203,19 @@ func (m Model) handleTagSearchKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case key.Matches(msg, m.keys.Quit):
 		return m, tea.Quit
 
-	case msg.Type == tea.KeyDown || msg.Type == tea.KeyCtrlN:
+	case key.Matches(msg, m.keys.NextSection) || msg.Type == tea.KeyDown || msg.Type == tea.KeyCtrlN:
+		// Tab / Down / Ctrl-N: cycle forward through matched tags.
 		tags := m.filteredTags()
-		if m.tagCursor < len(tags)-1 {
-			m.tagCursor++
+		if len(tags) > 0 {
+			m.tagCursor = (m.tagCursor + 1) % len(tags)
 		}
 		return m, nil
 
-	case msg.Type == tea.KeyUp || msg.Type == tea.KeyCtrlP:
-		if m.tagCursor > 0 {
-			m.tagCursor--
+	case key.Matches(msg, m.keys.PrevSection) || msg.Type == tea.KeyUp || msg.Type == tea.KeyCtrlP:
+		// Shift-Tab / Up / Ctrl-P: cycle backward through matched tags.
+		tags := m.filteredTags()
+		if len(tags) > 0 {
+			m.tagCursor = (m.tagCursor - 1 + len(tags)) % len(tags)
 		}
 		return m, nil
 

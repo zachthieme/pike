@@ -5,6 +5,9 @@ import (
 	"strings"
 
 	"pike/internal/filter"
+	"pike/internal/style"
+
+	"github.com/charmbracelet/lipgloss"
 )
 
 // View implements tea.Model.
@@ -125,26 +128,113 @@ func (m Model) viewAllTasks() string {
 }
 
 // viewTagSearch renders the tag picker with filter bar.
+// Tags are displayed in a flow-wrapped line with matched tags highlighted.
 func (m Model) viewTagSearch() string {
 	var parts []string
 
 	parts = append(parts, m.filterInput.View())
 	parts = append(parts, "")
 
-	tags := m.filteredTags()
-	if len(tags) == 0 {
-		parts = append(parts, "  No matching tags")
-	} else {
-		for i, tag := range tags {
-			line := fmt.Sprintf("  @%s", tag)
-			if i == m.tagCursor {
-				line = TaskStyle(true).Render(fmt.Sprintf("▸ @%s", tag))
+	filtered := m.filteredTags()
+	if len(m.tagList) == 0 {
+		parts = append(parts, "  No tags found")
+		return strings.Join(parts, "\n")
+	}
+
+	// Build a set of matched tag names for quick lookup.
+	matchedSet := make(map[string]bool, len(filtered))
+	for _, tag := range filtered {
+		matchedSet[tag] = true
+	}
+
+	// Determine which filtered tag is currently selected.
+	selectedTag := ""
+	if len(filtered) > 0 && m.tagCursor < len(filtered) {
+		selectedTag = filtered[m.tagCursor]
+	}
+
+	// Render all tags in a flow-wrapped line.
+	// Matched tags are highlighted with their configured color.
+	// The selected tag (via Tab) gets reverse video.
+	// Non-matching tags are rendered faint.
+	delim := lipgloss.NewStyle().Faint(true).Render(" · ")
+	var tagParts []string
+	for _, tag := range m.tagList {
+		label := "@" + tag
+		if tag == selectedTag {
+			tagParts = append(tagParts, TaskStyle(true).Render(label))
+		} else if matchedSet[tag] {
+			if color, ok := m.tagColors[tag]; ok {
+				tagParts = append(tagParts, TagStyle(color).Render(label))
+			} else if color, ok := m.tagColors["_default"]; ok {
+				tagParts = append(tagParts, TagStyle(color).Render(label))
+			} else {
+				tagParts = append(tagParts, label)
 			}
-			parts = append(parts, line)
+		} else {
+			tagParts = append(tagParts, lipgloss.NewStyle().Faint(true).Render(label))
 		}
 	}
 
+	// Flow-wrap the tags to fit the terminal width.
+	if m.width > 0 {
+		parts = append(parts, flowWrap(tagParts, delim, m.width-2))
+	} else {
+		parts = append(parts, "  "+strings.Join(tagParts, delim))
+	}
+
+	if len(filtered) == 0 && m.filterText != "" {
+		parts = append(parts, "")
+		parts = append(parts, "  No matching tags")
+	}
+
 	return strings.Join(parts, "\n")
+}
+
+// flowWrap joins styled parts with a delimiter, wrapping to new lines
+// when the visible width exceeds maxWidth.
+func flowWrap(parts []string, delim string, maxWidth int) string {
+	if maxWidth <= 0 {
+		maxWidth = 80
+	}
+
+	// Strip ANSI to measure visible width.
+	visibleLen := func(s string) int {
+		return len(style.StripANSI(s))
+	}
+
+	delimVisible := visibleLen(delim)
+	var lines []string
+	currentLine := "  " // indent
+	currentWidth := 2
+
+	for i, part := range parts {
+		partWidth := visibleLen(part)
+		needsDelim := i > 0
+
+		addedWidth := partWidth
+		if needsDelim {
+			addedWidth += delimVisible
+		}
+
+		if needsDelim && currentWidth+addedWidth > maxWidth {
+			lines = append(lines, currentLine)
+			currentLine = "  " + part
+			currentWidth = 2 + partWidth
+		} else {
+			if needsDelim {
+				currentLine += delim
+				currentWidth += delimVisible
+			}
+			currentLine += part
+			currentWidth += partWidth
+		}
+	}
+	if currentLine != "  " {
+		lines = append(lines, currentLine)
+	}
+
+	return strings.Join(lines, "\n")
 }
 
 // renderSections renders the filter bar (if active) and all non-empty sections.
