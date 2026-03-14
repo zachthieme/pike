@@ -9,6 +9,7 @@ import (
 )
 
 var completedTagRe = regexp.MustCompile(`\s*@completed(\([^)]*\))?(?:\s|$)`)
+var hiddenTagRe = regexp.MustCompile(`\s*@hidden(?:\s|$)`)
 
 // Complete marks an open checkbox task as completed by modifying the source file.
 // Replaces - [ ] with - [x] and appends @completed(YYYY-MM-DD).
@@ -68,6 +69,37 @@ func Uncomplete(filePath string, line int) error {
 
 	lines[idx] = l
 
+	return writeLines(filePath, lines)
+}
+
+// ToggleHidden adds @hidden to a task line if absent, or removes it if present.
+func ToggleHidden(filePath string, line int) error {
+	lines, err := readLines(filePath)
+	if err != nil {
+		return err
+	}
+	if line < 1 || line > len(lines) {
+		return fmt.Errorf("line %d out of range (file has %d lines)", line, len(lines))
+	}
+
+	idx := line - 1
+	l := lines[idx]
+
+	if strings.Contains(l, "@hidden") {
+		// Remove @hidden tag
+		l = hiddenTagRe.ReplaceAllStringFunc(l, func(match string) string {
+			if strings.HasSuffix(match, " ") || strings.HasSuffix(match, "\t") {
+				return " "
+			}
+			return ""
+		})
+		l = strings.TrimRight(l, " \t")
+	} else {
+		// Append @hidden tag
+		l += " @hidden"
+	}
+
+	lines[idx] = l
 	return writeLines(filePath, lines)
 }
 

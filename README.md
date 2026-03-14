@@ -293,8 +293,9 @@ open and "meeting notes"                # open tasks containing "meeting notes"
 | `a` | All tasks — show every task with search |
 | `t` | Tag search — browse and pick a tag |
 | `x` | Toggle task complete/incomplete |
+| `H` | Toggle `@hidden` tag on selected task |
 | `c` | Recently completed tasks |
-| `h` | Toggle hidden tasks (show/hide `@hidden` tasks) |
+| `h` | Toggle hidden tasks visibility (show/hide `@hidden` tasks) |
 | `s` | Toggle summary overlay |
 | `r` | Refresh (re-scan files) |
 | `q` | Quit |
@@ -323,6 +324,7 @@ Press `Tab` to switch focus between the query bar and the results list. When res
 | `Ctrl+D` | Scroll down half page |
 | `Ctrl+U` | Scroll up half page |
 | `x` | Toggle task complete (when results focused) |
+| `H` | Toggle `@hidden` tag (when results focused) |
 | `j` / `k` / `g` / `G` | Navigate results (when results focused) |
 | `/` | Return focus to query bar |
 | `Enter` | Open selected task in editor |

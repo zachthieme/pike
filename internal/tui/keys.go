@@ -68,6 +68,8 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			switch {
 			case key.Matches(msg, m.keys.Toggle):
 				return m.toggleTask()
+			case key.Matches(msg, m.keys.ToggleHiddenTag):
+				return m.toggleHiddenTag()
 			case key.Matches(msg, m.keys.Up):
 				if m.cursor > 0 {
 					m.cursor--
@@ -212,6 +214,9 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	case key.Matches(msg, m.keys.Toggle):
 		return m.toggleTask()
+
+	case key.Matches(msg, m.keys.ToggleHiddenTag):
+		return m.toggleHiddenTag()
 	}
 
 	// Check focus section keys 1-9.
@@ -276,6 +281,23 @@ func (m Model) toggleTask() (tea.Model, tea.Cmd) {
 	} else {
 		err = toggle.Uncomplete(filePath, task.Line)
 	}
+	if err != nil {
+		m.err = err
+		return m, nil
+	}
+	return m, func() tea.Msg { return RefreshMsg{} }
+}
+
+// toggleHiddenTag adds or removes @hidden from the task at the cursor.
+func (m Model) toggleHiddenTag() (tea.Model, tea.Cmd) {
+	flatTasks := m.flatTasks()
+	if len(flatTasks) == 0 || m.cursor >= len(flatTasks) {
+		return m, nil
+	}
+	task := flatTasks[m.cursor]
+	filePath := m.resolveFilePath(task.File)
+
+	err := toggle.ToggleHidden(filePath, task.Line)
 	if err != nil {
 		m.err = err
 		return m, nil

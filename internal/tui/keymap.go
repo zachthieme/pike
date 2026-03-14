@@ -10,7 +10,7 @@ type KeyMap struct {
 	Enter, Quit, Summary           key.Binding
 	Filter, Escape, Refresh        key.Binding
 	AllTasks, TagSearch, ToggleHidden key.Binding
-	Toggle, RecentlyCompleted key.Binding
+	Toggle, ToggleHiddenTag, RecentlyCompleted key.Binding
 }
 
 // DefaultKeyMap returns the default key bindings.
@@ -79,6 +79,10 @@ func DefaultKeyMap() KeyMap {
 		Toggle: key.NewBinding(
 			key.WithKeys("x"),
 			key.WithHelp("x", "toggle complete"),
+		),
+		ToggleHiddenTag: key.NewBinding(
+			key.WithKeys("H"),
+			key.WithHelp("H", "toggle @hidden tag"),
 		),
 		RecentlyCompleted: key.NewBinding(
 			key.WithKeys("c"),

@@ -152,3 +152,67 @@ func TestUncompletePreservesOtherTags(t *testing.T) {
 		t.Errorf("got:\n%s\nwant:\n%s", got, want)
 	}
 }
+
+func TestToggleHiddenAdd(t *testing.T) {
+	dir := t.TempDir()
+	p := writeFile(t, dir, "test.md", "- [ ] Buy groceries @today\n")
+
+	err := ToggleHidden(p, 1)
+	if err != nil {
+		t.Fatalf("ToggleHidden: %v", err)
+	}
+
+	got := readFile(t, p)
+	want := "- [ ] Buy groceries @today @hidden\n"
+	if got != want {
+		t.Errorf("got:\n%s\nwant:\n%s", got, want)
+	}
+}
+
+func TestToggleHiddenRemove(t *testing.T) {
+	dir := t.TempDir()
+	p := writeFile(t, dir, "test.md", "- [ ] Buy groceries @today @hidden\n")
+
+	err := ToggleHidden(p, 1)
+	if err != nil {
+		t.Fatalf("ToggleHidden: %v", err)
+	}
+
+	got := readFile(t, p)
+	want := "- [ ] Buy groceries @today\n"
+	if got != want {
+		t.Errorf("got:\n%s\nwant:\n%s", got, want)
+	}
+}
+
+func TestToggleHiddenPreservesOtherTags(t *testing.T) {
+	dir := t.TempDir()
+	p := writeFile(t, dir, "test.md", "- [ ] Task @today @hidden @risk\n")
+
+	err := ToggleHidden(p, 1)
+	if err != nil {
+		t.Fatalf("ToggleHidden: %v", err)
+	}
+
+	got := readFile(t, p)
+	want := "- [ ] Task @today @risk\n"
+	if got != want {
+		t.Errorf("got:\n%s\nwant:\n%s", got, want)
+	}
+}
+
+func TestToggleHiddenTaggedBullet(t *testing.T) {
+	dir := t.TempDir()
+	p := writeFile(t, dir, "test.md", "- Review design @talk\n")
+
+	err := ToggleHidden(p, 1)
+	if err != nil {
+		t.Fatalf("ToggleHidden: %v", err)
+	}
+
+	got := readFile(t, p)
+	want := "- Review design @talk @hidden\n"
+	if got != want {
+		t.Errorf("got:\n%s\nwant:\n%s", got, want)
+	}
+}
