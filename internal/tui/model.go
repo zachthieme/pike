@@ -43,6 +43,7 @@ type Model struct {
 	tagList     []string // unique tags for tag search mode
 	tagCursor   int      // cursor in tag list
 	showHidden  bool     // whether to show @hidden tasks
+	showAll     bool     // when true, all-tasks includes completed (e.g. from tag search)
 	width       int
 	height      int
 	err         error

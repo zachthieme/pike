@@ -117,6 +117,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	case key.Matches(msg, m.keys.AllTasks):
 		m.mode = modeAllTasks
+		m.showAll = false
 		m.filtering = true
 		m.filterInput.SetValue("")
 		m.filterText = ""
@@ -220,11 +221,12 @@ func (m Model) handleTagSearchKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case msg.Type == tea.KeyEnter:
-		// Select tag → switch to all-tasks mode filtered to @tag.
+		// Select tag → switch to all-tasks mode filtered to @tag (including completed).
 		tags := m.filteredTags()
 		if m.tagCursor < len(tags) {
 			selected := tags[m.tagCursor]
 			m.mode = modeAllTasks
+			m.showAll = true
 			m.filtering = true
 			m.filterText = "@" + selected
 			m.filterInput.SetValue("@" + selected)

@@ -11,11 +11,12 @@ import (
 
 // rebuildSections recomputes sections from allTasks, applying filter text.
 func (m *Model) rebuildSections() {
-	// In all-tasks mode, show all open (non-completed) tasks in a single section.
+	// In all-tasks mode, show tasks in a single section.
+	// When showAll is true (e.g. from tag search), include completed tasks too.
 	if m.mode == modeAllTasks {
 		var tasks []model.Task
 		for _, t := range m.allTasks {
-			if t.State != model.Completed {
+			if m.showAll || t.State != model.Completed {
 				tasks = append(tasks, t)
 			}
 		}
@@ -31,8 +32,12 @@ func (m *Model) rebuildSections() {
 			tasks = filtered
 		}
 
+		title := "All Open Tasks"
+		if m.showAll {
+			title = "All Tasks"
+		}
 		sections := []filter.ViewResult{{
-			Title: "All Open Tasks",
+			Title: title,
 			Color: "cyan",
 			Tasks: tasks,
 		}}
@@ -356,6 +361,7 @@ func (m Model) countCompletedThisWeek() int {
 func (m *Model) clearFilter() {
 	m.filtering = false
 	m.filterText = ""
+	m.showAll = false
 	m.filterInput.SetValue("")
 	m.filterInput.Prompt = "/ "
 	m.filterInput.Placeholder = "type to filter..."
