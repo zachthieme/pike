@@ -302,11 +302,15 @@ When the filter bar is active (`/` or `a`), tokens are space-separated and ANDed
 
 Example: `@talk foo !bob` shows tasks tagged `@talk` containing "foo" but not "bob". Partial tags work too: `@du` matches tasks with `@due`.
 
+Note: `j`/`k` type into the filter — use arrow keys or Ctrl keys to navigate.
+
 | Key | Action |
 |-----|--------|
 | Type | Filter tasks across all sections |
 | `Up` / `Ctrl+P` | Move cursor up |
 | `Down` / `Ctrl+N` | Move cursor down |
+| `Ctrl+D` | Scroll down half page |
+| `Ctrl+U` | Scroll up half page |
 | `Tab` | Jump to next section |
 | `Enter` | Open selected task in editor |
 | `Esc` | Clear filter and exit filter mode |
