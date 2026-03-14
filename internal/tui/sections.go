@@ -15,8 +15,11 @@ func lipglossStyleFunc(text string, color string) string {
 	return lipgloss.NewStyle().Foreground(resolveColor(color)).Render(text)
 }
 
-// RenderSection renders a single view section with a colored header and task list.
-func RenderSection(title string, tasks []model.Task, color string, cursor int, sectionStart int, tagColors map[string]string, width int, linkColor string, hiddenCount int) string {
+// renderSection renders a single view section with a colored header and task list.
+// cursor is the global flat cursor index, sectionStart is the flat index of the
+// first task in this section. hiddenCount is the number of @hidden tasks stripped;
+// when > 0 a lock icon is appended to the header.
+func (m Model) renderSection(title string, tasks []model.Task, color string, sectionStart int, hiddenCount int) string {
 	if len(tasks) == 0 {
 		return ""
 	}
@@ -28,19 +31,24 @@ func RenderSection(title string, tasks []model.Task, color string, cursor int, s
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(borderColor)
 
-	if width > 0 {
-		innerWidth := width - 4
+	if m.width > 0 {
+		innerWidth := m.width - 4
 		if innerWidth < 10 {
 			innerWidth = 10
 		}
 		borderStyle = borderStyle.Width(innerWidth)
 	}
 
+	linkColor := ""
+	if m.config != nil {
+		linkColor = m.config.LinkColor
+	}
+
 	var lines []string
 	for i, task := range tasks {
 		flatIdx := sectionStart + i
-		selected := flatIdx == cursor
-		line := formatTaskLine(task, tagColors, linkColor, selected)
+		selected := flatIdx == m.cursor
+		line := formatTaskLine(task, m.tagColors, linkColor, selected)
 		lines = append(lines, line)
 	}
 

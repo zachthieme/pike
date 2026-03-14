@@ -114,11 +114,11 @@ func (m Model) viewAllTasks() string {
 	hiddenCount := m.hiddenCountFor(sec.Title)
 
 	if len(tasks) <= maxVisible {
-		rendered := RenderSection(sec.Title, tasks, sec.Color, m.cursor, 0, m.tagColors, m.width, m.config.LinkColor, hiddenCount)
+		rendered := m.renderSection(sec.Title, tasks, sec.Color, 0, hiddenCount)
 		parts = append(parts, rendered)
 	} else {
 		start, end := scrollWindow(m.cursor, len(tasks), maxVisible)
-		rendered := RenderSection(sec.Title, tasks[start:end], sec.Color, m.cursor, start, m.tagColors, m.width, m.config.LinkColor, hiddenCount)
+		rendered := m.renderSection(sec.Title, tasks[start:end], sec.Color, start, hiddenCount)
 		parts = append(parts, rendered)
 		parts = append(parts, FooterStyle().Render(fmt.Sprintf("  %d–%d of %d tasks", start+1, end, len(tasks))))
 	}
@@ -252,7 +252,7 @@ func (m Model) renderSections() (string, int) {
 			continue
 		}
 		hiddenCount := m.hiddenCountFor(sec.Title)
-		rendered := RenderSection(sec.Title, sec.Tasks, sec.Color, m.cursor, flatIdx, m.tagColors, m.width, m.config.LinkColor, hiddenCount)
+		rendered := m.renderSection(sec.Title, sec.Tasks, sec.Color, flatIdx, hiddenCount)
 		if rendered != "" {
 			parts = append(parts, rendered)
 		}
