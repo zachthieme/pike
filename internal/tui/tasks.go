@@ -183,7 +183,7 @@ func (m Model) flatTasks() []model.Task {
 func (m *Model) pageScroll(direction int) {
 	// Use the visible task count (height minus overhead) rather than raw
 	// terminal height to avoid scrolling past the rendered window.
-	visible := m.height - 7 // match overhead in viewAllTasks
+	visible := m.height - 8 // match overhead in viewAllTasks
 	if visible < 6 {
 		visible = 6
 	}

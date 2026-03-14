@@ -103,9 +103,9 @@ func (m Model) viewAllTasks() string {
 
 	// Calculate available lines for task rows inside the border box.
 	// Overhead: search bar (1) + blank line (1) + section header (1)
-	//           + border top (1) + border bottom (1)
-	//           + scroll footer (1) + bubbletea final line (1) = 7
-	overhead := 7
+	//           + header-to-box newline (1) + border top (1) + border bottom (1)
+	//           + scroll footer (1) + bubbletea final line (1) = 8
+	overhead := 8
 
 	maxVisible := m.height - overhead
 	if maxVisible < 3 {
