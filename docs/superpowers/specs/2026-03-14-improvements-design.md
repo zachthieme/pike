@@ -146,7 +146,7 @@ New Model field: `queryErr error` — set when DSL parsing fails and fallback do
 
 ### Prompt change
 
-The filter input prompt changes from `"/ "` and `"> "` to `"query: "` in dashboard filter, all-tasks, and recently-completed modes. Tag search mode keeps its current `"> "` prompt and `"search tags..."` placeholder since users are searching tag names, not writing DSL queries. After a tag is selected and results are shown (which enters all-tasks mode), the prompt becomes `"query: "`.
+The filter input prompt is `"/ "` everywhere — dashboard filter, all-tasks, recently-completed, and after tag selection. No more `"> "` or other prompts. Tag search mode also uses `"/ "` with `"search tags..."` placeholder.
 
 ### Fallback logic
 
