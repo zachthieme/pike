@@ -108,44 +108,37 @@ func (m Model) viewAllTasks() string {
 		available = 5
 	}
 
-	if len(tasks) <= available {
-		// Try rendering all tasks — if it fits, use it.
-		rendered := m.renderSection(sec.Title, tasks, sec.Color, 0, hiddenCount)
-		if lipgloss.Height(rendered) <= available {
-			parts = append(parts, rendered)
-			return strings.Join(parts, "\n")
-		}
-	}
-
-	// Start from a reasonable estimate and shrink if needed.
-	// Section chrome: header (1) + header newline (1) + border top (1) + border bottom (1) = 4
-	maxTasks := available - 4
-	if maxTasks > len(tasks) {
-		maxTasks = len(tasks)
-	}
+	// Start with all tasks or a reasonable estimate, then shrink until it fits.
+	maxTasks := min(len(tasks), available-4) // 4 = section header + newline + borders
 	if maxTasks < 1 {
 		maxTasks = 1
 	}
 
-	start, end := scrollWindow(m.cursor, len(tasks), maxTasks)
-
-	// Shrink window if rendered output is too tall (tasks with long text wrap).
-	for end-start > 1 {
+	for maxTasks > 1 {
+		start, end := scrollWindow(m.cursor, len(tasks), maxTasks)
 		rendered := m.renderSection(sec.Title, tasks[start:end], sec.Color, start, hiddenCount)
-		if lipgloss.Height(rendered)+1 <= available { // +1 for footer
+		renderedHeight := lipgloss.Height(rendered)
+		needsFooter := end-start < len(tasks)
+		if needsFooter {
+			renderedHeight++ // footer line
+		}
+		if renderedHeight <= available {
 			parts = append(parts, rendered)
-			parts = append(parts, FooterStyle().Render(fmt.Sprintf("  %d–%d of %d tasks", start+1, end, len(tasks))))
+			if needsFooter {
+				parts = append(parts, FooterStyle().Render(fmt.Sprintf("  %d–%d of %d tasks", start+1, end, len(tasks))))
+			}
 			return strings.Join(parts, "\n")
 		}
-		// Too tall — reduce window by 1 and re-center.
 		maxTasks--
-		start, end = scrollWindow(m.cursor, len(tasks), maxTasks)
 	}
 
-	// Minimal case: just 1 task.
+	// Minimal case: 1 task.
+	start, end := scrollWindow(m.cursor, len(tasks), 1)
 	rendered := m.renderSection(sec.Title, tasks[start:end], sec.Color, start, hiddenCount)
 	parts = append(parts, rendered)
-	parts = append(parts, FooterStyle().Render(fmt.Sprintf("  %d–%d of %d tasks", start+1, end, len(tasks))))
+	if len(tasks) > 1 {
+		parts = append(parts, FooterStyle().Render(fmt.Sprintf("  %d–%d of %d tasks", start+1, end, len(tasks))))
+	}
 	return strings.Join(parts, "\n")
 }
 
