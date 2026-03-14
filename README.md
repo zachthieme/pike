@@ -60,6 +60,7 @@ Tags follow the format `@name` or `@name(value)`.
 | `@completed` | Marks the task as completed (with or without a date) |
 | `@completed(YYYY-MM-DD)` | Marks completed and records the completion date |
 | `@hidden` | Hides the task from all views by default (toggle with `h`) |
+| `@pin` | Floats the task to the top of its section |
 
 Any other `@word` tag (e.g. `@today`, `@risk`, `@weekly`, `@talk`) is a plain tag used for filtering and categorization.
 
@@ -136,6 +137,9 @@ editor: hx
 
 # Color for rendering prettified links (default: blue)
 link_color: blue
+
+# Days to show in recently-completed view (default: 7)
+recently_completed_days: 7
 
 # Map tag names to display colors
 # Supports named colors (red, green, yellow, blue, magenta, cyan, white)
@@ -281,26 +285,29 @@ open and not @risk                      # open, excluding risk
 | Key | Action |
 |-----|--------|
 | `Enter` | Open task in editor at the correct line |
-| `/` | Activate filter bar |
+| `/` | Activate query bar |
 | `a` | All tasks — show every task with search |
 | `t` | Tag search — browse and pick a tag |
+| `x` | Toggle task complete/incomplete |
+| `c` | Recently completed tasks |
 | `h` | Toggle hidden tasks (show/hide `@hidden` tasks) |
 | `s` | Toggle summary overlay |
 | `r` | Refresh (re-scan files) |
 | `q` | Quit |
 
-### Filter Mode
+### Query Mode
 
-When the filter bar is active (`/` or `a`), tokens are space-separated and ANDed:
+When the query bar is active (`/` or `a`), you can type full query DSL expressions or plain text:
 
-| Token | Meaning |
+| Input | Meaning |
 |-------|---------|
-| `foo` | Text must contain "foo" |
-| `!bar` | Text must NOT contain "bar" |
+| `foo` | Text must contain "foo" (simple substring) |
+| `foo bar` | Text must contain both "foo" and "bar" |
 | `@tag` | Task must have `@tag` (partial match: `@du` matches `@due`) |
-| `!@tag` | Task must NOT have `@tag` (partial match) |
+| `open and @due < today` | Full DSL query |
+| `not @risk` | DSL negation |
 
-Example: `@talk foo !bob` shows tasks tagged `@talk` containing "foo" but not "bob". Partial tags work too: `@du` matches tasks with `@due`.
+Plain text is matched as case-insensitive substrings (space-separated, ANDed). If the input contains DSL keywords (`and`, `or`, `not`, `@tag`, operators), it is parsed as a full query DSL expression with partial tag matching. Invalid DSL shows a parse error in the footer without clearing results.
 
 Note: `j`/`k` type into the filter — use arrow keys or Ctrl keys to navigate.
 
@@ -335,6 +342,8 @@ Tasks tagged `@hidden` are excluded from all views by default. Sections that con
 This is useful for tasks you want to keep in your notes but don't need to see day-to-day (e.g., deferred items, low-priority backlog, sensitive tasks).
 
 ## Display
+
+Section headers show the task count: `Today (3)`. When hidden tasks exist, a lock icon appears: `Today (3) 🔒`.
 
 ### Task Markers
 
