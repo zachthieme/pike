@@ -155,7 +155,6 @@ func (m Model) viewTagSearch() string {
 	var parts []string
 
 	parts = append(parts, m.filterInput.View())
-	parts = append(parts, "")
 
 	filtered := m.filteredTags()
 	if len(m.tagList) == 0 {
