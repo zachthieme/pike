@@ -1,0 +1,46 @@
+[
+  {
+    "text": "High priority bug @risk @due(2026-03-14) see https://github.com/org/repo/issues/456",
+    "state": "open",
+    "file": "mixed.md",
+    "line": 5,
+    "tags": [
+      "@risk",
+      "@due(2026-03-14)"
+    ],
+    "due": "2026-03-14",
+    "has_checkbox": true
+  },
+  {
+    "text": "Completed review @completed(2026-03-12) @today",
+    "state": "completed",
+    "file": "mixed.md",
+    "line": 6,
+    "tags": [
+      "@completed(2026-03-12)",
+      "@today"
+    ],
+    "completed": "2026-03-12",
+    "has_checkbox": true
+  },
+  {
+    "text": "Ask [[alice-bob|Alice Bob]] about [the plan](https://example.com/plan) @delegated(alice)",
+    "state": "open",
+    "file": "mixed.md",
+    "line": 7,
+    "tags": [
+      "@delegated(alice)"
+    ],
+    "has_checkbox": true
+  },
+  {
+    "text": "Regular bullet with @tag makes it a task",
+    "state": "open",
+    "file": "mixed.md",
+    "line": 9,
+    "tags": [
+      "@tag"
+    ],
+    "has_checkbox": false
+  }
+]

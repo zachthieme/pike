@@ -1,0 +1,9 @@
+Review PR [32m@today[0m
+Submit report [31m@due([0m[31m2026-03-15[0m[31m)[0m
+Write docs [32m@completed([0m[32m2026-03-10[0m[32m)[0m
+Deploy service [31m@risk[0m [32m@today[0m
+Escalate issue [33m@delegated([0m[33mzach[0m[33m)[0m
+Fix authentication [35m@blocked[0m
+Research spike [31m@risk[0m
+Hidden task [36m@hidden[0m
+Multiple dates [31m@due([0m[31m2026-03-20[0m[31m)[0m with [31m@risk[0m

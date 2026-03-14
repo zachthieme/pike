@@ -1,0 +1,7 @@
+No tags at all
+Tag at start [32m@today[0m of the line
+Multiple same tag [31m@risk[0m and @risk again
+Empty parens [36m@note[0m()
+Unicode text 日本語タスク [32m@today[0m
+Very long tag value [33m@delegated([0m[33msome very long person name here[0m[33m)[0m
+Nested parens in text (not a tag) [31m@due([0m[31m2026-04-01[0m[31m)[0m

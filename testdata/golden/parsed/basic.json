@@ -1,0 +1,34 @@
+[
+  {
+    "text": "Buy groceries",
+    "state": "open",
+    "file": "basic.md",
+    "line": 3,
+    "tags": null,
+    "has_checkbox": true
+  },
+  {
+    "text": "Clean the kitchen",
+    "state": "completed",
+    "file": "basic.md",
+    "line": 4,
+    "tags": null,
+    "has_checkbox": true
+  },
+  {
+    "text": "Walk the dog",
+    "state": "open",
+    "file": "basic.md",
+    "line": 5,
+    "tags": null,
+    "has_checkbox": true
+  },
+  {
+    "text": "Ship the package",
+    "state": "completed",
+    "file": "basic.md",
+    "line": 7,
+    "tags": null,
+    "has_checkbox": true
+  }
+]

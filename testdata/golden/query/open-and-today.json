@@ -1,0 +1,63 @@
+[
+  {
+    "text": "Tag at start @today of the line",
+    "state": "open",
+    "file": "edge-cases.md",
+    "line": 4,
+    "tags": [
+      "@today"
+    ],
+    "has_checkbox": true
+  },
+  {
+    "text": "Unicode text 日本語タスク @today",
+    "state": "open",
+    "file": "edge-cases.md",
+    "line": 7,
+    "tags": [
+      "@today"
+    ],
+    "has_checkbox": true
+  },
+  {
+    "text": "Talk to [[zach-thieme|Zach Thieme]] about deployment @today",
+    "state": "open",
+    "file": "links.md",
+    "line": 3,
+    "tags": [
+      "@today"
+    ],
+    "has_checkbox": true
+  },
+  {
+    "text": "Check https://github.com/org/repo/pull/123 @today",
+    "state": "open",
+    "file": "links.md",
+    "line": 5,
+    "tags": [
+      "@today"
+    ],
+    "has_checkbox": true
+  },
+  {
+    "text": "Review PR @today",
+    "state": "open",
+    "file": "tags.md",
+    "line": 3,
+    "tags": [
+      "@today"
+    ],
+    "has_checkbox": true
+  },
+  {
+    "text": "Deploy service @risk @today",
+    "state": "open",
+    "file": "tags.md",
+    "line": 6,
+    "tags": [
+      "@risk",
+      "@today"
+    ],
+    "has_checkbox": true
+  }
+]

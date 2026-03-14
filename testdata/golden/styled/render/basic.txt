@@ -1,0 +1,4 @@
+basic.md:3  - [ ] Buy groceries
+basic.md:4  - [x] Clean the kitchen
+basic.md:5  - [ ] Walk the dog
+basic.md:7  - [x] Ship the package
