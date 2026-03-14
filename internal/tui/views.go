@@ -160,7 +160,7 @@ func (m Model) viewTagSearch() string {
 	delim := lipgloss.NewStyle().Faint(true).Render(" · ")
 	var tagParts []string
 	for _, tag := range m.tagList {
-		label := "@" + tag
+		label := tag
 		if tag == selectedTag {
 			tagParts = append(tagParts, TaskStyle(true).Render(label))
 		} else if matchedSet[tag] {
