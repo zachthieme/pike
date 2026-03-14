@@ -510,4 +510,173 @@ func TestTagSearchWithoutAtPrefix(t *testing.T) {
 	}
 }
 
+func TestTagSelectShowsCompletedTasks(t *testing.T) {
+	m := testModel(testTasks(), testViews())
+
+	// Enter tag search, select a tag that has completed tasks (@completed).
+	updated, _ := sendKey(m, "t")
+	m = updated.(Model)
+
+	// Find the "completed" tag and move cursor to it.
+	tags := m.filteredTags()
+	idx := -1
+	for i, tag := range tags {
+		if tag == "completed" {
+			idx = i
+			break
+		}
+	}
+	if idx < 0 {
+		t.Fatal("expected 'completed' tag in tag list")
+	}
+	// Tab to the right tag.
+	for i := 0; i < idx; i++ {
+		updated, _ = sendSpecialKey(m, tea.KeyTab)
+		m = updated.(Model)
+	}
+
+	// Press Enter to select.
+	updated, _ = sendSpecialKey(m, tea.KeyEnter)
+	m = updated.(Model)
+
+	if m.mode != modeAllTasks {
+		t.Fatalf("expected modeAllTasks, got %d", m.mode)
+	}
+	if !m.showAll {
+		t.Error("expected showAll to be true after tag selection")
+	}
+
+	// Should include the completed task.
+	flat := m.flatTasks()
+	found := false
+	for _, task := range flat {
+		if task.State == model.Completed {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("expected completed tasks to appear when filtering by tag from tag search")
+	}
+}
+
+func TestTagSelectEscapeClearsShowAll(t *testing.T) {
+	m := testModel(testTasks(), testViews())
+
+	// Enter tag search, select first tag.
+	updated, _ := sendKey(m, "t")
+	m = updated.(Model)
+	updated, _ = sendSpecialKey(m, tea.KeyEnter)
+	m = updated.(Model)
+
+	if !m.showAll {
+		t.Fatal("expected showAll after tag selection")
+	}
+
+	// Escape back to dashboard.
+	updated, _ = sendSpecialKey(m, tea.KeyEscape)
+	m = updated.(Model)
+
+	if m.showAll {
+		t.Error("expected showAll to be false after escape")
+	}
+	if m.mode != modeDashboard {
+		t.Errorf("expected modeDashboard, got %d", m.mode)
+	}
+}
+
+func TestBackspaceToEmptyReturnsToTagSearch(t *testing.T) {
+	m := testModel(testTasks(), testViews())
+
+	// Enter tag search, select first tag.
+	updated, _ := sendKey(m, "t")
+	m = updated.(Model)
+	updated, _ = sendSpecialKey(m, tea.KeyEnter)
+	m = updated.(Model)
+
+	if m.mode != modeAllTasks {
+		t.Fatalf("expected modeAllTasks after tag selection, got %d", m.mode)
+	}
+
+	// Delete all characters in the filter.
+	for m.filterText != "" {
+		updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyBackspace})
+		m = updated.(Model)
+	}
+
+	if m.mode != modeTagSearch {
+		t.Errorf("expected modeTagSearch after clearing filter, got %d", m.mode)
+	}
+	if m.showAll {
+		t.Error("expected showAll to be false after returning to tag search")
+	}
+}
+
+func TestNegationWithPartialTag(t *testing.T) {
+	m := testModel(testTasks(), testViews())
+
+	// Activate filter and type "!@du" — should exclude tasks with @due.
+	updated, _ := sendKey(m, "/")
+	m = updated.(Model)
+	for _, ch := range "!@du" {
+		updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{ch}})
+		m = updated.(Model)
+	}
+
+	flat := m.flatTasks()
+	for _, task := range flat {
+		if task.HasTag("due") {
+			t.Errorf("expected !@du to exclude tasks with @due, but found %q", task.Text)
+		}
+	}
+}
+
+func TestFlowWrap(t *testing.T) {
+	// No ANSI codes — plain strings for predictable width measurement.
+	tests := []struct {
+		name     string
+		parts    []string
+		delim    string
+		maxWidth int
+		want     string
+	}{
+		{
+			name:     "all fit on one line",
+			parts:    []string{"today", "risk", "due"},
+			delim:    " | ",
+			maxWidth: 40,
+			want:     "  today | risk | due",
+		},
+		{
+			name:     "wraps to multiple lines",
+			parts:    []string{"today", "risk", "due", "blocked"},
+			delim:    " | ",
+			maxWidth: 20,
+			want:     "  today | risk | due\n  blocked",
+		},
+		{
+			name:     "single part",
+			parts:    []string{"today"},
+			delim:    " | ",
+			maxWidth: 40,
+			want:     "  today",
+		},
+		{
+			name:     "empty parts",
+			parts:    []string{},
+			delim:    " | ",
+			maxWidth: 40,
+			want:     "",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := flowWrap(tt.parts, tt.delim, tt.maxWidth)
+			if got != tt.want {
+				t.Errorf("flowWrap() =\n%q\nwant:\n%q", got, tt.want)
+			}
+		})
+	}
+}
+
 var _ filter.ViewResult
