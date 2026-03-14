@@ -34,7 +34,7 @@ func (m *Model) rebuildSections() {
 
 		title := "All Open Tasks"
 		if m.showAll {
-			title = "All Tasks"
+			title = "Tagged"
 		}
 		sections := []filter.ViewResult{{
 			Title: title,
