@@ -172,7 +172,7 @@ func (m Model) viewTagSearch() string {
 	// The selected tag (via Tab) gets reverse video.
 	// Non-matching tags are rendered faint.
 	faintStyle := lipgloss.NewStyle().Faint(true)
-	delim := faintStyle.Render("·")
+	delim := faintStyle.Render("\u2009·\u2009")
 	var tagParts []string
 	for _, tag := range m.tagList {
 		if tag == selectedTag {
