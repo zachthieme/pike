@@ -15,7 +15,7 @@ func (m *Model) rebuildSections() {
 	if m.mode == modeAllTasks {
 		var tasks []model.Task
 		for _, t := range m.allTasks {
-			if t.HasCheckbox && t.State != model.Completed {
+			if t.State != model.Completed {
 				tasks = append(tasks, t)
 			}
 		}
