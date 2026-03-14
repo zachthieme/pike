@@ -52,11 +52,20 @@ func Sort(tasks []model.Task, order string) error {
 // StablePartitionPinned returns a new slice with @pin tasks first,
 // preserving relative order within each group.
 func StablePartitionPinned(tasks []model.Task) []model.Task {
-	if len(tasks) == 0 {
+	// Fast path: check if any tasks are pinned before allocating.
+	hasPins := false
+	for _, t := range tasks {
+		if t.HasTag("pin") {
+			hasPins = true
+			break
+		}
+	}
+	if !hasPins {
 		return tasks
 	}
+
 	result := make([]model.Task, 0, len(tasks))
-	var unpinned []model.Task
+	unpinned := make([]model.Task, 0, len(tasks))
 	for _, t := range tasks {
 		if t.HasTag("pin") {
 			result = append(result, t)
@@ -64,8 +73,7 @@ func StablePartitionPinned(tasks []model.Task) []model.Task {
 			unpinned = append(unpinned, t)
 		}
 	}
-	result = append(result, unpinned...)
-	return result
+	return append(result, unpinned...)
 }
 
 // compareDatesNilLast compares two date pointers, placing nil values last.

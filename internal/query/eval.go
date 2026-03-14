@@ -9,26 +9,7 @@ import (
 // Eval evaluates an AST node against a task, returning true if the task matches.
 // The now parameter is used to resolve relative date expressions (today, today+Nd).
 func Eval(node Node, task *model.Task, now time.Time) bool {
-	switch n := node.(type) {
-	case *OpenNode:
-		return task.State == model.Open
-	case *CompletedNode:
-		return task.State == model.Completed
-	case *TagNode:
-		return task.HasTag(n.Name)
-	case *DateCmpNode:
-		return evalDateCmp(n, task, now)
-	case *RegexNode:
-		return n.CompiledRe.MatchString(task.Text)
-	case *AndNode:
-		return Eval(n.Left, task, now) && Eval(n.Right, task, now)
-	case *OrNode:
-		return Eval(n.Left, task, now) || Eval(n.Right, task, now)
-	case *NotNode:
-		return !Eval(n.Expr, task, now)
-	default:
-		return false
-	}
+	return EvalWithOptions(node, task, now, EvalOptions{})
 }
 
 // EvalOptions configures evaluation behavior.
@@ -45,7 +26,7 @@ func EvalWithOptions(node Node, task *model.Task, now time.Time, opts EvalOption
 		return task.State == model.Completed
 	case *TagNode:
 		if opts.PartialTags {
-			return hasTagPartial(task, n.Name)
+			return hasTagPartial(task, strings.ToLower(n.Name))
 		}
 		return task.HasTag(n.Name)
 	case *DateCmpNode:
@@ -63,11 +44,11 @@ func EvalWithOptions(node Node, task *model.Task, now time.Time, opts EvalOption
 	}
 }
 
-// hasTagPartial returns true if any tag name contains the query as a substring (case-insensitive).
-func hasTagPartial(task *model.Task, name string) bool {
-	lower := strings.ToLower(name)
+// hasTagPartial returns true if any tag name contains the query as a substring.
+// The name parameter must already be lowercased.
+func hasTagPartial(task *model.Task, lowerName string) bool {
 	for _, tag := range task.Tags {
-		if strings.Contains(strings.ToLower(tag.Name), lower) {
+		if strings.Contains(strings.ToLower(tag.Name), lowerName) {
 			return true
 		}
 	}

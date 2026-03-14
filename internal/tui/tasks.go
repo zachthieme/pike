@@ -16,135 +16,69 @@ import (
 
 // rebuildSections recomputes sections from allTasks, applying filter text.
 func (m *Model) rebuildSections() {
-	// In all-tasks mode, show tasks in a single section.
-	// When showAll is true (e.g. from tag search), include completed tasks too.
-	if m.mode == modeAllTasks {
+	m.queryErr = nil
+	now := m.nowFunc()
+
+	switch m.mode {
+	case modeAllTasks:
 		var tasks []model.Task
 		for _, t := range m.allTasks {
 			if m.showAll {
-				// From tag search: include all tasks (checkbox + tagged bullets, any state).
 				tasks = append(tasks, t)
 			} else if t.HasCheckbox && t.State != model.Completed {
-				// From 'a' key: only open checkbox tasks.
 				tasks = append(tasks, t)
 			}
 		}
-
-		if m.filterText != "" {
-			now := m.nowFunc()
-			filtered, err := applyQueryFilter(tasks, m.filterText, now)
-			if err != nil {
-				m.queryErr = err
-				return // preserve existing sections
-			}
-			m.queryErr = nil
-			tasks = filtered
-		} else {
-			m.queryErr = nil
-		}
-
-		tasks = tasksort.StablePartitionPinned(tasks)
-
 		title := "All Open Tasks"
 		if m.showAll {
 			title = "Tagged"
 		}
-		sections := []filter.ViewResult{{
-			Title: title,
-			Color: "cyan",
-			Tasks: tasks,
-		}}
-		m.sections = sections
-		m.applyHiddenFilter()
-		return
+		m.rebuildSingleSection(title, "cyan", tasks, now)
+
+	case modeRecentlyCompleted:
+		m.rebuildSingleSection("Recently Completed", "blue", m.allTasks, now)
+
+	default:
+		m.rebuildDashboard(now)
 	}
+}
 
-	if m.mode == modeRecentlyCompleted {
-		tasks := make([]model.Task, len(m.allTasks))
-		copy(tasks, m.allTasks)
-
-		if m.filterText != "" {
-			now := m.nowFunc()
-			filtered, err := applyQueryFilter(tasks, m.filterText, now)
-			if err != nil {
-				m.queryErr = err
-				return
-			}
-			m.queryErr = nil
-			tasks = filtered
-		} else {
-			m.queryErr = nil
+// rebuildSingleSection builds a single-section view from the given tasks,
+// applying the query filter and pin partitioning.
+func (m *Model) rebuildSingleSection(title, color string, tasks []model.Task, now time.Time) {
+	if m.filterText != "" {
+		filtered, err := applyQueryFilter(tasks, m.filterText, now)
+		if err != nil {
+			m.queryErr = err
+			return // preserve existing sections
 		}
-
-		tasks = tasksort.StablePartitionPinned(tasks)
-
-		sections := []filter.ViewResult{{
-			Title: "Recently Completed",
-			Color: "blue",
-			Tasks: tasks,
-		}}
-		m.sections = sections
-		m.applyHiddenFilter()
-		return
+		tasks = filtered
 	}
+	tasks = tasksort.StablePartitionPinned(tasks)
+	m.sections = []filter.ViewResult{{Title: title, Color: color, Tasks: tasks}}
+	m.applyHiddenFilter()
+}
 
-	now := m.nowFunc()
+// rebuildDashboard builds the multi-section dashboard view.
+func (m *Model) rebuildDashboard(now time.Time) {
 	results, err := filter.ApplyViews(m.allTasks, m.config.Views, now)
 	if err != nil {
 		m.err = err
 		return
 	}
 
-	// Apply query filter if active. Supports full DSL syntax with fallback
-	// to simple substring matching for plain text.
 	if m.filterText != "" {
-		now := m.nowFunc()
-		node, err := query.Parse(m.filterText)
-		if err == nil && node != nil {
-			m.queryErr = nil
-			opts := query.EvalOptions{PartialTags: true}
-			for i := range results {
-				var filtered []model.Task
-				for _, t := range results[i].Tasks {
-					if query.EvalWithOptions(node, &t, now, opts) {
-						filtered = append(filtered, t)
-					}
-				}
-				if filtered == nil {
-					filtered = []model.Task{}
-				}
-				results[i].Tasks = filtered
+		for i := range results {
+			filtered, err := applyQueryFilter(results[i].Tasks, m.filterText, now)
+			if err != nil {
+				m.queryErr = err
+				return // preserve existing sections
 			}
-		} else if hasDSLTokens(m.filterText) {
-			m.queryErr = err
-			return // preserve existing sections
-		} else {
-			m.queryErr = nil
-			// Fallback: simple substring matching
-			tokens := strings.Fields(strings.ToLower(m.filterText))
-			for i := range results {
-				var filtered []model.Task
-				for _, t := range results[i].Tasks {
-					lower := strings.ToLower(t.Text)
-					match := true
-					for _, tok := range tokens {
-						if !strings.Contains(lower, tok) {
-							match = false
-							break
-						}
-					}
-					if match {
-						filtered = append(filtered, t)
-					}
-				}
-				if filtered == nil {
-					filtered = []model.Task{}
-				}
-				results[i].Tasks = filtered
+			if filtered == nil {
+				filtered = []model.Task{}
 			}
+			results[i].Tasks = filtered
 		}
-	} else {
-		m.queryErr = nil
 	}
 
 	m.sections = results
@@ -505,11 +439,7 @@ func (m *Model) enterTagSearchMode() tea.Cmd {
 
 // enterRecentlyCompletedMode switches to recently-completed view with a pre-filled query.
 func (m *Model) enterRecentlyCompletedMode() tea.Cmd {
-	days := 7
-	if m.config != nil {
-		days = m.config.RecentlyCompletedDays
-	}
-	queryStr := fmt.Sprintf("completed and @completed >= today-%dd", days)
+	queryStr := fmt.Sprintf("completed and @completed >= today-%dd", m.config.RecentlyCompletedDays)
 
 	m.mode = modeRecentlyCompleted
 	m.filtering = true

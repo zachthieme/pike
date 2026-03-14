@@ -194,15 +194,20 @@ func (m Model) openEditor() (tea.Model, tea.Cmd) {
 	task := flatTasks[m.cursor]
 	editorName := editor.ResolveEditor(m.editorCmd)
 
-	filePath := task.File
-	if m.config != nil && m.config.NotesDir != "" {
-		filePath = filepath.Join(m.config.NotesDir, task.File)
-	}
+	filePath := m.resolveFilePath(task.File)
 
 	cmd := editor.Command(editorName, filePath, task.Line)
 	return m, tea.ExecProcess(cmd, func(err error) tea.Msg {
 		return EditorFinishedMsg{Err: err}
 	})
+}
+
+// resolveFilePath returns the absolute path for a task's file.
+func (m Model) resolveFilePath(relPath string) string {
+	if m.config != nil && m.config.NotesDir != "" {
+		return filepath.Join(m.config.NotesDir, relPath)
+	}
+	return relPath
 }
 
 // toggleTask completes or uncompletes the task at the cursor.
@@ -216,10 +221,7 @@ func (m Model) toggleTask() (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	filePath := task.File
-	if m.config != nil && m.config.NotesDir != "" {
-		filePath = filepath.Join(m.config.NotesDir, task.File)
-	}
+	filePath := m.resolveFilePath(task.File)
 
 	var err error
 	if task.State == model.Open {
