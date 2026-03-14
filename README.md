@@ -347,6 +347,25 @@ Tasks tagged `@hidden` are excluded from all views by default. Sections that con
 
 This is useful for tasks you want to keep in your notes but don't need to see day-to-day (e.g., deferred items, low-priority backlog, sensitive tasks).
 
+### Task Toggling
+
+Press `x` on a checkbox task to toggle its completion state directly in the source file:
+
+- **Completing:** `- [ ] Task` becomes `- [x] Task @completed(2026-03-14)` (today's date is appended)
+- **Un-completing:** `- [x] Task @completed(2026-03-14)` becomes `- [ ] Task` (checkbox is unchecked and `@completed(...)` tag is removed)
+
+Indented tasks and tasks with other tags are handled correctly. Non-checkbox tasks (tagged bullets) are not affected. If the file has been modified externally since the last scan, the toggle validates the line content before writing and shows an error if it doesn't match.
+
+To toggle tasks while the query bar is active, press `Tab` to focus the results list first, then `x` to toggle.
+
+### Recently Completed
+
+Press `c` to see tasks completed in the last N days (configurable via `recently_completed_days` in config, default 7). The view opens with a pre-filled query `completed and @completed >= today-Nd` which you can edit. Press `x` to un-complete a task (undo an accidental completion).
+
+### Pinned Tasks
+
+Tasks tagged `@pin` float to the top of their section, regardless of sort order. Within the pinned group and the unpinned group, the section's configured sort order is preserved.
+
 ## Display
 
 Section headers show the task count: `Today (3)`. When hidden tasks exist, a lock icon appears: `Today (3) 🔒`.
@@ -399,7 +418,8 @@ internal/
     ast.go                     AST node types
     parser.go                  Recursive-descent parser
     eval.go                    AST evaluator
-  sort/sort.go                 Task sorting (6 orders)
+  sort/sort.go                 Task sorting (6 orders) and pin partitioning
+  toggle/toggle.go             Task completion toggling (file writes)
   scanner/scanner.go           File walker with mtime-based caching
   filter/filter.go             Query + sort pipeline, view engine
   editor/editor.go             Editor command construction
