@@ -162,7 +162,8 @@ func TestPrettifyText(t *testing.T) {
 		input string
 		want  string
 	}{
-		{"wiki link with display name", "talk to [[zach-thieme|Zach Thieme]] about it", "talk to Zach Thieme about it"},
+		{"wiki link with display name (pipe)", "talk to [[zach-thieme|Zach Thieme]] about it", "talk to Zach Thieme about it"},
+		{"wiki link with display name (hash)", "talk to [[rob-dellinger#Rob Dellinger]] about it", "talk to Rob Dellinger about it"},
 		{"wiki link without display name", "talk to [[Zach Thieme]] about it", "talk to Zach Thieme about it"},
 		{"wiki link slug gets prettified", "see [[jeff-roache]] for details", "see Jeff Roache for details"},
 		{"markdown link shows text only", "check [the docs](https://example.com/docs/guide) first", "check the docs first"},

@@ -33,7 +33,7 @@ const ansiReset = "\033[0m"
 var ansiStripRe = regexp.MustCompile(`\x1b\[[0-9;]*m`)
 
 var (
-	wikiLinkRe = regexp.MustCompile(`\[\[([^\]|]+?)(?:\|([^\]]+?))?\]\]`)
+	wikiLinkRe = regexp.MustCompile(`\[\[([^\]|#]+?)(?:[|#]([^\]]+?))?\]\]`)
 	mdLinkRe   = regexp.MustCompile(`\[([^\]]+)\]\([^)]+\)`)
 	bareURLRe  = regexp.MustCompile(`https?://\S+`)
 )
