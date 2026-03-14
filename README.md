@@ -309,18 +309,20 @@ When the query bar is active (`/` or `a`), you can type full query DSL expressio
 
 Plain text is matched as case-insensitive substrings (space-separated, ANDed). If the input contains DSL keywords (`and`, `or`, `not`, `@tag`, operators), it is parsed as a full query DSL expression with partial tag matching. Invalid DSL shows a parse error in the footer without clearing results.
 
-Note: `j`/`k` type into the filter — use arrow keys or Ctrl keys to navigate.
+Press `Tab` to switch focus between the query bar and the results list. When results are focused, `j`/`k`, `g`/`G`, and `x` (toggle complete) work directly on tasks. Press `Tab` or `/` to return to editing the query. `Esc` from results returns to the query bar; `Esc` from the query bar exits filter mode.
 
 | Key | Action |
 |-----|--------|
 | Type | Filter tasks across all sections |
-| `Up` / `Ctrl+P` | Move cursor up |
-| `Down` / `Ctrl+N` | Move cursor down |
+| `Tab` | Toggle focus between query bar and results |
+| `Up` / `Down` / `Ctrl+P` / `Ctrl+N` | Move cursor up/down |
 | `Ctrl+D` | Scroll down half page |
 | `Ctrl+U` | Scroll up half page |
-| `Tab` | Jump to next section |
+| `x` | Toggle task complete (when results focused) |
+| `j` / `k` / `g` / `G` | Navigate results (when results focused) |
+| `/` | Return focus to query bar |
 | `Enter` | Open selected task in editor |
-| `Esc` | Clear filter and exit filter mode |
+| `Esc` | Return to query bar, or exit filter mode |
 
 ### Tag Search Mode
 

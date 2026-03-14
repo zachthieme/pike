@@ -17,16 +17,30 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.handleTagSearchKey(msg)
 	}
 
-	// If filtering, handle text input first.
+	// If filtering, handle keys based on whether the query bar or results have focus.
 	if m.filtering {
 		switch {
 		case key.Matches(msg, m.keys.Escape):
+			// If results are focused, return focus to query bar.
+			if !m.filterInput.Focused() {
+				cmd := m.filterInput.Focus()
+				return m, cmd
+			}
 			m.clearFilter()
 			if m.mode == modeAllTasks || m.mode == modeRecentlyCompleted {
 				m.mode = modeDashboard
 			}
 			m.rebuildSections()
 			m.clampCursor()
+			return m, nil
+		case key.Matches(msg, m.keys.NextSection):
+			// Tab: toggle focus between query bar and results.
+			if m.filterInput.Focused() {
+				m.filterInput.Blur()
+			} else {
+				cmd := m.filterInput.Focus()
+				return m, cmd
+			}
 			return m, nil
 		case msg.Type == tea.KeyEnter:
 			return m.openEditor()
@@ -47,25 +61,57 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		case msg.Type == tea.KeyCtrlU:
 			m.pageScroll(-1)
 			return m, tea.ClearScreen
-		case key.Matches(msg, m.keys.NextSection):
-			m.jumpToNextSection()
-			return m, nil
-		case key.Matches(msg, m.keys.PrevSection):
-			m.jumpToPrevSection()
-			return m, nil
-		default:
-			var cmd tea.Cmd
-			m.filterInput, cmd = m.filterInput.Update(msg)
-			m.filterText = m.filterInput.Value()
-			// If we came from tag search and filter is now empty, return to tag search.
-			if m.showAll && m.filterText == "" && m.mode != modeRecentlyCompleted {
-				m.enterTagSearchMode()
+		}
+
+		// When results are focused, handle navigation and action keys directly.
+		if !m.filterInput.Focused() {
+			switch {
+			case key.Matches(msg, m.keys.Toggle):
+				return m.toggleTask()
+			case key.Matches(msg, m.keys.Up):
+				if m.cursor > 0 {
+					m.cursor--
+				}
+				return m, nil
+			case key.Matches(msg, m.keys.Down):
+				flatTasks := m.flatTasks()
+				if len(flatTasks) > 0 && m.cursor < len(flatTasks)-1 {
+					m.cursor++
+				}
+				return m, nil
+			case key.Matches(msg, m.keys.Top):
+				m.cursor = 0
+				return m, nil
+			case key.Matches(msg, m.keys.Bottom):
+				flatTasks := m.flatTasks()
+				if len(flatTasks) > 0 {
+					m.cursor = len(flatTasks) - 1
+				}
+				return m, nil
+			case key.Matches(msg, m.keys.Filter):
+				// / returns focus to query bar.
+				cmd := m.filterInput.Focus()
 				return m, cmd
+			case key.Matches(msg, m.keys.PrevSection):
+				m.jumpToPrevSection()
+				return m, nil
 			}
-			m.rebuildSections()
-			m.clampCursor()
+			// Ignore other keys when results are focused (don't type into input).
+			return m, nil
+		}
+
+		// Query bar is focused — route to text input.
+		var cmd tea.Cmd
+		m.filterInput, cmd = m.filterInput.Update(msg)
+		m.filterText = m.filterInput.Value()
+		// If we came from tag search and filter is now empty, return to tag search.
+		if m.showAll && m.filterText == "" && m.mode != modeRecentlyCompleted {
+			m.enterTagSearchMode()
 			return m, cmd
 		}
+		m.rebuildSections()
+		m.clampCursor()
+		return m, cmd
 	}
 
 	switch {
