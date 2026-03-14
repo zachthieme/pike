@@ -1,0 +1,30 @@
+notes_dir: "testdata/notes"
+include:
+  - "**/*.md"
+refresh_interval: "5s"
+editor: "vi"
+link_color: "#6CB4EE"
+tag_colors:
+  today: "green"
+  risk: "red"
+  due: "red"
+  completed: "green"
+  delegated: "yellow"
+  blocked: "magenta"
+  _default: "cyan"
+views:
+  - title: "Overdue"
+    query: "open and @due < today"
+    sort: "due_asc"
+    color: "red"
+    order: 1
+  - title: "Today"
+    query: "open and @today"
+    sort: "file"
+    color: "green"
+    order: 2
+  - title: "All Open"
+    query: "open"
+    sort: "file"
+    color: "blue"
+    order: 3
