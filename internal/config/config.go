@@ -20,8 +20,9 @@ type Config struct {
 	RefreshInterval time.Duration     `yaml:"-"`
 	Editor          string            `yaml:"-"`
 	TagColors       map[string]string `yaml:"-"`
-	LinkColor       string            `yaml:"-"`
-	Views           []ViewConfig      `yaml:"-"`
+	LinkColor              string            `yaml:"-"`
+	RecentlyCompletedDays  int               `yaml:"-"`
+	Views                  []ViewConfig      `yaml:"-"`
 }
 
 // ViewConfig defines a single dashboard section.
@@ -41,8 +42,9 @@ type rawConfig struct {
 	RefreshInterval string            `yaml:"refresh_interval"`
 	Editor          string            `yaml:"editor"`
 	TagColors       map[string]string `yaml:"tag_colors"`
-	LinkColor       string            `yaml:"link_color"`
-	Views           []ViewConfig      `yaml:"views"`
+	LinkColor              string            `yaml:"link_color"`
+	RecentlyCompletedDays  *int              `yaml:"recently_completed_days"`
+	Views                  []ViewConfig      `yaml:"views"`
 }
 
 // Load reads configuration from the given path. If path is empty, it checks
@@ -159,6 +161,13 @@ func applyDefaults(raw *rawConfig) (*Config, error) {
 		cfg.LinkColor = raw.LinkColor
 	} else {
 		cfg.LinkColor = "blue"
+	}
+
+	// RecentlyCompletedDays: default to 7
+	if raw.RecentlyCompletedDays != nil {
+		cfg.RecentlyCompletedDays = *raw.RecentlyCompletedDays
+	} else {
+		cfg.RecentlyCompletedDays = 7
 	}
 
 	// Views: default to a single "All Open" view

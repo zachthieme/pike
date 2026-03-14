@@ -434,3 +434,28 @@ views:
 		t.Errorf("Views[2].Title = %q, want %q", cfg.Views[2].Title, "Gamma")
 	}
 }
+
+func TestLoadBytes_DefaultRecentlyCompletedDays(t *testing.T) {
+	yaml := `notes_dir: ~/Notes`
+	cfg, err := LoadBytes([]byte(yaml))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.RecentlyCompletedDays != 7 {
+		t.Errorf("RecentlyCompletedDays = %d, want 7", cfg.RecentlyCompletedDays)
+	}
+}
+
+func TestLoadBytes_ExplicitRecentlyCompletedDays(t *testing.T) {
+	yaml := `
+notes_dir: ~/Notes
+recently_completed_days: 14
+`
+	cfg, err := LoadBytes([]byte(yaml))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.RecentlyCompletedDays != 14 {
+		t.Errorf("RecentlyCompletedDays = %d, want 14", cfg.RecentlyCompletedDays)
+	}
+}
