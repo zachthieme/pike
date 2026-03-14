@@ -305,13 +305,13 @@ func TestEvalWithOptionsExactByDefault(t *testing.T) {
 func TestEvalTextNode(t *testing.T) {
 	task := &model.Task{Text: "Deploy the service to production"}
 
-	if !Eval(&TextNode{Pattern: "deploy"}, task, now) {
+	if !Eval(&TextNode{Pattern: "deploy", LowerPattern: "deploy"}, task, now) {
 		t.Error("TextNode should match case-insensitively")
 	}
-	if !Eval(&TextNode{Pattern: "service to"}, task, now) {
+	if !Eval(&TextNode{Pattern: "service to", LowerPattern: "service to"}, task, now) {
 		t.Error("TextNode should match multi-word substrings")
 	}
-	if Eval(&TextNode{Pattern: "staging"}, task, now) {
+	if Eval(&TextNode{Pattern: "staging", LowerPattern: "staging"}, task, now) {
 		t.Error("TextNode should not match missing text")
 	}
 }

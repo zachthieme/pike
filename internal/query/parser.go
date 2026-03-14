@@ -3,6 +3,7 @@ package query
 import (
 	"fmt"
 	"regexp"
+	"strings"
 	"time"
 )
 
@@ -134,11 +135,11 @@ func (p *parser) parseAtom() (Node, error) {
 
 	case TokWord:
 		p.advance()
-		return &TextNode{Pattern: tok.Value}, nil
+		return &TextNode{Pattern: tok.Value, LowerPattern: strings.ToLower(tok.Value)}, nil
 
 	case TokString:
 		p.advance()
-		return &TextNode{Pattern: tok.Value}, nil
+		return &TextNode{Pattern: tok.Value, LowerPattern: strings.ToLower(tok.Value)}, nil
 
 	case TokLParen:
 		p.advance() // consume "("
