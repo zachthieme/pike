@@ -283,13 +283,6 @@ func (m Model) renderSections() (string, int) {
 // It finds the line containing the cursor marker (reverse video) and shows a
 // window of m.height lines centered on it.
 func (m Model) truncateView(s string) string {
-	return m.truncateViewPinTop(s, 0)
-}
-
-// truncateViewPinTop ensures the rendered output fits within the terminal
-// height, keeping the first pinnedTop lines always visible. The remaining
-// lines scroll to keep the cursor-selected line on screen.
-func (m Model) truncateViewPinTop(s string, pinnedTop int) string {
 	if m.height <= 0 {
 		return s
 	}
@@ -299,26 +292,17 @@ func (m Model) truncateViewPinTop(s string, pinnedTop int) string {
 		return s
 	}
 
-	if pinnedTop >= maxLines {
-		pinnedTop = 0
-	}
-
-	top := lines[:pinnedTop]
-	rest := lines[pinnedTop:]
-
 	// Find the line with the selected cursor (reverse-video escape).
 	cursorIdx := 0
-	for i, line := range rest {
+	for i, line := range lines {
 		if strings.Contains(line, reverseVideoEsc) {
 			cursorIdx = i
 			break
 		}
 	}
 
-	available := maxLines - pinnedTop
-	start, end := scrollWindow(cursorIdx, len(rest), available)
-	result := append(top, rest[start:end]...)
-	return strings.Join(result, "\n")
+	start, end := scrollWindow(cursorIdx, len(lines), maxLines)
+	return strings.Join(lines[start:end], "\n")
 }
 
 // scrollWindow computes the start/end indices of a task window of size

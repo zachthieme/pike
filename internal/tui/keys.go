@@ -76,6 +76,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.showSummary = false
 		} else if m.mode != modeDashboard {
 			m.mode = modeDashboard
+			m.showAll = false
 			m.rebuildSections()
 			m.clampCursor()
 		} else if m.focusedView != "" {
