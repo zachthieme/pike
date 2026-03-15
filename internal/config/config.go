@@ -21,6 +21,8 @@ type Config struct {
 	Editor          string            `yaml:"-"`
 	TagColors       map[string]string `yaml:"-"`
 	LinkColor              string            `yaml:"-"`
+	HiddenColor            string            `yaml:"-"` // color for ◌ icon (hidden tasks concealed)
+	VisibleColor           string            `yaml:"-"` // color for ◉ icon (hidden tasks revealed)
 	RecentlyCompletedDays  int               `yaml:"-"`
 	Views                  []ViewConfig      `yaml:"-"`
 }
@@ -43,6 +45,8 @@ type rawConfig struct {
 	Editor          string            `yaml:"editor"`
 	TagColors       map[string]string `yaml:"tag_colors"`
 	LinkColor              string            `yaml:"link_color"`
+	HiddenColor            string            `yaml:"hidden_color"`
+	VisibleColor           string            `yaml:"visible_color"`
 	RecentlyCompletedDays  *int              `yaml:"recently_completed_days"`
 	Views                  []ViewConfig      `yaml:"views"`
 }
@@ -161,6 +165,20 @@ func applyDefaults(raw *rawConfig) (*Config, error) {
 		cfg.LinkColor = raw.LinkColor
 	} else {
 		cfg.LinkColor = "blue"
+	}
+
+	// HiddenColor: default to "238" (dark gray)
+	if raw.HiddenColor != "" {
+		cfg.HiddenColor = raw.HiddenColor
+	} else {
+		cfg.HiddenColor = "238"
+	}
+
+	// VisibleColor: default to "212" (pink)
+	if raw.VisibleColor != "" {
+		cfg.VisibleColor = raw.VisibleColor
+	} else {
+		cfg.VisibleColor = "212"
 	}
 
 	// RecentlyCompletedDays: default to 7

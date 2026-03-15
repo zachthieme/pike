@@ -87,6 +87,11 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				return m.toggleTask()
 			case key.Matches(msg, m.keys.ToggleHiddenTag):
 				return m.toggleHiddenTag()
+			case key.Matches(msg, m.keys.ToggleHidden):
+				m.showHidden = !m.showHidden
+				m.rebuildSections()
+				m.clampCursor()
+				return m, nil
 			case key.Matches(msg, m.keys.Up):
 				m.cursorUp()
 				return m, nil
