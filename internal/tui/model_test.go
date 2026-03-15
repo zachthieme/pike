@@ -454,11 +454,6 @@ func TestViewRendersWithSummary(t *testing.T) {
 
 	view := m.View()
 
-	// Task counts
-	if !strings.Contains(view, "Open tasks") {
-		t.Error("expected summary to contain 'Open tasks'")
-	}
-
 	// Version header
 	if !strings.Contains(view, "v1.2.3") {
 		t.Error("expected summary to contain version")

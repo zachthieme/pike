@@ -347,46 +347,7 @@ func (m Model) countOpen() int {
 	return count
 }
 
-// countOverdue returns the number of open tasks past their due date.
-func (m Model) countOverdue() int {
-	now := m.nowFunc()
-	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
-	count := 0
-	for _, t := range m.allTasks {
-		if t.State == model.Open && t.Due != nil && t.Due.Before(today) {
-			count++
-		}
-	}
-	return count
-}
 
-// countDueThisWeek returns the number of open tasks due within 7 days.
-func (m Model) countDueThisWeek() int {
-	now := m.nowFunc()
-	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
-	endOfWeek := today.AddDate(0, 0, 7)
-	count := 0
-	for _, t := range m.allTasks {
-		if t.State == model.Open && t.Due != nil && !t.Due.Before(today) && t.Due.Before(endOfWeek) {
-			count++
-		}
-	}
-	return count
-}
-
-// countCompletedThisWeek returns the number of tasks completed within the last 7 days.
-func (m Model) countCompletedThisWeek() int {
-	now := m.nowFunc()
-	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
-	weekAgo := today.AddDate(0, 0, -7)
-	count := 0
-	for _, t := range m.allTasks {
-		if t.State == model.Completed && t.Completed != nil && !t.Completed.Before(weekAgo) {
-			count++
-		}
-	}
-	return count
-}
 
 // setFilterMode sets the filter mode, updates the prompt, and focuses the input.
 func (m *Model) setFilterMode(mode filterMode) tea.Cmd {

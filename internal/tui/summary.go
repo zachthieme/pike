@@ -7,26 +7,9 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-// RenderSummary renders a centered summary overlay with version, task counts, and keybindings.
-func RenderSummary(version string, open, overdue, dueThisWeek, completedThisWeek int, width int) string {
-	const labelWidth = 24
-
-	formatLine := func(label string, count int, style lipgloss.Style) string {
-		countStr := fmt.Sprintf("%d", count)
-		padding := labelWidth - lipgloss.Width(label)
-		if padding < 1 {
-			padding = 1
-		}
-		line := fmt.Sprintf("  %s%s%s", label, strings.Repeat(" ", padding), countStr)
-		if style.Value() != lipgloss.NewStyle().Value() {
-			return style.Render(line)
-		}
-		return line
-	}
-
-	noStyle := lipgloss.NewStyle()
+// RenderSummary renders a centered summary overlay with version, description, and keybindings.
+func RenderSummary(version string, width int) string {
 	faintStyle := lipgloss.NewStyle().Faint(true)
-	redStyle := lipgloss.NewStyle().Foreground(resolveColor("red"))
 	boldStyle := lipgloss.NewStyle().Bold(true)
 
 	var lines []string
@@ -40,21 +23,7 @@ func RenderSummary(version string, open, overdue, dueThisWeek, completedThisWeek
 	lines = append(lines, faintStyle.Render("terminal task dashboard for markdown notes"))
 	lines = append(lines, "")
 
-	// Task counts
-	lines = append(lines, formatLine("Open tasks", open, noStyle))
-	overdueStyle := noStyle
-	if overdue > 0 {
-		overdueStyle = redStyle
-	}
-	lines = append(lines, formatLine("Overdue", overdue, overdueStyle))
-	lines = append(lines, formatLine("Due this week", dueThisWeek, noStyle))
-	lines = append(lines, formatLine("Completed this week", completedThisWeek, noStyle))
-	lines = append(lines, "")
-
 	// Keybindings
-	lines = append(lines, boldStyle.Render("  Keys"))
-	lines = append(lines, "")
-
 	keys := []struct{ key, desc string }{
 		{"j/k", "move up/down"},
 		{"g/G", "top/bottom"},
@@ -77,15 +46,21 @@ func RenderSummary(version string, open, overdue, dueThisWeek, completedThisWeek
 		{"q", "quit"},
 	}
 
+	// Find the widest key to align descriptions.
+	maxKeyWidth := 0
+	for _, k := range keys {
+		if len(k.key) > maxKeyWidth {
+			maxKeyWidth = len(k.key)
+		}
+	}
+	colGap := 3
+
 	for _, k := range keys {
 		if k.key == "" {
 			lines = append(lines, "")
 			continue
 		}
-		padding := 12 - len(k.key)
-		if padding < 1 {
-			padding = 1
-		}
+		padding := maxKeyWidth - len(k.key) + colGap
 		lines = append(lines, fmt.Sprintf("  %s%s%s",
 			boldStyle.Render(k.key),
 			strings.Repeat(" ", padding),
@@ -97,7 +72,7 @@ func RenderSummary(version string, open, overdue, dueThisWeek, completedThisWeek
 
 	boxStyle := SummaryStyle()
 	if width > 0 {
-		boxWidth := 44
+		boxWidth := 48
 		if boxWidth > width-4 {
 			boxWidth = width - 4
 		}
