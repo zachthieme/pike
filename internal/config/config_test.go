@@ -447,6 +447,56 @@ func TestLoadBytes_DefaultRecentlyCompletedDays(t *testing.T) {
 	}
 }
 
+func TestLoadBytes_DefaultHiddenColor(t *testing.T) {
+	yaml := `notes_dir: ~/Notes`
+	cfg, err := LoadBytes([]byte(yaml))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.HiddenColor != "238" {
+		t.Errorf("HiddenColor = %q, want %q", cfg.HiddenColor, "238")
+	}
+}
+
+func TestLoadBytes_ExplicitHiddenColor(t *testing.T) {
+	yaml := `
+notes_dir: ~/Notes
+hidden_color: "red"
+`
+	cfg, err := LoadBytes([]byte(yaml))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.HiddenColor != "red" {
+		t.Errorf("HiddenColor = %q, want %q", cfg.HiddenColor, "red")
+	}
+}
+
+func TestLoadBytes_DefaultVisibleColor(t *testing.T) {
+	yaml := `notes_dir: ~/Notes`
+	cfg, err := LoadBytes([]byte(yaml))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.VisibleColor != "212" {
+		t.Errorf("VisibleColor = %q, want %q", cfg.VisibleColor, "212")
+	}
+}
+
+func TestLoadBytes_ExplicitVisibleColor(t *testing.T) {
+	yaml := `
+notes_dir: ~/Notes
+visible_color: "#FF5733"
+`
+	cfg, err := LoadBytes([]byte(yaml))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.VisibleColor != "#FF5733" {
+		t.Errorf("VisibleColor = %q, want %q", cfg.VisibleColor, "#FF5733")
+	}
+}
+
 func TestLoadBytes_ExplicitRecentlyCompletedDays(t *testing.T) {
 	yaml := `
 notes_dir: ~/Notes

@@ -18,7 +18,8 @@ func lipglossStyleFunc(text string, color string) string {
 // renderSection renders a single view section with a colored header and task list.
 // cursor is the global flat cursor index, sectionStart is the flat index of the
 // first task in this section. hiddenCount is the number of @hidden tasks stripped;
-// when > 0 a lock icon is appended to the header.
+// when > 0 a ◌ icon is shown. When showHidden is true and the section contains
+// @hidden tasks, a ◉ icon is shown instead.
 func (m Model) renderSection(title string, tasks []model.Task, color string, sectionStart int, hiddenCount int) string {
 	if len(tasks) == 0 {
 		return ""
@@ -56,18 +57,10 @@ func (m Model) renderSection(title string, tasks []model.Task, color string, sec
 
 	headerLabel := fmt.Sprintf(" %s (%d) ", title, len(tasks))
 	hiddenIcon := ""
-	if hiddenCount > 0 {
-		c := "238"
-		if m.config != nil && m.config.HiddenColor != "" {
-			c = m.config.HiddenColor
-		}
-		hiddenIcon = lipgloss.NewStyle().Foreground(resolveColor(c)).Render("◌")
-	} else if m.showHidden && hasHiddenTasks(tasks) {
-		c := "212"
-		if m.config != nil && m.config.VisibleColor != "" {
-			c = m.config.VisibleColor
-		}
-		hiddenIcon = lipgloss.NewStyle().Foreground(resolveColor(c)).Render("◉")
+	if hiddenCount > 0 && m.config != nil {
+		hiddenIcon = lipgloss.NewStyle().Foreground(resolveColor(m.config.HiddenColor)).Render("◌")
+	} else if m.showHidden && hasHiddenTasks(tasks) && m.config != nil {
+		hiddenIcon = lipgloss.NewStyle().Foreground(resolveColor(m.config.VisibleColor)).Render("◉")
 	}
 	headerText := headerStyle.Render(headerLabel)
 	if hiddenIcon != "" {

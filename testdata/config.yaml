@@ -4,6 +4,8 @@ include:
 refresh_interval: "5s"
 editor: "vi"
 link_color: "#6CB4EE"
+hidden_color: "238"
+visible_color: "212"
 tag_colors:
   today: "green"
   risk: "red"
