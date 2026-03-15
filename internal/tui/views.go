@@ -44,19 +44,12 @@ func (m Model) viewDashboard() string {
 	lineWidth := max(0, m.width-lipgloss.Width(label))
 	footer := FooterStyle().Render(strings.Repeat("\u2500", lineWidth) + label)
 
-	if m.queryErr != nil {
-		footer += "\n" + FooterStyle().Render("  "+m.queryErr.Error())
-	}
-
 	full := body + "\n" + footer
 	return m.truncateView(full)
 }
 
 func (m Model) viewFocused() string {
 	body, count := m.renderSections()
-	if m.queryErr != nil {
-		body += "\n" + FooterStyle().Render("  "+m.queryErr.Error())
-	}
 	if count == 0 {
 		return body + "\nNo tasks"
 	}

@@ -47,12 +47,16 @@ func (m *Model) rebuildSections() {
 // applying the query filter and pin partitioning.
 func (m *Model) rebuildSingleSection(title, color string, tasks []model.Task, now time.Time) {
 	if m.filterText != "" {
-		filtered, err := applyQueryFilter(tasks, m.filterText, now)
-		if err != nil {
-			m.queryErr = err
-			return // preserve existing sections
+		if m.filterMode == filterQuery {
+			filtered, err := applyDSLFilter(tasks, m.filterText, now)
+			if err != nil {
+				m.queryErr = err
+				return
+			}
+			tasks = filtered
+		} else {
+			tasks = applySubstringFilter(tasks, m.filterText)
 		}
-		tasks = filtered
 	}
 	tasks = tasksort.StablePartitionPinned(tasks)
 	m.sections = []filter.ViewResult{{Title: title, Color: color, Tasks: tasks}}
@@ -69,10 +73,16 @@ func (m *Model) rebuildDashboard(now time.Time) {
 
 	if m.filterText != "" {
 		for i := range results {
-			filtered, err := applyQueryFilter(results[i].Tasks, m.filterText, now)
-			if err != nil {
-				m.queryErr = err
-				return // preserve existing sections
+			var filtered []model.Task
+			if m.filterMode == filterQuery {
+				var qErr error
+				filtered, qErr = applyDSLFilter(results[i].Tasks, m.filterText, now)
+				if qErr != nil {
+					m.queryErr = qErr
+					return
+				}
+			} else {
+				filtered = applySubstringFilter(results[i].Tasks, m.filterText)
 			}
 			if filtered == nil {
 				filtered = []model.Task{}
@@ -112,49 +122,12 @@ func (m *Model) applyHiddenFilter() {
 	}
 }
 
-// hasDSLTokens checks if input contains DSL-specific tokens that distinguish
-// it from a plain text search. Uses word-boundary matching for keywords.
-func hasDSLTokens(input string) bool {
-	if strings.ContainsAny(input, "@<>\"") {
-		return true
+// applySubstringFilter filters tasks using space-separated substring matching (ANDed).
+func applySubstringFilter(tasks []model.Task, filterText string) []model.Task {
+	tokens := strings.Fields(strings.ToLower(strings.TrimSpace(filterText)))
+	if len(tokens) == 0 {
+		return tasks
 	}
-	// Detect /regex/ patterns (paired slashes)
-	if strings.Count(input, "/") >= 2 {
-		return true
-	}
-	for _, word := range strings.Fields(input) {
-		if strings.EqualFold(word, "and") || strings.EqualFold(word, "or") || strings.EqualFold(word, "not") || strings.EqualFold(word, "open") || strings.EqualFold(word, "completed") {
-			return true
-		}
-	}
-	return false
-}
-
-// applyQueryFilter filters tasks using DSL parsing with fallback to substring matching.
-// Returns (filtered tasks, parse error or nil).
-// When DSL parsing fails and input has DSL tokens, returns (nil, error) to signal
-// the caller should preserve existing sections.
-func applyQueryFilter(tasks []model.Task, filterText string, now time.Time) ([]model.Task, error) {
-	// Try DSL parsing first
-	node, err := query.Parse(filterText)
-	if err == nil && node != nil {
-		opts := query.EvalOptions{PartialTags: true}
-		var filtered []model.Task
-		for _, t := range tasks {
-			if query.EvalWithOptions(node, &t, now, opts) {
-				filtered = append(filtered, t)
-			}
-		}
-		return filtered, nil
-	}
-
-	// DSL parse failed — check if input looks like DSL
-	if hasDSLTokens(filterText) {
-		return nil, err // signal to preserve existing sections
-	}
-
-	// Fallback: simple substring matching (space-separated tokens, ANDed)
-	tokens := strings.Fields(strings.ToLower(filterText))
 	var filtered []model.Task
 	for _, t := range tasks {
 		lower := strings.ToLower(t.Text)
@@ -166,6 +139,26 @@ func applyQueryFilter(tasks []model.Task, filterText string, now time.Time) ([]m
 			}
 		}
 		if match {
+			filtered = append(filtered, t)
+		}
+	}
+	return filtered
+}
+
+// applyDSLFilter filters tasks using the query DSL.
+func applyDSLFilter(tasks []model.Task, filterText string, now time.Time) ([]model.Task, error) {
+	filterText = strings.TrimSpace(filterText)
+	node, err := query.Parse(filterText)
+	if err != nil {
+		return nil, err
+	}
+	if node == nil {
+		return tasks, nil
+	}
+	opts := query.EvalOptions{PartialTags: true}
+	var filtered []model.Task
+	for _, t := range tasks {
+		if query.EvalWithOptions(node, &t, now, opts) {
 			filtered = append(filtered, t)
 		}
 	}
@@ -399,6 +392,7 @@ func (m Model) countCompletedThisWeek() int {
 func (m *Model) clearFilter() {
 	m.filtering = false
 	m.filterText = ""
+	m.filterMode = filterSubstring
 	m.showAll = false
 	m.filterInput.SetValue("")
 	m.filterInput.Prompt = "/ "
@@ -413,7 +407,9 @@ func (m *Model) enterAllTasksMode(showAll bool, initialFilter string) tea.Cmd {
 	m.showAll = showAll
 	m.filtering = true
 	m.filterInput.SetValue(initialFilter)
+	m.filterInput.CursorEnd()
 	m.filterText = initialFilter
+	m.filterMode = filterSubstring
 	m.filterInput.Prompt = "/ "
 	m.filterInput.Placeholder = "search tasks..."
 	m.cursor = 0
@@ -430,6 +426,7 @@ func (m *Model) enterTagSearchMode() tea.Cmd {
 	m.filtering = true
 	m.filterInput.SetValue("")
 	m.filterText = ""
+	m.filterMode = filterSubstring
 	m.filterInput.Prompt = "/ "
 	m.filterInput.Placeholder = "search tags..."
 	m.tagCursor = 0
@@ -444,7 +441,8 @@ func (m *Model) enterRecentlyCompletedMode() tea.Cmd {
 	m.filtering = true
 	m.filterInput.SetValue(queryStr)
 	m.filterText = queryStr
-	m.filterInput.Prompt = "/ "
+	m.filterMode = filterQuery
+	m.filterInput.Prompt = "? "
 	m.filterInput.Placeholder = "type to filter..."
 	m.cursor = 0
 	m.rebuildSections()

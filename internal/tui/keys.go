@@ -109,7 +109,9 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				}
 				return m, nil
 			case key.Matches(msg, m.keys.Filter):
-				// / returns focus to query bar.
+				// / returns focus to query bar and switches to substring mode.
+				m.filterMode = filterSubstring
+				m.filterInput.Prompt = "/ "
 				cmd := m.filterInput.Focus()
 				return m, cmd
 			case key.Matches(msg, m.keys.PrevSection):
@@ -200,6 +202,15 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	case key.Matches(msg, m.keys.Filter):
 		m.filtering = true
+		m.filterMode = filterSubstring
+		m.filterInput.Prompt = "/ "
+		cmd := m.filterInput.Focus()
+		return m, cmd
+
+	case key.Matches(msg, m.keys.Query):
+		m.filtering = true
+		m.filterMode = filterQuery
+		m.filterInput.Prompt = "? "
 		cmd := m.filterInput.Focus()
 		return m, cmd
 

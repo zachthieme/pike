@@ -208,6 +208,60 @@ func TestFilterActivation(t *testing.T) {
 	if !m2.filtering {
 		t.Error("expected filtering to be true after pressing '/'")
 	}
+	if m2.filterMode != filterSubstring {
+		t.Error("expected filterSubstring mode after pressing '/'")
+	}
+}
+
+func TestQueryModeActivation(t *testing.T) {
+	m := testModel(testTasks(), testViews())
+
+	updated, _ := sendKey(m, "?")
+	m2 := updated.(Model)
+	if !m2.filtering {
+		t.Error("expected filtering to be true after pressing '?'")
+	}
+	if m2.filterMode != filterQuery {
+		t.Error("expected filterQuery mode after pressing '?'")
+	}
+}
+
+func TestRecentlyCompletedUsesQueryMode(t *testing.T) {
+	m := testModel(testTasks(), testViews())
+
+	updated, _ := sendKey(m, "c")
+	m2 := updated.(Model)
+	if m2.filterMode != filterQuery {
+		t.Error("expected filterQuery mode for recently completed")
+	}
+}
+
+func TestSubstringFilterWithTags(t *testing.T) {
+	tasks := []model.Task{
+		{Text: "Fix bug @delegated to bob", State: model.Open, File: "t.md", Line: 1,
+			Tags: []model.Tag{{Name: "delegated"}}, HasCheckbox: true},
+		{Text: "Write docs", State: model.Open, File: "t.md", Line: 2, HasCheckbox: true},
+	}
+	views := []config.ViewConfig{
+		{Title: "All", Query: "open", Sort: "file", Color: "green"},
+	}
+	m := testModel(tasks, views)
+
+	// Activate substring filter
+	updated, _ := sendKey(m, "/")
+	m = updated.(Model)
+	for _, ch := range "@delegated bob" {
+		updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{ch}})
+		m = updated.(Model)
+	}
+
+	flat := m.flatTasks()
+	if len(flat) != 1 {
+		t.Fatalf("expected 1 matching task, got %d", len(flat))
+	}
+	if !strings.Contains(flat[0].Text, "delegated") {
+		t.Errorf("expected task with @delegated, got %q", flat[0].Text)
+	}
 }
 
 func TestFilterAtTopWhenActive(t *testing.T) {

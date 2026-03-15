@@ -8,7 +8,7 @@ type KeyMap struct {
 	NextSection, PrevSection key.Binding
 	FocusSection             [9]key.Binding // 1-9
 	Enter, Quit, Summary           key.Binding
-	Filter, Escape, Refresh        key.Binding
+	Filter, Query, Escape, Refresh        key.Binding
 	AllTasks, TagSearch, ToggleHidden key.Binding
 	Toggle, ToggleHiddenTag, RecentlyCompleted key.Binding
 }
@@ -55,6 +55,10 @@ func DefaultKeyMap() KeyMap {
 		Filter: key.NewBinding(
 			key.WithKeys("/"),
 			key.WithHelp("/", "filter"),
+		),
+		Query: key.NewBinding(
+			key.WithKeys("?"),
+			key.WithHelp("?", "query"),
 		),
 		Escape: key.NewBinding(
 			key.WithKeys("esc"),

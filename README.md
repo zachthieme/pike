@@ -301,46 +301,49 @@ open and "meeting notes"                # open tasks containing "meeting notes"
 | Key | Action |
 |-----|--------|
 | `Enter` | Open task in editor at the correct line |
-| `/` | Activate query bar |
-| `a` | All tasks — show every task with search |
+| `/` | Filter bar — substring search (prompt shows `/ `) |
+| `?` | Query bar — DSL query mode (prompt shows `? `) |
+| `a` | All tasks — show every task with substring search |
 | `t` | Tag search — browse and pick a tag |
 | `x` | Toggle task complete/incomplete |
 | `H` | Toggle `@hidden` tag on selected task |
-| `c` | Recently completed tasks |
+| `c` | Recently completed tasks (opens in query mode) |
 | `h` | Toggle hidden tasks visibility (show/hide `@hidden` tasks) |
 | `s` | Toggle summary overlay |
 | `r` | Refresh (re-scan files) |
 | `q` | Quit |
 
-### Query Mode
+### Filter and Query Modes
 
-When the query bar is active (`/` or `a`), you can type full query DSL expressions or plain text:
+Pike has two filter bar modes, each with a distinct prompt character:
 
-| Input | Meaning |
-|-------|---------|
-| `foo` | Text must contain "foo" (simple substring) |
-| `foo bar` | Text must contain both "foo" and "bar" |
-| `@tag` | Task must have `@tag` (partial match: `@du` matches `@due`) |
-| `open and @due < today` | Full DSL query |
-| `not @risk` | DSL negation |
+| Key | Mode | Prompt | Behavior |
+|-----|------|--------|----------|
+| `/` | Substring | `/ ` | Case-insensitive substring matching (space-separated tokens, ANDed) |
+| `?` | Query DSL | `? ` | Full query DSL with tags, dates, boolean operators, regex |
 
-Plain text is matched as case-insensitive substrings (space-separated, ANDed). If the input contains DSL keywords (`and`, `or`, `not`, `@tag`, operators), it is parsed as a full query DSL expression with partial tag matching. Invalid DSL shows a parse error in the footer without clearing results.
+**Substring mode (`/`)** is for quick, free-form text search. Type any words and tasks containing all of them will match. `@tag` text is matched literally as a substring.
 
-Press `Tab` to switch focus between the query bar and the results list. When results are focused, `j`/`k`, `g`/`G`, and `x` (toggle complete) work directly on tasks. Press `Tab` or `/` to return to editing the query. `Esc` from results returns to the query bar; `Esc` from the query bar exits filter mode.
+**Query mode (`?`)** uses the full query DSL. Parse errors are shown in the footer. The `c` (recently completed) view opens in query mode with a pre-filled DSL expression.
+
+Press `Enter` to submit the filter and move focus to results. Press `Tab` to toggle focus between the filter bar and results. When results are focused, `j`/`k`, `g`/`G`, and `x` (toggle complete) work directly on tasks. Press `Tab` or `/` to return to editing the filter.
+
+`Esc` behavior when the filter bar is focused: if there is text, clears the text; if already empty, exits filter mode.
 
 | Key | Action |
 |-----|--------|
 | Type | Filter tasks across all sections |
-| `Tab` | Toggle focus between query bar and results |
+| `Enter` | Submit filter and move focus to results |
+| `Tab` | Toggle focus between filter bar and results |
 | `Up` / `Down` / `Ctrl+P` / `Ctrl+N` | Move cursor up/down |
 | `Ctrl+D` | Scroll down half page |
 | `Ctrl+U` | Scroll up half page |
 | `x` | Toggle task complete (when results focused) |
 | `H` | Toggle `@hidden` tag (when results focused) |
 | `j` / `k` / `g` / `G` | Navigate results (when results focused) |
-| `/` | Return focus to query bar |
-| `Enter` | Open selected task in editor |
-| `Esc` | Return to query bar, or exit filter mode |
+| `/` | Return focus to filter bar (switches to substring mode) |
+| `Enter` | Open selected task in editor (when results focused) |
+| `Esc` | Clear text, or exit filter mode if empty |
 
 ### Tag Search Mode
 
@@ -374,7 +377,7 @@ To toggle tasks while the query bar is active, press `Tab` to focus the results 
 
 ### Recently Completed
 
-Press `c` to see tasks completed in the last N days (configurable via `recently_completed_days` in config, default 7). The view opens with a pre-filled query `completed and @completed >= today-Nd` which you can edit. Press `x` to un-complete a task (undo an accidental completion).
+Press `c` to see tasks completed in the last N days (configurable via `recently_completed_days` in config, default 7). The view opens in query mode (`? ` prompt) with a pre-filled DSL expression `completed and @completed >= today-Nd` which you can edit. Press `x` to un-complete a task (undo an accidental completion).
 
 ### Pinned Tasks
 

@@ -28,6 +28,14 @@ const (
 	modeRecentlyCompleted
 )
 
+// filterMode tracks whether the filter bar uses substring or DSL matching.
+type filterMode int
+
+const (
+	filterSubstring filterMode = iota
+	filterQuery
+)
+
 // Model is the main Bubbletea model for the tasks TUI.
 type Model struct {
 	config      *config.Config
@@ -40,6 +48,7 @@ type Model struct {
 	filterInput textinput.Model
 	filtering   bool
 	filterText  string
+	filterMode  filterMode
 	mode        viewMode
 	tagList     []string // unique tags for tag search mode
 	tagCursor   int      // cursor in tag list
