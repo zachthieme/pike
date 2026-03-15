@@ -159,6 +159,7 @@ func TestLoad_ImplicitMissingFileReturnsDefaults(t *testing.T) {
 	// Load should return defaults without error.
 	t.Setenv("PIKE_CONFIG", "")
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir()) // empty dir, no config file
+	t.Setenv("HOME", t.TempDir())            // prevent ~/.config/pike/config.yaml fallback
 
 	cfg, err := Load("")
 	if err != nil {
