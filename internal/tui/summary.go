@@ -7,10 +7,11 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-// RenderSummary renders a centered summary overlay with version, description, and keybindings.
+// RenderSummary renders a full-screen summary with version, description, and keybindings.
 func RenderSummary(version string, width int) string {
 	faintStyle := lipgloss.NewStyle().Faint(true)
 	boldStyle := lipgloss.NewStyle().Bold(true)
+	headerStyle := lipgloss.NewStyle().Bold(true).Underline(true)
 
 	var lines []string
 
@@ -19,71 +20,92 @@ func RenderSummary(version string, width int) string {
 	if version != "" {
 		versionStr = " " + version
 	}
-	lines = append(lines, boldStyle.Render("pike"+versionStr))
+	lines = append(lines, headerStyle.Render("pike"+versionStr))
 	lines = append(lines, "")
-	lines = append(lines, faintStyle.Render("  A long pointed tool, used to pick"))
-	lines = append(lines, faintStyle.Render("  through things quickly and with"))
-	lines = append(lines, faintStyle.Render("  precision. Your tasks are scattered"))
-	lines = append(lines, faintStyle.Render("  across dozens of markdown files."))
-	lines = append(lines, faintStyle.Render("  Pike reaches in and pulls them out."))
+	lines = append(lines, faintStyle.Render("A long pointed tool, used to pick through things"))
+	lines = append(lines, faintStyle.Render("quickly and with precision. Your tasks are scattered"))
+	lines = append(lines, faintStyle.Render("across dozens of markdown files. Pike reaches in"))
+	lines = append(lines, faintStyle.Render("and pulls them out."))
+	lines = append(lines, "")
 	lines = append(lines, "")
 
-	// Keybindings
-	keys := []struct{ key, desc string }{
-		{"j/k", "move up/down"},
-		{"g/G", "top/bottom"},
-		{"Enter", "open in editor"},
-		{"x", "toggle complete"},
-		{"", ""},
-		{"/", "substring filter"},
-		{"?", "query DSL filter"},
-		{"a", "all tasks"},
-		{"t", "tag search"},
-		{"c", "recently completed"},
-		{"", ""},
-		{"Tab", "next section / toggle focus"},
-		{"Shift+Tab", "prev section"},
-		{"Ctrl+D/U", "page down/up"},
-		{"H", "toggle @hidden tag"},
-		{"h", "show/hide hidden"},
-		{"s", "toggle this summary"},
-		{"r", "refresh"},
-		{"q", "quit"},
+	// Keybinding sections
+	type section struct {
+		title string
+		keys  []struct{ key, desc string }
 	}
 
-	// Find the widest key to compute the description column offset.
+	sections := []section{
+		{
+			title: "Navigation",
+			keys: []struct{ key, desc string }{
+				{"j / k", "move down / up"},
+				{"g / G", "jump to top / bottom"},
+				{"Tab", "next section / toggle focus"},
+				{"Shift+Tab", "previous section"},
+				{"Ctrl+D / U", "page down / up"},
+				{"1-9", "focus section by number"},
+			},
+		},
+		{
+			title: "Actions",
+			keys: []struct{ key, desc string }{
+				{"Enter", "open task in editor"},
+				{"x", "toggle task complete"},
+				{"H", "toggle @hidden tag on task"},
+				{"h", "show / hide @hidden tasks"},
+			},
+		},
+		{
+			title: "Search & Filter",
+			keys: []struct{ key, desc string }{
+				{"/", "substring search"},
+				{"?", "query DSL search"},
+				{"a", "all open tasks"},
+				{"t", "tag search"},
+				{"c", "recently completed"},
+				{"Esc", "clear filter / exit"},
+			},
+		},
+		{
+			title: "Other",
+			keys: []struct{ key, desc string }{
+				{"s", "toggle this summary"},
+				{"r", "refresh tasks"},
+				{"q", "quit"},
+			},
+		},
+	}
+
+	// Find the widest key across all sections for uniform alignment.
 	maxKeyLen := 0
-	for _, k := range keys {
-		if len(k.key) > maxKeyLen {
-			maxKeyLen = len(k.key)
+	for _, sec := range sections {
+		for _, k := range sec.keys {
+			if len(k.key) > maxKeyLen {
+				maxKeyLen = len(k.key)
+			}
 		}
 	}
-	colWidth := maxKeyLen + 3
+	colWidth := maxKeyLen + 4
 
-	for _, k := range keys {
-		if k.key == "" {
+	for i, sec := range sections {
+		if i > 0 {
 			lines = append(lines, "")
-			continue
 		}
-		// Right-pad the key to a fixed column width, then style each part.
-		paddedKey := fmt.Sprintf("%-*s", colWidth, k.key)
-		lines = append(lines, "  "+boldStyle.Render(paddedKey)+faintStyle.Render(k.desc))
+		lines = append(lines, boldStyle.Render(sec.title))
+		lines = append(lines, "")
+		for _, k := range sec.keys {
+			paddedKey := fmt.Sprintf("  %-*s", colWidth, k.key)
+			lines = append(lines, paddedKey+faintStyle.Render(k.desc))
+		}
 	}
-	lines = append(lines, "")
 
 	content := strings.Join(lines, "\n")
 
-	boxStyle := SummaryStyle()
 	if width > 0 {
-		boxWidth := min(48, width-4)
-		boxStyle = boxStyle.Width(boxWidth)
+		content = lipgloss.PlaceHorizontal(width, lipgloss.Center,
+			lipgloss.NewStyle().Width(min(60, width)).Render(content))
 	}
 
-	box := boxStyle.Render(content)
-
-	if width > 0 {
-		box = lipgloss.PlaceHorizontal(width, lipgloss.Center, box)
-	}
-
-	return box
+	return content
 }

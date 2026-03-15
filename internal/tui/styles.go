@@ -57,14 +57,6 @@ func TagStyle(color string) lipgloss.Style {
 		Foreground(resolveColor(color))
 }
 
-// SummaryStyle returns a style for the summary overlay box.
-func SummaryStyle() lipgloss.Style {
-	return lipgloss.NewStyle().
-		Border(lipgloss.DoubleBorder()).
-		Padding(1, 2).
-		Align(lipgloss.Center)
-}
-
 // FooterStyle returns a style for the footer bar.
 func FooterStyle() lipgloss.Style {
 	return lipgloss.NewStyle().
