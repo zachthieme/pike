@@ -1,0 +1,77 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.25.x"
+
+      - name: Run GoReleaser
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          version: "~> v2"
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@main
+
+      - name: Update flake.nix
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          VERSION="${TAG#v}"
+
+          REPO="https://github.com/zachthieme/pike/releases/download/${TAG}"
+
+          # Compute SRI hashes for each archive
+          compute_hash() {
+            local url="$1"
+            local hash
+            hash=$(nix-prefetch-url "$url" | xargs nix hash convert --hash-algo sha256 --from nix32 --to sri)
+            if [ -z "$hash" ]; then
+              echo "ERROR: Failed to compute hash for $url" >&2
+              exit 1
+            fi
+            echo "$hash"
+          }
+
+          HASH_LINUX_AMD64=$(compute_hash "${REPO}/pike_linux_amd64.tar.gz")
+          HASH_LINUX_ARM64=$(compute_hash "${REPO}/pike_linux_arm64.tar.gz")
+          HASH_DARWIN_AMD64=$(compute_hash "${REPO}/pike_darwin_amd64.tar.gz")
+          HASH_DARWIN_ARM64=$(compute_hash "${REPO}/pike_darwin_arm64.tar.gz")
+
+          # Update flake.nix
+          sed -i "s|pikeVersion = \".*\"|pikeVersion = \"${VERSION}\"|" flake.nix
+          sed -i "s|x86_64-linux = \"sha256-.*\"|x86_64-linux = \"${HASH_LINUX_AMD64}\"|" flake.nix
+          sed -i "s|aarch64-linux = \"sha256-.*\"|aarch64-linux = \"${HASH_LINUX_ARM64}\"|" flake.nix
+          sed -i "s|x86_64-darwin = \"sha256-.*\"|x86_64-darwin = \"${HASH_DARWIN_AMD64}\"|" flake.nix
+          sed -i "s|aarch64-darwin = \"sha256-.*\"|aarch64-darwin = \"${HASH_DARWIN_ARM64}\"|" flake.nix
+
+      - name: Push flake.nix update
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          VERSION="${TAG#v}"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git fetch origin main
+          git checkout -B main origin/main
+          git add flake.nix
+          git commit -m "release: update flake.nix for v${VERSION} [skip ci]"
+          git push origin main
