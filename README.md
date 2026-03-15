@@ -218,77 +218,18 @@ views:
 
 ## Query DSL
 
-The query language filters tasks by state, tags, dates, and text patterns. Queries are used in view configs and the `--query` flag.
-
-### Grammar
+The query language filters tasks by state, tags, dates, and text patterns. Queries are used in view configs and the `--query` flag. See [QUERY_DSL.md](QUERY_DSL.md) for the full reference (grammar, operators, date expressions, sort orders).
 
 ```
-expr     = or_expr
-or_expr  = and_expr ("or" and_expr)*
-and_expr = not_expr ("and" not_expr)*
-not_expr = "not" not_expr | atom
-atom     = "open" | "completed" | @tag | @tag <op> <date> | /regex/ | "text" | word | ( expr )
-```
-
-### Atoms
-
-| Atom | Matches |
-|------|---------|
-| `open` | Tasks with open state |
-| `completed` | Tasks with completed state |
-| `@tag` | Tasks that have the given tag |
-| `@due < today` | Date comparison on the due field |
-| `@completed >= today-7d` | Date comparison on the completed field |
-| `/pattern/` | Regex match against task text |
-| `word` | Case-insensitive substring match against task text |
-| `"multi word"` | Quoted substring match against task text |
-
-### Operators
-
-| Operator | Description |
-|----------|-------------|
-| `and` | Both sides must match |
-| `or` | Either side must match |
-| `not` | Negates the following expression |
-| `<`, `>`, `<=`, `>=`, `=` | Date comparisons (`==` is also accepted) |
-
-### Date Values
-
-| Value | Description |
-|-------|-------------|
-| `today` | Current date (midnight) |
-| `tomorrow` | Tomorrow (shorthand for `today+1d`) |
-| `yesterday` | Yesterday (shorthand for `today-1d`) |
-| `today+Nd` | N days from today |
-| `today-Nd` | N days before today |
-| `YYYY-MM-DD` | Absolute date literal |
-
-### Example Queries
-
-```
-open                                    # all open tasks
 open and @due < today                   # overdue
-open and @due >= today and @due <= today+3d   # due within 3 days
+open and @due = today                   # due exactly today
+open and @due < tomorrow                # due today or overdue
 completed and @completed >= today-7d    # completed in last week
 open and (@weekly or @today)            # tagged weekly or today
 open and not @risk                      # open, excluding risk
 /deploy/                                # regex matches "deploy"
-open and deploy                         # open tasks containing "deploy"
-open and "meeting notes"                # open tasks containing "meeting notes"
-open and @due = today                  # due exactly today
-open and @due < tomorrow               # due today or overdue
+open and "meeting notes"                # quoted substring match
 ```
-
-## Sort Orders
-
-| Order | Description |
-|-------|-------------|
-| `due_asc` | By due date, earliest first (nil last) |
-| `due_desc` | By due date, latest first (nil last) |
-| `completed_asc` | By completion date, earliest first (nil last) |
-| `completed_desc` | By completion date, latest first (nil last) |
-| `file` | By file path, then line number |
-| `alpha` | Alphabetically by task text |
 
 ## TUI Keybindings
 

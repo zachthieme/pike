@@ -64,16 +64,7 @@ Used in view configs (`sort` field) and the `--sort` CLI flag.
 
 ## Tag Format
 
-Tags follow the format `@name` or `@name(value)`.
-
-| Tag | Effect |
-|-----|--------|
-| `@due(YYYY-MM-DD)` | Sets the task's due date for date comparisons |
-| `@completed` | Marks the task as completed (with or without a date) |
-| `@completed(YYYY-MM-DD)` | Marks completed and records the completion date |
-| `@hidden` | Hides the task from all views by default (toggle with `h`) |
-| `@pin` | Floats the task to the top of its section |
-| `@<word>` | Categorical tag for filtering (e.g., `@today`, `@risk`, `@talk`) |
+Tags follow the format `@name` or `@name(value)`. See [README.md](README.md#special-tags) for the full list of special tags (`@due`, `@completed`, `@hidden`, `@pin`).
 
 ## Examples
 
