@@ -37,11 +37,10 @@ func (m Model) View() string {
 }
 
 func (m Model) viewDashboard() string {
-	body, _ := m.renderSections()
+	body, displayed := m.renderSections()
 
-	label := fmt.Sprintf(" ○ %d/%d  ● %d wk", m.displayedCount, m.openCount, m.completedThisWeek)
-	lineWidth := max(0, m.width-lipgloss.Width(label))
-	footer := FooterStyle().Render(strings.Repeat("\u2500", lineWidth) + label)
+	label := fmt.Sprintf(" ○ %d/%d  ● %d wk", displayed, m.openCount, m.completedThisWeek)
+	footer := m.renderFooterBar(label)
 
 	if m.filter.QueryErr != nil {
 		footer += "\n" + FooterStyle().Render("  "+m.filter.QueryErr.Error())

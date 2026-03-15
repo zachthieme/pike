@@ -3,6 +3,7 @@ package config
 import (
 	"cmp"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
@@ -184,10 +185,11 @@ func applyDefaults(raw *rawConfig) (*Config, error) {
 	}
 
 	// WeekStartDay: default to 0 (Sunday)
-	if raw.WeekStartDay != nil && *raw.WeekStartDay >= 0 && *raw.WeekStartDay <= 6 {
+	if raw.WeekStartDay != nil {
+		if *raw.WeekStartDay < 0 || *raw.WeekStartDay > 6 {
+			return nil, fmt.Errorf("week_start_day must be 0-6 (Sunday-Saturday), got %d", *raw.WeekStartDay)
+		}
 		cfg.WeekStartDay = *raw.WeekStartDay
-	} else {
-		cfg.WeekStartDay = 0
 	}
 
 	// RecentlyCompletedDays: default to 7

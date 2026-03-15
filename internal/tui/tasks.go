@@ -51,18 +51,12 @@ func (m *Model) rebuildSections() {
 		if t.HasCheckbox && t.State == model.Open {
 			openCount++
 		}
-		if t.Completed != nil && !t.Completed.Before(weekStart) {
+		if t.HasCheckbox && t.Completed != nil && !t.Completed.Before(weekStart) {
 			completedThisWeek++
 		}
 	}
 	m.openCount = openCount
 	m.completedThisWeek = completedThisWeek
-
-	displayed := 0
-	for _, sec := range m.displaySections() {
-		displayed += len(sec.Tasks)
-	}
-	m.displayedCount = displayed
 }
 
 // startOfWeek returns midnight of the most recent occurrence of the given weekday.
@@ -387,12 +381,6 @@ func (m Model) hiddenCountFor(title string) int {
 	}
 	return 0
 }
-
-// countOpen returns the cached count of open checkbox tasks.
-func (m Model) countOpen() int {
-	return m.openCount
-}
-
 
 // setFilterMode sets the filter mode, updates the prompt, and focuses the input.
 func (m *Model) setFilterMode(mode filterMode) tea.Cmd {
