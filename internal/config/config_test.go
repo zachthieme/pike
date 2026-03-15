@@ -453,8 +453,8 @@ func TestLoadBytes_DefaultHiddenColor(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if cfg.HiddenColor != "245" {
-		t.Errorf("HiddenColor = %q, want %q", cfg.HiddenColor, "245")
+	if cfg.HiddenColor != "#6c7086" {
+		t.Errorf("HiddenColor = %q, want %q", cfg.HiddenColor, "#6c7086")
 	}
 }
 
@@ -478,8 +478,8 @@ func TestLoadBytes_DefaultVisibleColor(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if cfg.VisibleColor != "212" {
-		t.Errorf("VisibleColor = %q, want %q", cfg.VisibleColor, "212")
+	if cfg.VisibleColor != "#f5c2e7" {
+		t.Errorf("VisibleColor = %q, want %q", cfg.VisibleColor, "#f5c2e7")
 	}
 }
 

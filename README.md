@@ -131,6 +131,8 @@ Config is loaded from (in order of precedence):
 
 ### Config File
 
+A default config using the [Catppuccin Mocha](https://github.com/catppuccin/catppuccin) color scheme is written to `~/.config/pike/config.yaml` on first run.
+
 ```yaml
 # Directory containing your markdown notes (supports ~ expansion)
 notes_dir: ~/notes
@@ -150,60 +152,47 @@ refresh_interval: 5s
 # Editor command for opening tasks (default: $EDITOR, then hx)
 editor: hx
 
-# Color for rendering prettified links (default: blue)
-link_color: blue
-
 # Days to show in recently-completed view (default: 7)
 recently_completed_days: 7
 
-# Colors for hidden-task visibility icons (ANSI number, name, or hex)
-hidden_color: "245"     # ○ icon when hidden tasks are concealed
-visible_color: "212"    # ◉ icon when hidden tasks are revealed
+# Day the week starts on: 0=Sunday, 1=Monday, ..., 6=Saturday (default: 0)
+week_start_day: 0
 
-# Map tag names to display colors
-# Supports named colors (red, green, yellow, blue, magenta, cyan, white)
-# and hex colors (#FF5733)
+# Color theme (Catppuccin Mocha)
+# Supports named colors (red, green, etc.) and hex (#FF5733)
+link_color: "#89b4fa"
+hidden_color: "#6c7086"     # ○ icon when hidden tasks are concealed
+visible_color: "#f5c2e7"    # ◉ icon when hidden tasks are revealed
+
 tag_colors:
-  risk: red
-  due: red
-  today: green
-  completed: green
-  weekly: blue
-  horizon: yellow
-  talk: magenta
-  _default: cyan       # fallback for unspecified tags
+  risk: "#f38ba8"
+  due: "#f38ba8"
+  today: "#a6e3a1"
+  completed: "#a6e3a1"
+  weekly: "#89b4fa"
+  horizon: "#f9e2af"
+  talk: "#cba6f7"
+  _default: "#94e2d5"       # fallback for unspecified tags
 
 # Dashboard sections — each view is a filtered, sorted slice of your tasks
 views:
   - title: "Today"
     query: "open and @today"
     sort: due_asc
-    color: green
+    color: "#a6e3a1"
     order: 1
 
   - title: "Overdue"
     query: "open and @due < today"
     sort: due_asc
-    color: red
+    color: "#f38ba8"
     order: 2
 
-  - title: "Next 3 Days"
-    query: "open and @due >= today and @due <= today+3d"
+  - title: "This Week"
+    query: "open and @due >= today and @due <= today+7d"
     sort: due_asc
-    color: yellow
+    color: "#f9e2af"
     order: 3
-
-  - title: "Talk"
-    query: "open and @talk"
-    sort: file
-    color: magenta
-    order: 4
-
-  - title: "Horizon"
-    query: "@risk or @horizon"
-    sort: file
-    color: yellow
-    order: 5
 ```
 
 ### View Config Fields

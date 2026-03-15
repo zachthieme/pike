@@ -56,12 +56,13 @@ type rawConfig struct {
 
 // Load reads configuration from the given path. If path is empty, it checks
 // $PIKE_CONFIG, then $XDG_CONFIG_HOME/pike/config.yaml, then
-// ~/.config/pike/config.yaml. If no file is found at any path, defaults are
-// returned.
+// ~/.config/pike/config.yaml. If no config file is found, a default config
+// is written to the XDG config path and defaults are returned.
 func Load(path string) (*Config, error) {
 	path, explicit := resolveConfigPath(path)
 
 	if path == "" {
+		writeDefaultConfig()
 		return applyDefaults(&rawConfig{})
 	}
 
@@ -163,25 +164,25 @@ func applyDefaults(raw *rawConfig) (*Config, error) {
 		cfg.TagColors = make(map[string]string)
 	}
 
-	// LinkColor: default to blue
+	// LinkColor: default to Catppuccin Mocha blue
 	if raw.LinkColor != "" {
 		cfg.LinkColor = raw.LinkColor
 	} else {
-		cfg.LinkColor = "blue"
+		cfg.LinkColor = "#89b4fa"
 	}
 
-	// HiddenColor: default to "238" (dark gray)
+	// HiddenColor: default to Catppuccin Mocha overlay0
 	if raw.HiddenColor != "" {
 		cfg.HiddenColor = raw.HiddenColor
 	} else {
-		cfg.HiddenColor = "245"
+		cfg.HiddenColor = "#6c7086"
 	}
 
-	// VisibleColor: default to "212" (pink)
+	// VisibleColor: default to Catppuccin Mocha pink
 	if raw.VisibleColor != "" {
 		cfg.VisibleColor = raw.VisibleColor
 	} else {
-		cfg.VisibleColor = "212"
+		cfg.VisibleColor = "#f5c2e7"
 	}
 
 	// WeekStartDay: default to 0 (Sunday)
@@ -234,4 +235,93 @@ func expandTilde(path string) string {
 		return home
 	}
 	return filepath.Join(home, path[2:])
+}
+
+// defaultConfigYAML is the config written on first run.
+const defaultConfigYAML = `# Pike configuration
+# See https://github.com/zachthieme/pike for full documentation.
+
+# Directory containing your markdown notes (supports ~ expansion)
+# notes_dir: ~/notes
+
+# File patterns to include (default: all .md files)
+# include:
+#   - "**/*.md"
+
+# File patterns to exclude
+# exclude:
+#   - "templates/**"
+#   - "archive/**"
+
+# How often to re-scan files for changes (default: 5s)
+# refresh_interval: 5s
+
+# Editor command for opening tasks (default: $EDITOR, then hx)
+# editor: hx
+
+# Days to show in recently-completed view (default: 7)
+# recently_completed_days: 7
+
+# Day the week starts on: 0=Sunday, 1=Monday, ..., 6=Saturday (default: 0)
+# week_start_day: 0
+
+# Color theme (Catppuccin Mocha)
+link_color: "#89b4fa"
+hidden_color: "#6c7086"
+visible_color: "#f5c2e7"
+
+tag_colors:
+  risk: "#f38ba8"
+  due: "#f38ba8"
+  today: "#a6e3a1"
+  completed: "#a6e3a1"
+  weekly: "#89b4fa"
+  horizon: "#f9e2af"
+  talk: "#cba6f7"
+  _default: "#94e2d5"
+
+# Dashboard sections — each view is a filtered, sorted slice of your tasks
+views:
+  - title: "Today"
+    query: "open and @today"
+    sort: due_asc
+    color: "#a6e3a1"
+    order: 1
+
+  - title: "Overdue"
+    query: "open and @due < today"
+    sort: due_asc
+    color: "#f38ba8"
+    order: 2
+
+  - title: "This Week"
+    query: "open and @due >= today and @due <= today+7d"
+    sort: due_asc
+    color: "#f9e2af"
+    order: 3
+`
+
+// writeDefaultConfig writes a default config file to the XDG config directory
+// if no config file exists. Errors are silently ignored (best-effort).
+func writeDefaultConfig() {
+	dir := os.Getenv("XDG_CONFIG_HOME")
+	if dir == "" {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return
+		}
+		dir = filepath.Join(home, ".config")
+	}
+	configDir := filepath.Join(dir, "pike")
+	configPath := filepath.Join(configDir, "config.yaml")
+
+	// Don't overwrite an existing file.
+	if fileExists(configPath) {
+		return
+	}
+
+	if err := os.MkdirAll(configDir, 0o755); err != nil {
+		return
+	}
+	os.WriteFile(configPath, []byte(defaultConfigYAML), 0o644)
 }

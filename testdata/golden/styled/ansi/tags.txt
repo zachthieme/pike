@@ -1,9 +1,9 @@
-Review PR [32m@today[0m
-Submit report [31m@due([0m[31m2026-03-15[0m[31m)[0m
-Write docs [32m@completed([0m[32m2026-03-10[0m[32m)[0m
-Deploy service [31m@risk[0m [32m@today[0m
-Escalate issue [33m@delegated([0m[33mzach[0m[33m)[0m
-Fix authentication [35m@blocked[0m
-Research spike [31m@risk[0m
-Hidden task [36m@hidden[0m
-Multiple dates [31m@due([0m[31m2026-03-20[0m[31m)[0m with [31m@risk[0m
+Review PR [38;2;166;227;161m@today[0m
+Submit report [38;2;243;139;168m@due([0m[38;2;243;139;168m2026-03-15[0m[38;2;243;139;168m)[0m
+Write docs [38;2;166;227;161m@completed([0m[38;2;166;227;161m2026-03-10[0m[38;2;166;227;161m)[0m
+Deploy service [38;2;243;139;168m@risk[0m [38;2;166;227;161m@today[0m
+Escalate issue [38;2;249;226;175m@delegated([0m[38;2;249;226;175mzach[0m[38;2;249;226;175m)[0m
+Fix authentication [38;2;203;166;247m@blocked[0m
+Research spike [38;2;243;139;168m@risk[0m
+Hidden task [38;2;148;226;213m@hidden[0m
+Multiple dates [38;2;243;139;168m@due([0m[38;2;243;139;168m2026-03-20[0m[38;2;243;139;168m)[0m with [38;2;243;139;168m@risk[0m
