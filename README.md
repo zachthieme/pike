@@ -12,8 +12,20 @@ Pike scans your notes directory for checkbox items (`- [ ]`/`- [x]`) and tagged 
 
 ## Installation
 
+### Nix
+
 ```bash
-go install ./cmd/pike
+# Run directly
+nix run github:zachthieme/pike
+
+# Install into profile
+nix profile install github:zachthieme/pike
+```
+
+### Go
+
+```bash
+go install github:zachthieme/pike/cmd/pike@latest
 ```
 
 Or build locally:
