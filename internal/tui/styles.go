@@ -37,28 +37,32 @@ func resolveColor(color string) lipgloss.Color {
 
 // Static styles (no runtime parameters).
 var (
-	footerStyle   = lipgloss.NewStyle().Faint(true)
+	faintStyle    = lipgloss.NewStyle().Faint(true)
 	errorStyle    = lipgloss.NewStyle().Foreground(resolveColor("red")).Bold(true)
 	selectedStyle = lipgloss.NewStyle().Reverse(true)
 	normalStyle   = lipgloss.NewStyle()
-	faintStyle    = lipgloss.NewStyle().Faint(true)
 	boldStyle     = lipgloss.NewStyle().Bold(true)
+	headerStyle   = lipgloss.NewStyle().Bold(true).Underline(true)
 )
 
 // Parameterized style caches.
 var (
-	sectionHeaderCache sync.Map // color string → lipgloss.Style
-	tagStyleCache      sync.Map // color string → lipgloss.Style
-	linkStyleCache     sync.Map // color string → lipgloss.Style
+	boldColorCache sync.Map // color string → lipgloss.Style (bold + foreground)
+	tagStyleCache  sync.Map // color string → lipgloss.Style (foreground only)
 )
 
 // SectionHeaderStyle returns a bold style with the given color for section headers.
 func SectionHeaderStyle(color string) lipgloss.Style {
-	if v, ok := sectionHeaderCache.Load(color); ok {
+	return boldColorStyle(color)
+}
+
+// boldColorStyle returns a cached bold + foreground style for the given color.
+func boldColorStyle(color string) lipgloss.Style {
+	if v, ok := boldColorCache.Load(color); ok {
 		return v.(lipgloss.Style)
 	}
 	s := lipgloss.NewStyle().Bold(true).Foreground(resolveColor(color))
-	sectionHeaderCache.Store(color, s)
+	boldColorCache.Store(color, s)
 	return s
 }
 
@@ -81,9 +85,9 @@ func TagStyle(color string) lipgloss.Style {
 	return s
 }
 
-// FooterStyle returns a style for the footer bar.
+// FooterStyle returns a style for the footer bar (same as FaintStyle).
 func FooterStyle() lipgloss.Style {
-	return footerStyle
+	return faintStyle
 }
 
 // ErrorStyle returns a style for rendering error messages.
@@ -93,12 +97,7 @@ func ErrorStyle() lipgloss.Style {
 
 // LinkStyle returns a bold style with the given color for rendering links.
 func LinkStyle(color string) lipgloss.Style {
-	if v, ok := linkStyleCache.Load(color); ok {
-		return v.(lipgloss.Style)
-	}
-	s := lipgloss.NewStyle().Bold(true).Foreground(resolveColor(color))
-	linkStyleCache.Store(color, s)
-	return s
+	return boldColorStyle(color)
 }
 
 // FaintStyle returns a faint style for dimmed text.
@@ -109,4 +108,9 @@ func FaintStyle() lipgloss.Style {
 // BoldStyle returns a bold style.
 func BoldStyle() lipgloss.Style {
 	return boldStyle
+}
+
+// HeaderStyle returns a bold + underline style.
+func HeaderStyle() lipgloss.Style {
+	return headerStyle
 }

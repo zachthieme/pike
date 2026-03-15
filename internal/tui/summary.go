@@ -11,7 +11,7 @@ import (
 func RenderSummary(version string, width int) string {
 	fs := FaintStyle()
 	bs := BoldStyle()
-	headerStyle := lipgloss.NewStyle().Bold(true).Underline(true)
+	hs := HeaderStyle()
 
 	var lines []string
 
@@ -20,7 +20,7 @@ func RenderSummary(version string, width int) string {
 	if version != "" {
 		versionStr = " " + version
 	}
-	lines = append(lines, headerStyle.Render("pike"+versionStr))
+	lines = append(lines, hs.Render("pike"+versionStr))
 	lines = append(lines, "")
 	lines = append(lines, fs.Render("A long pointed tool, used to pick through things"))
 	lines = append(lines, fs.Render("quickly and with precision. Your tasks are scattered"))

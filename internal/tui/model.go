@@ -100,8 +100,8 @@ func NewModel(cfg *config.Config, tasks []model.Task, scanFunc func() ([]model.T
 	ti.Placeholder = "type to filter..."
 	ti.CharLimit = 256
 	ti.Prompt = "/ "
-	ti.PromptStyle = lipgloss.NewStyle().Bold(true)
-	ti.PlaceholderStyle = lipgloss.NewStyle().Faint(true).Foreground(lipgloss.Color("7"))
+	ti.PromptStyle = BoldStyle()
+	ti.PlaceholderStyle = FaintStyle().Foreground(lipgloss.Color("7"))
 
 	m := Model{
 		config:      cfg,
@@ -213,6 +213,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.tagCursor = 0
 				}
 			}
+		}
+		// Rebuild sections if tasks or config changed (config affects views, tag colors).
+		if msg.Tasks != nil || msg.Config != nil {
 			m.rebuildSections()
 			m.clampCursor()
 		}
