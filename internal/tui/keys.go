@@ -32,8 +32,8 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.filterText = ""
 				// If we came from tag search, return there instead of showing empty results.
 				if m.showAll && m.mode != modeRecentlyCompleted {
-					m.enterTagSearchMode()
-					return m, nil
+					focusCmd := m.enterTagSearchMode()
+					return m, focusCmd
 				}
 				m.rebuildSections()
 				m.clampCursor()
@@ -114,6 +114,12 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.filterInput.Prompt = "/ "
 				cmd := m.filterInput.Focus()
 				return m, cmd
+			case key.Matches(msg, m.keys.Query):
+				// ? returns focus to query bar and switches to query mode.
+				m.filterMode = filterQuery
+				m.filterInput.Prompt = "? "
+				cmd := m.filterInput.Focus()
+				return m, cmd
 			case key.Matches(msg, m.keys.PrevSection):
 				m.jumpToPrevSection()
 				return m, nil
@@ -128,8 +134,8 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.filterText = m.filterInput.Value()
 		// If we came from tag search and filter is now empty, return to tag search.
 		if m.showAll && m.filterText == "" && m.mode != modeRecentlyCompleted {
-			m.enterTagSearchMode()
-			return m, cmd
+			focusCmd := m.enterTagSearchMode()
+			return m, tea.Batch(cmd, focusCmd)
 		}
 		m.rebuildSections()
 		m.clampCursor()

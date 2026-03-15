@@ -57,7 +57,7 @@ type Model struct {
 	width       int
 	height      int
 	err         error
-	queryErr    error  // DSL parse error for display in footer
+	queryErr    error  // DSL parse error shown when filterMode is filterQuery
 	scanFunc    func() ([]model.Task, error)             // injected for refresh
 	configFunc  func() (*config.Config, error)            // injected for config reload
 	editorCmd   string
