@@ -21,15 +21,13 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if m.filtering {
 		switch {
 		case key.Matches(msg, m.keys.Escape):
-			// If results are focused, return focus to query bar.
-			if !m.filterInput.Focused() {
-				cmd := m.filterInput.Focus()
-				return m, cmd
-			}
-			// If query bar has content, clear it; otherwise exit filter mode.
+			// If query bar has content, clear it (regardless of focus).
 			if m.filterInput.Value() != "" {
 				m.filterInput.SetValue("")
 				m.filterText = ""
+				if !m.filterInput.Focused() {
+					m.filterInput.Focus()
+				}
 				// If we came from tag search, return there instead of showing empty results.
 				if m.showAll && m.mode != modeRecentlyCompleted {
 					focusCmd := m.enterTagSearchMode()
@@ -39,6 +37,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.clampCursor()
 				return m, nil
 			}
+			// No query: exit filter mode and return to dashboard.
 			m.clearFilter()
 			if m.mode == modeAllTasks || m.mode == modeRecentlyCompleted {
 				m.mode = modeDashboard
