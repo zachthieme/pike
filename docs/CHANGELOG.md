@@ -2,7 +2,7 @@
 
 ## Timeline
 
-Pike was built over 3 days — March 13-15, 2026 — across 80 commits.
+Pike was built over 3 days — March 13-15, 2026 — across 90+ commits.
 
 ### Day 1 — March 13: Foundation
 
@@ -28,6 +28,8 @@ The biggest day. Started with a major refactor — extracted a shared `style` pa
 - **Query box focus behavior** — Enter submits query (doesn't open file), no cursor highlight while typing, two-step Escape (clear text, then exit)
 - **Filter mode split** — `/` for substring search, `?` for DSL queries, prompt character shows active mode
 - **Code review fixes** — captured dropped focus commands, added `?` handler when results focused, restored `queryErr` display in all views
+- **Simplification pass** — extracted `cursorUp`/`cursorDown`/`cursorSection`/`countFlatTasks` helpers, centralized filter mode activation via `setFilterMode` and `filterPrompt` map
+- **Summary overlay** — now shows version, description ("terminal task dashboard for markdown notes"), and full keybindings reference
 
 ---
 
@@ -53,7 +55,7 @@ The biggest day. Started with a major refactor — extracted a shared `style` pa
 - Configurable multi-section views with colored borders
 - Section focus (`1`-`9`), navigation (`j`/`k`/`g`/`G`/Tab/Shift-Tab)
 - Half-page scroll (`Ctrl-D`/`Ctrl-U`)
-- Summary overlay (`s`) with open/overdue/due/completed counts
+- Summary overlay (`s`) with version, description, task counts, and keybindings reference
 - Scroll windowing for large task lists
 - Task count in section headers
 - Link prettification (wiki-links, markdown links, bare URLs)
