@@ -76,7 +76,7 @@ func (m Model) viewFocused() string {
 	}
 
 	if count == 0 {
-		return body + "\nNo results"
+		return body + "\nNo results\n" + footer
 	}
 
 	full := body + "\n" + footer

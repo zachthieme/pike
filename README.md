@@ -91,13 +91,13 @@ pike [flags]
 |------|-------|-------------|
 | `--dir <path>` | `-d` | Notes directory (overrides config and `$NOTES` env) |
 | `--config <path>` | `-c` | Config file path |
-| `--view <name>` | `-v` | Start focused on a named section |
+| `--view <name>` | `-w` | Start focused on a named section |
 | `--query <query>` | `-q` | Run a query, print results to stdout, and exit |
 | `--sort <order>` | | Sort order for `--query` mode (default: `file`) |
 | `--summary` | | Print task summary counts and exit |
 | `--color` | | Force color output |
 | `--no-color` | | Disable color output |
-| `--version` | | Print version |
+| `--version` | `-v` | Print version |
 | `--help` | `-h` | Print help |
 
 ### Examples
@@ -116,7 +116,7 @@ pike -q "@risk" --sort alpha
 pike --summary
 
 # Start focused on the "Today" section
-pike -v Today
+pike -w Today
 ```
 
 ## Configuration
@@ -257,6 +257,8 @@ atom     = "open" | "completed" | @tag | @tag <op> <date> | /regex/ | "text" | w
 | Value | Description |
 |-------|-------------|
 | `today` | Current date (midnight) |
+| `tomorrow` | Tomorrow (shorthand for `today+1d`) |
+| `yesterday` | Yesterday (shorthand for `today-1d`) |
 | `today+Nd` | N days from today |
 | `today-Nd` | N days before today |
 | `YYYY-MM-DD` | Absolute date literal |
@@ -274,6 +276,7 @@ open and not @risk                      # open, excluding risk
 open and deploy                         # open tasks containing "deploy"
 open and "meeting notes"                # open tasks containing "meeting notes"
 open and @due = today                  # due exactly today
+open and @due < tomorrow               # due today or overdue
 ```
 
 ## Sort Orders
