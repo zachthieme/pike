@@ -1,4 +1,4 @@
-# pike
+![pike](assets/pike-logo.png)
 
 > **pike** /pa&#618;k/ *n.* — a long pointed tool, used to pick through things quickly and with precision.
 >
