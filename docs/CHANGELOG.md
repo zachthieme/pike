@@ -29,7 +29,7 @@ The biggest day. Started with a major refactor — extracted a shared `style` pa
 - **Filter mode split** — `/` for substring search, `?` for DSL queries, prompt character shows active mode
 - **Code review fixes** — captured dropped focus commands, added `?` handler when results focused, restored `queryErr` display in all views
 - **Simplification pass** — extracted `cursorUp`/`cursorDown`/`cursorSection`/`countFlatTasks` helpers, centralized filter mode activation via `setFilterMode` and `filterPrompt` map
-- **Summary overlay** — now shows version, description ("terminal task dashboard for markdown notes"), and full keybindings reference
+- **Summary overlay** — full-screen layout with version, README description, and keybindings organized into sections (Navigation, Actions, Search & Filter, Other)
 
 ---
 
@@ -55,7 +55,7 @@ The biggest day. Started with a major refactor — extracted a shared `style` pa
 - Configurable multi-section views with colored borders
 - Section focus (`1`-`9`), navigation (`j`/`k`/`g`/`G`/Tab/Shift-Tab)
 - Half-page scroll (`Ctrl-D`/`Ctrl-U`)
-- Summary overlay (`s`) with version, description, task counts, and keybindings reference
+- Summary overlay (`s`) with version, description, and organized keybindings reference
 - Scroll windowing for large task lists
 - Task count in section headers
 - Link prettification (wiki-links, markdown links, bare URLs)
