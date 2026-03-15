@@ -10,9 +10,9 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-// lipglossStyleFunc applies foreground color via lipgloss.
+// lipglossStyleFunc applies foreground color via lipgloss using cached styles.
 func lipglossStyleFunc(text string, color string) string {
-	return lipgloss.NewStyle().Foreground(resolveColor(color)).Render(text)
+	return TagStyle(color).Render(text)
 }
 
 // renderSection renders a single view section with a colored header and task list.

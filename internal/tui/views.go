@@ -199,8 +199,8 @@ func (m Model) viewTagSearch() string {
 	// Matched tags are highlighted with their configured color.
 	// The selected tag (via Tab) gets reverse video.
 	// Non-matching tags are rendered faint.
-	faintStyle := lipgloss.NewStyle().Faint(true)
-	delim := faintStyle.Render("\u2009·\u2009")
+	fs := FaintStyle()
+	delim := fs.Render("\u2009·\u2009")
 	var tagParts []string
 	for _, tag := range m.tagList {
 		if tag == selectedTag {
@@ -212,7 +212,7 @@ func (m Model) viewTagSearch() string {
 				tagParts = append(tagParts, tag)
 			}
 		} else {
-			tagParts = append(tagParts, faintStyle.Render(tag))
+			tagParts = append(tagParts, fs.Render(tag))
 		}
 	}
 

@@ -9,8 +9,8 @@ import (
 
 // RenderSummary renders a full-screen summary with version, description, and keybindings.
 func RenderSummary(version string, width int) string {
-	faintStyle := lipgloss.NewStyle().Faint(true)
-	boldStyle := lipgloss.NewStyle().Bold(true)
+	fs := FaintStyle()
+	bs := BoldStyle()
 	headerStyle := lipgloss.NewStyle().Bold(true).Underline(true)
 
 	var lines []string
@@ -22,10 +22,10 @@ func RenderSummary(version string, width int) string {
 	}
 	lines = append(lines, headerStyle.Render("pike"+versionStr))
 	lines = append(lines, "")
-	lines = append(lines, faintStyle.Render("A long pointed tool, used to pick through things"))
-	lines = append(lines, faintStyle.Render("quickly and with precision. Your tasks are scattered"))
-	lines = append(lines, faintStyle.Render("across dozens of markdown files. Pike reaches in"))
-	lines = append(lines, faintStyle.Render("and pulls them out."))
+	lines = append(lines, fs.Render("A long pointed tool, used to pick through things"))
+	lines = append(lines, fs.Render("quickly and with precision. Your tasks are scattered"))
+	lines = append(lines, fs.Render("across dozens of markdown files. Pike reaches in"))
+	lines = append(lines, fs.Render("and pulls them out."))
 	lines = append(lines, "")
 	lines = append(lines, "")
 
@@ -92,11 +92,11 @@ func RenderSummary(version string, width int) string {
 		if i > 0 {
 			lines = append(lines, "")
 		}
-		lines = append(lines, boldStyle.Render(sec.title))
+		lines = append(lines, bs.Render(sec.title))
 		lines = append(lines, "")
 		for _, k := range sec.keys {
 			paddedKey := fmt.Sprintf("  %-*s", colWidth, k.key)
-			lines = append(lines, paddedKey+faintStyle.Render(k.desc))
+			lines = append(lines, paddedKey+fs.Render(k.desc))
 		}
 	}
 

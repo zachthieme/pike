@@ -438,10 +438,14 @@ func TestRefreshMsg(t *testing.T) {
 		t.Fatalf("expected 1 task initially, got %d", len(m.flatTasks()))
 	}
 
+	// RefreshMsg launches an async scan; simulate receiving the result.
 	updated, _ := m.Update(RefreshMsg{})
 	m2 := updated.(Model)
-	if len(m2.flatTasks()) != 2 {
-		t.Fatalf("expected 2 tasks after refresh, got %d", len(m2.flatTasks()))
+	// Feed the scan result directly.
+	updated, _ = m2.Update(scanResultMsg{Tasks: newTasks})
+	m3 := updated.(Model)
+	if len(m3.flatTasks()) != 2 {
+		t.Fatalf("expected 2 tasks after refresh, got %d", len(m3.flatTasks()))
 	}
 }
 

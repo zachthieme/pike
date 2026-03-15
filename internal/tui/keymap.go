@@ -4,11 +4,12 @@ import "github.com/charmbracelet/bubbles/key"
 
 // KeyMap defines the key bindings for the TUI.
 type KeyMap struct {
-	Up, Down, Top, Bottom    key.Binding
-	NextSection, PrevSection key.Binding
-	FocusSection             [9]key.Binding // 1-9
-	Enter, Quit, Summary           key.Binding
-	Filter, Query, Escape, Refresh        key.Binding
+	Up, Down, Top, Bottom        key.Binding
+	PageDown, PageUp             key.Binding
+	NextSection, PrevSection     key.Binding
+	FocusSection                 [9]key.Binding // 1-9
+	Enter, Quit, Summary         key.Binding
+	Filter, Query, Escape, Refresh key.Binding
 	AllTasks, TagSearch, ToggleHidden key.Binding
 	Toggle, ToggleHiddenTag, RecentlyCompleted key.Binding
 }
@@ -17,11 +18,11 @@ type KeyMap struct {
 func DefaultKeyMap() KeyMap {
 	km := KeyMap{
 		Up: key.NewBinding(
-			key.WithKeys("k", "up"),
+			key.WithKeys("k", "up", "ctrl+p"),
 			key.WithHelp("k/up", "move up"),
 		),
 		Down: key.NewBinding(
-			key.WithKeys("j", "down"),
+			key.WithKeys("j", "down", "ctrl+n"),
 			key.WithHelp("j/down", "move down"),
 		),
 		Top: key.NewBinding(
@@ -31,6 +32,14 @@ func DefaultKeyMap() KeyMap {
 		Bottom: key.NewBinding(
 			key.WithKeys("G"),
 			key.WithHelp("G", "go to bottom"),
+		),
+		PageDown: key.NewBinding(
+			key.WithKeys("ctrl+d"),
+			key.WithHelp("ctrl+d", "page down"),
+		),
+		PageUp: key.NewBinding(
+			key.WithKeys("ctrl+u"),
+			key.WithHelp("ctrl+u", "page up"),
 		),
 		NextSection: key.NewBinding(
 			key.WithKeys("tab"),

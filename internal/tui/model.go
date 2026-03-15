@@ -18,6 +18,16 @@ type RefreshMsg struct{}
 // EditorFinishedMsg is sent after the editor process exits.
 type EditorFinishedMsg struct{ Err error }
 
+// toggleResultMsg is sent after a toggle operation completes.
+type toggleResultMsg struct{ Err error }
+
+// scanResultMsg is sent after a background scan completes.
+type scanResultMsg struct {
+	Tasks  []model.Task
+	Config *config.Config
+	Err    error
+}
+
 // viewMode tracks the current display mode.
 type viewMode int
 
@@ -160,23 +170,41 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return RefreshMsg{}
 			})
 		}
-		// Hot-reload config (tag colors, views, etc.)
-		if m.configFunc != nil {
-			if cfg, err := m.configFunc(); err == nil {
-				m.config = cfg
-				m.tagColors = cfg.TagColors
-				m.editorCmd = cfg.Editor
-			} else {
-				m.err = err
+		// Launch async scan + config reload.
+		scanFn := m.scanFunc
+		configFn := m.configFunc
+		scanCmd := func() tea.Msg {
+			var cfg *config.Config
+			if configFn != nil {
+				c, err := configFn()
+				if err != nil {
+					return scanResultMsg{Err: err}
+				}
+				cfg = c
 			}
+			if scanFn != nil {
+				tasks, err := scanFn()
+				if err != nil {
+					return scanResultMsg{Err: err}
+				}
+				return scanResultMsg{Tasks: tasks, Config: cfg}
+			}
+			return scanResultMsg{Config: cfg}
 		}
-		if m.scanFunc != nil {
-			tasks, err := m.scanFunc()
-			if err != nil {
-				m.err = err
-				return m, nextTick
-			}
-			m.allTasks = tasks
+		return m, tea.Batch(nextTick, scanCmd)
+
+	case scanResultMsg:
+		if msg.Err != nil {
+			m.err = msg.Err
+			return m, nil
+		}
+		if msg.Config != nil {
+			m.config = msg.Config
+			m.tagColors = msg.Config.TagColors
+			m.editorCmd = msg.Config.Editor
+		}
+		if msg.Tasks != nil {
+			m.allTasks = msg.Tasks
 			if m.mode == modeTagSearch {
 				m.buildTagList()
 				if tags := m.filteredTags(); len(tags) > 0 {
@@ -188,7 +216,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.rebuildSections()
 			m.clampCursor()
 		}
-		return m, nextTick
+		return m, nil
+
+	case toggleResultMsg:
+		if msg.Err != nil {
+			m.err = msg.Err
+			return m, nil
+		}
+		return m, func() tea.Msg { return RefreshMsg{} }
 
 	case EditorFinishedMsg:
 		if msg.Err != nil {

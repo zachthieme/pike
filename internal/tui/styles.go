@@ -2,6 +2,7 @@ package tui
 
 import (
 	"strings"
+	"sync"
 
 	"github.com/charmbracelet/lipgloss"
 )
@@ -34,45 +35,78 @@ func resolveColor(color string) lipgloss.Color {
 	return lipgloss.Color(color)
 }
 
+// Static styles (no runtime parameters).
+var (
+	footerStyle   = lipgloss.NewStyle().Faint(true)
+	errorStyle    = lipgloss.NewStyle().Foreground(resolveColor("red")).Bold(true)
+	selectedStyle = lipgloss.NewStyle().Reverse(true)
+	normalStyle   = lipgloss.NewStyle()
+	faintStyle    = lipgloss.NewStyle().Faint(true)
+	boldStyle     = lipgloss.NewStyle().Bold(true)
+)
+
+// Parameterized style caches.
+var (
+	sectionHeaderCache sync.Map // color string → lipgloss.Style
+	tagStyleCache      sync.Map // color string → lipgloss.Style
+	linkStyleCache     sync.Map // color string → lipgloss.Style
+)
+
 // SectionHeaderStyle returns a bold style with the given color for section headers.
 func SectionHeaderStyle(color string) lipgloss.Style {
-	return lipgloss.NewStyle().
-		Bold(true).
-		Foreground(resolveColor(color))
+	if v, ok := sectionHeaderCache.Load(color); ok {
+		return v.(lipgloss.Style)
+	}
+	s := lipgloss.NewStyle().Bold(true).Foreground(resolveColor(color))
+	sectionHeaderCache.Store(color, s)
+	return s
 }
 
 // TaskStyle returns a style for rendering task lines.
 // If selected is true, the task is highlighted with a reverse video effect.
 func TaskStyle(selected bool) lipgloss.Style {
-	s := lipgloss.NewStyle()
 	if selected {
-		s = s.Reverse(true)
+		return selectedStyle
 	}
-	return s
+	return normalStyle
 }
 
 // TagStyle returns a colored style for rendering tag tokens.
 func TagStyle(color string) lipgloss.Style {
-	return lipgloss.NewStyle().
-		Foreground(resolveColor(color))
+	if v, ok := tagStyleCache.Load(color); ok {
+		return v.(lipgloss.Style)
+	}
+	s := lipgloss.NewStyle().Foreground(resolveColor(color))
+	tagStyleCache.Store(color, s)
+	return s
 }
 
 // FooterStyle returns a style for the footer bar.
 func FooterStyle() lipgloss.Style {
-	return lipgloss.NewStyle().
-		Faint(true)
+	return footerStyle
 }
 
 // ErrorStyle returns a style for rendering error messages.
 func ErrorStyle() lipgloss.Style {
-	return lipgloss.NewStyle().
-		Foreground(resolveColor("red")).
-		Bold(true)
+	return errorStyle
 }
 
 // LinkStyle returns a bold style with the given color for rendering links.
 func LinkStyle(color string) lipgloss.Style {
-	return lipgloss.NewStyle().
-		Bold(true).
-		Foreground(resolveColor(color))
+	if v, ok := linkStyleCache.Load(color); ok {
+		return v.(lipgloss.Style)
+	}
+	s := lipgloss.NewStyle().Bold(true).Foreground(resolveColor(color))
+	linkStyleCache.Store(color, s)
+	return s
+}
+
+// FaintStyle returns a faint style for dimmed text.
+func FaintStyle() lipgloss.Style {
+	return faintStyle
+}
+
+// BoldStyle returns a bold style.
+func BoldStyle() lipgloss.Style {
+	return boldStyle
 }

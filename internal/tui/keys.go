@@ -59,23 +59,23 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				return m, cmd
 			}
 			return m, nil
-		case msg.Type == tea.KeyEnter:
+		case key.Matches(msg, m.keys.Enter):
 			if m.filter.Input.Focused() {
 				// Submit query: move focus to results.
 				m.filter.Input.Blur()
 				return m, nil
 			}
 			return m.openEditor()
-		case msg.Type == tea.KeyDown || msg.Type == tea.KeyCtrlN:
+		case key.Matches(msg, m.keys.Down):
 			m.cursorDown()
 			return m, nil
-		case msg.Type == tea.KeyUp || msg.Type == tea.KeyCtrlP:
+		case key.Matches(msg, m.keys.Up):
 			m.cursorUp()
 			return m, nil
-		case msg.Type == tea.KeyCtrlD:
+		case key.Matches(msg, m.keys.PageDown):
 			m.pageScroll(1)
 			return m, tea.ClearScreen
-		case msg.Type == tea.KeyCtrlU:
+		case key.Matches(msg, m.keys.PageUp):
 			m.pageScroll(-1)
 			return m, tea.ClearScreen
 		}
@@ -163,11 +163,11 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.cursor = max(0, m.countFlatTasks()-1)
 		return m, nil
 
-	case msg.Type == tea.KeyCtrlD:
+	case key.Matches(msg, m.keys.PageDown):
 		m.pageScroll(1)
 		return m, tea.ClearScreen
 
-	case msg.Type == tea.KeyCtrlU:
+	case key.Matches(msg, m.keys.PageUp):
 		m.pageScroll(-1)
 		return m, tea.ClearScreen
 
@@ -267,7 +267,7 @@ func (m Model) resolveFilePath(relPath string) string {
 	return relPath
 }
 
-// toggleTask completes or uncompletes the task at the cursor.
+// toggleTask completes or uncompletes the task at the cursor asynchronously.
 func (m Model) toggleTask() (tea.Model, tea.Cmd) {
 	flatTasks := m.flatTasks()
 	if len(flatTasks) == 0 || m.cursor >= len(flatTasks) {
@@ -279,22 +279,22 @@ func (m Model) toggleTask() (tea.Model, tea.Cmd) {
 	}
 
 	filePath := m.resolveFilePath(task.File)
+	state := task.State
+	line := task.Line
+	now := m.nowFunc()
 
-	var err error
-	if task.State == model.Open {
-		now := m.nowFunc()
-		err = toggle.Complete(filePath, task.Line, now)
-	} else {
-		err = toggle.Uncomplete(filePath, task.Line)
+	return m, func() tea.Msg {
+		var err error
+		if state == model.Open {
+			err = toggle.Complete(filePath, line, now)
+		} else {
+			err = toggle.Uncomplete(filePath, line)
+		}
+		return toggleResultMsg{Err: err}
 	}
-	if err != nil {
-		m.err = err
-		return m, nil
-	}
-	return m, func() tea.Msg { return RefreshMsg{} }
 }
 
-// toggleHiddenTag adds or removes @hidden from the task at the cursor.
+// toggleHiddenTag adds or removes @hidden from the task at the cursor asynchronously.
 func (m Model) toggleHiddenTag() (tea.Model, tea.Cmd) {
 	flatTasks := m.flatTasks()
 	if len(flatTasks) == 0 || m.cursor >= len(flatTasks) {
@@ -302,13 +302,11 @@ func (m Model) toggleHiddenTag() (tea.Model, tea.Cmd) {
 	}
 	task := flatTasks[m.cursor]
 	filePath := m.resolveFilePath(task.File)
+	line := task.Line
 
-	err := toggle.ToggleHidden(filePath, task.Line)
-	if err != nil {
-		m.err = err
-		return m, nil
+	return m, func() tea.Msg {
+		return toggleResultMsg{Err: toggle.ToggleHidden(filePath, line)}
 	}
-	return m, func() tea.Msg { return RefreshMsg{} }
 }
 
 // handleTagSearchKey handles key events in tag search mode.
@@ -321,7 +319,7 @@ func (m Model) handleTagSearchKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case key.Matches(msg, m.keys.Quit):
 		return m, tea.Quit
 
-	case key.Matches(msg, m.keys.NextSection) || msg.Type == tea.KeyDown || msg.Type == tea.KeyCtrlN:
+	case key.Matches(msg, m.keys.NextSection) || key.Matches(msg, m.keys.Down):
 		// Tab / Down / Ctrl-N: cycle forward through matched tags.
 		tags := m.filteredTags()
 		if len(tags) > 0 {
@@ -329,7 +327,7 @@ func (m Model) handleTagSearchKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
-	case key.Matches(msg, m.keys.PrevSection) || msg.Type == tea.KeyUp || msg.Type == tea.KeyCtrlP:
+	case key.Matches(msg, m.keys.PrevSection) || key.Matches(msg, m.keys.Up):
 		// Shift-Tab / Up / Ctrl-P: cycle backward through matched tags.
 		tags := m.filteredTags()
 		if len(tags) > 0 {
@@ -337,7 +335,7 @@ func (m Model) handleTagSearchKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
-	case msg.Type == tea.KeyEnter:
+	case key.Matches(msg, m.keys.Enter):
 		// Select tag → switch to all-tasks mode filtered to @tag (including completed).
 		tags := m.filteredTags()
 		if m.tagCursor < len(tags) {
