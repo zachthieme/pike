@@ -222,3 +222,24 @@ func truncate(s string, maxLen int) string {
 	}
 	return string(runes[:maxLen-1]) + "\u2026"
 }
+
+// TaskMarker returns the display marker for a task.
+// TUI mode uses ○/●/▸, CLI mode uses [ ]/[x]/-.
+func TaskMarker(task model.Task, tui bool) string {
+	if tui {
+		if task.HasCheckbox {
+			if task.State == model.Completed {
+				return "●"
+			}
+			return "○"
+		}
+		return "▸"
+	}
+	if task.HasCheckbox {
+		if task.State == model.Completed {
+			return "[x]"
+		}
+		return "[ ]"
+	}
+	return "-"
+}

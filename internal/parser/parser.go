@@ -57,6 +57,7 @@ func ParseLine(line string, file string, lineNum int) *model.Task {
 	}
 
 	// Extract tags
+	task.TagSet = make(map[string]bool)
 	tagMatches := tagRe.FindAllStringSubmatch(text, -1)
 	for _, tm := range tagMatches {
 		tagName := tm[1]
@@ -77,6 +78,7 @@ func ParseLine(line string, file string, lineNum int) *model.Task {
 		}
 
 		task.Tags = append(task.Tags, tag)
+		task.TagSet[tagName] = true
 
 		// Set Due and Completed fields from well-known tags
 		if tagName == "due" && tag.Value != "" {

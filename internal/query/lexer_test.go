@@ -76,6 +76,8 @@ func TestLexComparisons(t *testing.T) {
 		{">", TokGT},
 		{"<=", TokLTE},
 		{">=", TokGTE},
+		{"=", TokEQ},
+		{"==", TokEQ},
 	}
 
 	for _, tt := range tests {

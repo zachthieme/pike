@@ -42,36 +42,45 @@ var filterPrompt = map[filterMode]string{
 	filterQuery:     "? ",
 }
 
+// FilterState encapsulates all filter-related state.
+type FilterState struct {
+	Active   bool
+	Text     string
+	Mode     filterMode
+	Input    textinput.Model
+	QueryErr error // DSL parse error shown when Mode is filterQuery
+}
+
 // Model is the main Bubbletea model for the tasks TUI.
 type Model struct {
 	config      *config.Config
 	allTasks    []model.Task
-	sections     []filter.ViewResult
-	hiddenCounts []int // per-section count of @hidden tasks that were removed
-	cursor       int   // index into flat task list across all sections
-	focusedView string // "" = dashboard, otherwise title of focused section
-	viewLocked  bool   // when true, block mode-switching keys and prevent unfocusing (set via --view flag)
-	showSummary bool
-	filterInput textinput.Model
-	filtering   bool
-	filterText  string
-	filterMode  filterMode
-	mode        viewMode
-	tagList     []string // unique tags for tag search mode
-	tagCursor   int      // cursor in tag list
-	showHidden  bool     // whether to show @hidden tasks
-	showAll     bool     // when true, all-tasks includes completed (e.g. from tag search)
-	width       int
-	height      int
-	err         error
-	queryErr    error  // DSL parse error shown when filterMode is filterQuery
-	scanFunc    func() ([]model.Task, error)             // injected for refresh
-	configFunc  func() (*config.Config, error)            // injected for config reload
-	editorCmd   string
-	tagColors   map[string]string
-	keys        KeyMap
-	version     string
-	now         func() time.Time // injectable for testing
+	sections    []filter.ViewResult
+	// unfilteredSections caches the full (pre-filter) view results so
+	// visibleSections() doesn't have to recompute every query on each keypress.
+	unfilteredSections []filter.ViewResult
+	hiddenCounts       []int        // per-section count of @hidden tasks that were removed
+	cachedFlat         []model.Task // cached flat task list, invalidated with sections
+	cursor             int          // index into flat task list across all sections
+	focusedView        string       // "" = dashboard, otherwise title of focused section
+	viewLocked         bool         // when true, block mode-switching keys and prevent unfocusing (set via --view flag)
+	showSummary        bool
+	filter             FilterState
+	mode               viewMode
+	tagList            []string // unique tags for tag search mode
+	tagCursor          int      // cursor in tag list
+	showHidden         bool     // whether to show @hidden tasks
+	showAll            bool     // when true, all-tasks includes completed (e.g. from tag search)
+	width              int
+	height             int
+	err                error
+	scanFunc           func() ([]model.Task, error)  // injected for refresh
+	configFunc         func() (*config.Config, error) // injected for config reload
+	editorCmd          string
+	tagColors          map[string]string
+	keys               KeyMap
+	version            string
+	now                func() time.Time // injectable for testing
 }
 
 // NewModel creates a new TUI model with the given configuration and initial tasks.
@@ -87,7 +96,7 @@ func NewModel(cfg *config.Config, tasks []model.Task, scanFunc func() ([]model.T
 		config:      cfg,
 		allTasks:    tasks,
 		focusedView: "",
-		filterInput: ti,
+		filter:      FilterState{Input: ti},
 		scanFunc:    scanFunc,
 		editorCmd:   cfg.Editor,
 		tagColors:   cfg.TagColors,
@@ -156,6 +165,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.config = cfg
 				m.tagColors = cfg.TagColors
 				m.editorCmd = cfg.Editor
+			} else {
+				m.err = err
 			}
 		}
 		if m.scanFunc != nil {

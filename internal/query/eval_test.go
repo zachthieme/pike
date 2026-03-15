@@ -39,6 +39,7 @@ func TestEvalTagMatching(t *testing.T) {
 			{Name: "today"},
 			{Name: "risk"},
 		},
+		TagSet: map[string]bool{"today": true, "risk": true},
 	}
 
 	if !Eval(&TagNode{Name: "today"}, task, now) {
@@ -57,6 +58,7 @@ func TestEvalAndOrNot(t *testing.T) {
 		State: model.Open,
 		Text:  "Task @today",
 		Tags:  []model.Tag{{Name: "today"}},
+		TagSet: map[string]bool{"today": true},
 	}
 
 	// And: both true
@@ -130,6 +132,31 @@ func TestEvalDateComparisons(t *testing.T) {
 	}
 }
 
+func TestEvalDateEqualityToday(t *testing.T) {
+	todayTask := &model.Task{
+		State:  model.Open,
+		Text:   "Due today",
+		Due:    date(2026, time.March, 13),
+		Tags:   []model.Tag{{Name: "due", Value: "2026-03-13"}},
+		TagSet: map[string]bool{"due": true},
+	}
+	tomorrowTask := &model.Task{
+		State:  model.Open,
+		Text:   "Due tomorrow",
+		Due:    date(2026, time.March, 14),
+		Tags:   []model.Tag{{Name: "due", Value: "2026-03-14"}},
+		TagSet: map[string]bool{"due": true},
+	}
+
+	dueEqToday := &DateCmpNode{Field: "due", Op: "=", Days: 0}
+	if !Eval(dueEqToday, todayTask, now) {
+		t.Error("task due today should match @due = today")
+	}
+	if Eval(dueEqToday, tomorrowTask, now) {
+		t.Error("task due tomorrow should not match @due = today")
+	}
+}
+
 func TestEvalDateComparisonNilDate(t *testing.T) {
 	task := &model.Task{
 		State: model.Open,
@@ -174,10 +201,11 @@ func TestEvalIntegrationOverdue(t *testing.T) {
 	}
 
 	overdueOpen := &model.Task{
-		State: model.Open,
-		Text:  "Overdue @due(2026-03-10)",
-		Tags:  []model.Tag{{Name: "due", Value: "2026-03-10"}},
-		Due:   date(2026, time.March, 10),
+		State:  model.Open,
+		Text:   "Overdue @due(2026-03-10)",
+		Tags:   []model.Tag{{Name: "due", Value: "2026-03-10"}},
+		TagSet: map[string]bool{"due": true},
+		Due:    date(2026, time.March, 10),
 	}
 	if !Eval(node, overdueOpen, now) {
 		t.Error("open overdue task should match 'open and @due < today'")
@@ -185,10 +213,11 @@ func TestEvalIntegrationOverdue(t *testing.T) {
 
 	// Completed overdue task should NOT match
 	overdueCompleted := &model.Task{
-		State: model.Completed,
-		Text:  "Overdue completed @due(2026-03-10)",
-		Tags:  []model.Tag{{Name: "due", Value: "2026-03-10"}},
-		Due:   date(2026, time.March, 10),
+		State:  model.Completed,
+		Text:   "Overdue completed @due(2026-03-10)",
+		Tags:   []model.Tag{{Name: "due", Value: "2026-03-10"}},
+		TagSet: map[string]bool{"due": true},
+		Due:    date(2026, time.March, 10),
 	}
 	if Eval(node, overdueCompleted, now) {
 		t.Error("completed overdue task should not match 'open and @due < today'")
@@ -203,27 +232,30 @@ func TestEvalIntegrationDailyView(t *testing.T) {
 	}
 
 	todayTask := &model.Task{
-		State: model.Open,
-		Text:  "Call dentist @today",
-		Tags:  []model.Tag{{Name: "today"}},
+		State:  model.Open,
+		Text:   "Call dentist @today",
+		Tags:   []model.Tag{{Name: "today"}},
+		TagSet: map[string]bool{"today": true},
 	}
 	if !Eval(node, todayTask, now) {
 		t.Error("open task with @today should match 'open and (@today or @weekly)'")
 	}
 
 	weeklyTask := &model.Task{
-		State: model.Open,
-		Text:  "Review OKRs @weekly",
-		Tags:  []model.Tag{{Name: "weekly"}},
+		State:  model.Open,
+		Text:   "Review OKRs @weekly",
+		Tags:   []model.Tag{{Name: "weekly"}},
+		TagSet: map[string]bool{"weekly": true},
 	}
 	if !Eval(node, weeklyTask, now) {
 		t.Error("open task with @weekly should match 'open and (@today or @weekly)'")
 	}
 
 	riskTask := &model.Task{
-		State: model.Open,
-		Text:  "Something @risk",
-		Tags:  []model.Tag{{Name: "risk"}},
+		State:  model.Open,
+		Text:   "Something @risk",
+		Tags:   []model.Tag{{Name: "risk"}},
+		TagSet: map[string]bool{"risk": true},
 	}
 	if Eval(node, riskTask, now) {
 		t.Error("open task with @risk should not match 'open and (@today or @weekly)'")
@@ -241,6 +273,7 @@ func TestEvalIntegrationRecentlyCompleted(t *testing.T) {
 		State:     model.Completed,
 		Text:      "Done recently @completed(2026-03-10)",
 		Tags:      []model.Tag{{Name: "completed", Value: "2026-03-10"}},
+		TagSet:    map[string]bool{"completed": true},
 		Completed: date(2026, time.March, 10),
 	}
 	if !Eval(node, recentlyCompleted, now) {
@@ -251,6 +284,7 @@ func TestEvalIntegrationRecentlyCompleted(t *testing.T) {
 		State:     model.Completed,
 		Text:      "Done long ago @completed(2026-02-01)",
 		Tags:      []model.Tag{{Name: "completed", Value: "2026-02-01"}},
+		TagSet:    map[string]bool{"completed": true},
 		Completed: date(2026, time.February, 1),
 	}
 	if Eval(node, oldCompleted, now) {
@@ -265,6 +299,7 @@ func TestEvalWithOptionsPartialTagMatch(t *testing.T) {
 			{Name: "due", Value: "2026-03-15"},
 			{Name: "duration", Value: "2h"},
 		},
+		TagSet: map[string]bool{"due": true, "duration": true},
 	}
 	opts := EvalOptions{PartialTags: true}
 
@@ -286,8 +321,9 @@ func TestEvalWithOptionsPartialTagMatch(t *testing.T) {
 
 func TestEvalWithOptionsExactByDefault(t *testing.T) {
 	task := &model.Task{
-		Text: "Task @due(2026-03-15)",
-		Tags: []model.Tag{{Name: "due", Value: "2026-03-15"}},
+		Text:   "Task @due(2026-03-15)",
+		Tags:   []model.Tag{{Name: "due", Value: "2026-03-15"}},
+		TagSet: map[string]bool{"due": true},
 	}
 
 	// Without PartialTags, "du" should NOT match "due"

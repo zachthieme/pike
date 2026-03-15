@@ -19,6 +19,7 @@ const (
 	TokGT                         // >
 	TokLTE                        // <=
 	TokGTE                        // >=
+	TokEQ                         // = or ==
 	TokDate                       // YYYY-MM-DD
 	TokToday                      // "today" (standalone, not part of offset)
 	TokOffset                     // today+3d or today-7d
@@ -52,6 +53,8 @@ func (t TokenType) String() string {
 		return "TokLTE"
 	case TokGTE:
 		return "TokGTE"
+	case TokEQ:
+		return "TokEQ"
 	case TokDate:
 		return "TokDate"
 	case TokToday:
@@ -109,7 +112,7 @@ func Lex(input string) ([]Token, error) {
 			continue
 		}
 
-		// Comparison operators: <=, >=, <, >
+		// Comparison operators: <=, >=, <, >, =, ==
 		if ch == '<' {
 			if i+1 < len(runes) && runes[i+1] == '=' {
 				tokens = append(tokens, Token{Type: TokLTE, Value: "<="})
@@ -126,6 +129,16 @@ func Lex(input string) ([]Token, error) {
 				i += 2
 			} else {
 				tokens = append(tokens, Token{Type: TokGT, Value: ">"})
+				i++
+			}
+			continue
+		}
+		if ch == '=' {
+			if i+1 < len(runes) && runes[i+1] == '=' {
+				tokens = append(tokens, Token{Type: TokEQ, Value: "=="})
+				i += 2
+			} else {
+				tokens = append(tokens, Token{Type: TokEQ, Value: "="})
 				i++
 			}
 			continue

@@ -18,7 +18,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 
 	// If filtering, handle keys based on whether the query bar or results have focus.
-	if m.filtering {
+	if m.filter.Active {
 		switch {
 		case key.Matches(msg, m.keys.Escape):
 			// Recently completed is query-driven; escape always exits to dashboard.
@@ -27,11 +27,11 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 			// If query bar has content, clear it (regardless of focus).
-			if m.filterInput.Value() != "" {
-				m.filterInput.SetValue("")
-				m.filterText = ""
-				if !m.filterInput.Focused() {
-					m.filterInput.Focus()
+			if m.filter.Input.Value() != "" {
+				m.filter.Input.SetValue("")
+				m.filter.Text = ""
+				if !m.filter.Input.Focused() {
+					m.filter.Input.Focus()
 				}
 				// If we came from tag search, return there instead of showing empty results.
 				if m.showAll {
@@ -52,17 +52,17 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		case key.Matches(msg, m.keys.NextSection):
 			// Tab: toggle focus between query bar and results.
-			if m.filterInput.Focused() {
-				m.filterInput.Blur()
+			if m.filter.Input.Focused() {
+				m.filter.Input.Blur()
 			} else {
-				cmd := m.filterInput.Focus()
+				cmd := m.filter.Input.Focus()
 				return m, cmd
 			}
 			return m, nil
 		case msg.Type == tea.KeyEnter:
-			if m.filterInput.Focused() {
+			if m.filter.Input.Focused() {
 				// Submit query: move focus to results.
-				m.filterInput.Blur()
+				m.filter.Input.Blur()
 				return m, nil
 			}
 			return m.openEditor()
@@ -81,7 +81,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 
 		// When results are focused, handle navigation and action keys directly.
-		if !m.filterInput.Focused() {
+		if !m.filter.Input.Focused() {
 			switch {
 			case key.Matches(msg, m.keys.Toggle):
 				return m.toggleTask()
@@ -113,10 +113,10 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 		// Query bar is focused — route to text input.
 		var cmd tea.Cmd
-		m.filterInput, cmd = m.filterInput.Update(msg)
-		m.filterText = m.filterInput.Value()
+		m.filter.Input, cmd = m.filter.Input.Update(msg)
+		m.filter.Text = m.filter.Input.Value()
 		// If we came from tag search and filter is now empty, return to tag search.
-		if m.showAll && m.filterText == "" && m.mode != modeRecentlyCompleted {
+		if m.showAll && m.filter.Text == "" && m.mode != modeRecentlyCompleted {
 			focusCmd := m.enterTagSearchMode()
 			return m, tea.Batch(cmd, focusCmd)
 		}
@@ -347,8 +347,8 @@ func (m Model) handleTagSearchKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	default:
 		var cmd tea.Cmd
-		m.filterInput, cmd = m.filterInput.Update(msg)
-		m.filterText = m.filterInput.Value()
+		m.filter.Input, cmd = m.filter.Input.Update(msg)
+		m.filter.Text = m.filter.Input.Value()
 		m.tagCursor = 0
 		return m, cmd
 	}

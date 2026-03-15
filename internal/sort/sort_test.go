@@ -224,11 +224,11 @@ func TestSort(t *testing.T) {
 
 func TestStablePartitionPinned(t *testing.T) {
 	tasks := []model.Task{
-		{Text: "unpinned-a"},
-		{Text: "pinned-b", Tags: []model.Tag{{Name: "pin"}}},
-		{Text: "unpinned-c"},
-		{Text: "pinned-d", Tags: []model.Tag{{Name: "pin"}}},
-		{Text: "unpinned-e"},
+		{Text: "unpinned-a", TagSet: map[string]bool{}},
+		{Text: "pinned-b", Tags: []model.Tag{{Name: "pin"}}, TagSet: map[string]bool{"pin": true}},
+		{Text: "unpinned-c", TagSet: map[string]bool{}},
+		{Text: "pinned-d", Tags: []model.Tag{{Name: "pin"}}, TagSet: map[string]bool{"pin": true}},
+		{Text: "unpinned-e", TagSet: map[string]bool{}},
 	}
 
 	result := StablePartitionPinned(tasks)
@@ -246,8 +246,8 @@ func TestStablePartitionPinned(t *testing.T) {
 
 func TestStablePartitionPinnedNoPins(t *testing.T) {
 	tasks := []model.Task{
-		{Text: "a"},
-		{Text: "b"},
+		{Text: "a", TagSet: map[string]bool{}},
+		{Text: "b", TagSet: map[string]bool{}},
 	}
 
 	result := StablePartitionPinned(tasks)

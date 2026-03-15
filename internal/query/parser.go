@@ -161,7 +161,7 @@ func (p *parser) parseTagOrDateCmp() (Node, error) {
 
 	// Check if next token is a comparison operator
 	next := p.current()
-	if next.Type == TokLT || next.Type == TokGT || next.Type == TokLTE || next.Type == TokGTE {
+	if next.Type == TokLT || next.Type == TokGT || next.Type == TokLTE || next.Type == TokGTE || next.Type == TokEQ {
 		// Only @due and @completed support date comparisons
 		if tagName != "due" && tagName != "completed" {
 			return nil, fmt.Errorf("unsupported date field @%s; only @due and @completed support date comparisons", tagName)

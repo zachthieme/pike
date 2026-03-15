@@ -18,39 +18,48 @@ func timePtr(t time.Time) *time.Time {
 
 var testNow = time.Date(2026, 3, 13, 0, 0, 0, 0, time.UTC)
 
+// taskWithTagSet creates a Task and populates TagSet from Tags.
+func taskWithTagSet(t model.Task) model.Task {
+	t.TagSet = make(map[string]bool, len(t.Tags))
+	for _, tag := range t.Tags {
+		t.TagSet[tag.Name] = true
+	}
+	return t
+}
+
 func testTasks() []model.Task {
 	return []model.Task{
-		{
+		taskWithTagSet(model.Task{
 			Text:  "Overdue task @due(2026-03-10)",
 			State: model.Open,
 			File:  "notes/todo.md",
 			Line:  1,
 			Tags:  []model.Tag{{Name: "due", Value: "2026-03-10"}},
 			Due:   timePtr(time.Date(2026, 3, 10, 0, 0, 0, 0, time.UTC)),
-		},
-		{
+		}),
+		taskWithTagSet(model.Task{
 			Text:  "Today task @today",
 			State: model.Open,
 			File:  "notes/todo.md",
 			Line:  2,
 			Tags:  []model.Tag{{Name: "today"}},
-		},
-		{
+		}),
+		taskWithTagSet(model.Task{
 			Text:  "Future task @due(2026-03-20)",
 			State: model.Open,
 			File:  "notes/todo.md",
 			Line:  3,
 			Tags:  []model.Tag{{Name: "due", Value: "2026-03-20"}},
 			Due:   timePtr(time.Date(2026, 3, 20, 0, 0, 0, 0, time.UTC)),
-		},
-		{
+		}),
+		taskWithTagSet(model.Task{
 			Text:      "Done task @completed(2026-03-12)",
 			State:     model.Completed,
 			File:      "notes/todo.md",
 			Line:      4,
 			Tags:      []model.Tag{{Name: "completed", Value: "2026-03-12"}},
 			Completed: timePtr(time.Date(2026, 3, 12, 0, 0, 0, 0, time.UTC)),
-		},
+		}),
 	}
 }
 
@@ -199,16 +208,16 @@ func TestSummaryToggle(t *testing.T) {
 func TestFilterActivation(t *testing.T) {
 	m := testModel(testTasks(), testViews())
 
-	if m.filtering {
+	if m.filter.Active {
 		t.Fatal("expected filtering to start false")
 	}
 
 	updated, _ := sendKey(m, "/")
 	m2 := updated.(Model)
-	if !m2.filtering {
+	if !m2.filter.Active {
 		t.Error("expected filtering to be true after pressing '/'")
 	}
-	if m2.filterMode != filterSubstring {
+	if m2.filter.Mode != filterSubstring {
 		t.Error("expected filterSubstring mode after pressing '/'")
 	}
 }
@@ -218,10 +227,10 @@ func TestQueryModeActivation(t *testing.T) {
 
 	updated, _ := sendKey(m, "?")
 	m2 := updated.(Model)
-	if !m2.filtering {
+	if !m2.filter.Active {
 		t.Error("expected filtering to be true after pressing '?'")
 	}
-	if m2.filterMode != filterQuery {
+	if m2.filter.Mode != filterQuery {
 		t.Error("expected filterQuery mode after pressing '?'")
 	}
 }
@@ -231,16 +240,17 @@ func TestRecentlyCompletedUsesQueryMode(t *testing.T) {
 
 	updated, _ := sendKey(m, "c")
 	m2 := updated.(Model)
-	if m2.filterMode != filterQuery {
+	if m2.filter.Mode != filterQuery {
 		t.Error("expected filterQuery mode for recently completed")
 	}
 }
 
 func TestSubstringFilterWithTags(t *testing.T) {
 	tasks := []model.Task{
-		{Text: "Fix bug @delegated to bob", State: model.Open, File: "t.md", Line: 1,
-			Tags: []model.Tag{{Name: "delegated"}}, HasCheckbox: true},
-		{Text: "Write docs", State: model.Open, File: "t.md", Line: 2, HasCheckbox: true},
+		taskWithTagSet(model.Task{Text: "Fix bug @delegated to bob", State: model.Open, File: "t.md", Line: 1,
+			Tags: []model.Tag{{Name: "delegated"}}, HasCheckbox: true}),
+		{Text: "Write docs", State: model.Open, File: "t.md", Line: 2, HasCheckbox: true,
+			TagSet: map[string]bool{}},
 	}
 	views := []config.ViewConfig{
 		{Title: "All", Query: "open", Sort: "file", Color: "green"},
@@ -339,17 +349,17 @@ func TestEscapeDismissesFilter(t *testing.T) {
 	// First Escape clears query text but stays in filter mode.
 	updated, _ = sendSpecialKey(m, tea.KeyEscape)
 	m = updated.(Model)
-	if !m.filtering {
+	if !m.filter.Active {
 		t.Error("expected filtering to still be true after first Esc")
 	}
-	if m.filterText != "" {
-		t.Errorf("expected filterText to be empty, got %q", m.filterText)
+	if m.filter.Text != "" {
+		t.Errorf("expected filterText to be empty, got %q", m.filter.Text)
 	}
 
 	// Second Escape exits filter mode entirely.
 	updated, _ = sendSpecialKey(m, tea.KeyEscape)
 	m2 := updated.(Model)
-	if m2.filtering {
+	if m2.filter.Active {
 		t.Error("expected filtering to be false after second Esc")
 	}
 }
@@ -682,7 +692,7 @@ func TestBackspaceToEmptyReturnsToTagSearch(t *testing.T) {
 	}
 
 	// Delete all characters in the filter.
-	for m.filterText != "" {
+	for m.filter.Text != "" {
 		updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyBackspace})
 		m = updated.(Model)
 	}
@@ -844,11 +854,11 @@ func TestRecentlyCompletedMode(t *testing.T) {
 	if m.mode != modeRecentlyCompleted {
 		t.Errorf("expected modeRecentlyCompleted, got %d", m.mode)
 	}
-	if !m.filtering {
+	if !m.filter.Active {
 		t.Error("expected filtering to be true")
 	}
-	if !strings.Contains(m.filterText, "completed and @completed") {
-		t.Errorf("expected pre-filled query, got %q", m.filterText)
+	if !strings.Contains(m.filter.Text, "completed and @completed") {
+		t.Errorf("expected pre-filled query, got %q", m.filter.Text)
 	}
 }
 

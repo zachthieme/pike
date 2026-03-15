@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"io"
@@ -119,11 +120,12 @@ func run(args []string, stdout, stderr io.Writer) error {
 	cfg.NotesDir = notesDir
 
 	// Scan files.
+	ctx := context.Background()
 	sc, err := scanner.New(cfg.NotesDir, cfg.Include, cfg.Exclude)
 	if err != nil {
 		return fmt.Errorf("invalid glob patterns: %w", err)
 	}
-	tasks, err := sc.Scan()
+	tasks, err := sc.Scan(ctx)
 	if err != nil {
 		return fmt.Errorf("scanning: %w", err)
 	}
@@ -243,7 +245,10 @@ func runTUI(_ io.Writer, cfg *config.Config, tasks []model.Task, sc *scanner.Sca
 	configReload := func() (*config.Config, error) {
 		return config.Load(configPath)
 	}
-	m := tui.NewModel(cfg, tasks, sc.Refresh, configReload)
+	scanRefresh := func() ([]model.Task, error) {
+		return sc.Refresh(context.Background())
+	}
+	m := tui.NewModel(cfg, tasks, scanRefresh, configReload)
 	m.SetVersion(version)
 
 	// If --view flag is set, find and focus that section.

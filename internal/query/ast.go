@@ -29,7 +29,7 @@ func (n *TagNode) nodeType() string { return "tag" }
 
 // DateCmpNode compares a task's date field against a target date.
 // Field is the tag name ("due" or "completed").
-// Op is one of "<", ">", "<=", ">=".
+// Op is one of "<", ">", "<=", ">=", "=".
 // Days is the offset from "now": 0 = today, +3 = today+3d, -7 = today-7d.
 // If Literal is non-nil, it's a literal YYYY-MM-DD date and Days is ignored.
 type DateCmpNode struct {

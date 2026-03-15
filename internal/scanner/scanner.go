@@ -2,6 +2,7 @@ package scanner
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"io/fs"
 	"os"
@@ -23,6 +24,13 @@ type Scanner struct {
 	exclude []string               // glob patterns like "archive/**"
 	mtimes  map[string]time.Time   // relPath -> last mtime
 	tasks   map[string][]model.Task // relPath -> tasks from that file
+}
+
+// matchedFile holds info about a file discovered during a directory walk.
+type matchedFile struct {
+	absPath string
+	relPath string
+	modTime time.Time
 }
 
 // New creates a Scanner for the given root directory with include and exclude
@@ -49,13 +57,65 @@ func New(root string, include, exclude []string) (*Scanner, error) {
 }
 
 // Scan performs a full scan of all matching files. Returns all tasks found.
-func (s *Scanner) Scan() ([]model.Task, error) {
+func (s *Scanner) Scan(ctx context.Context) ([]model.Task, error) {
 	mtimes := make(map[string]time.Time)
 	tasks := make(map[string][]model.Task)
 
-	err := filepath.WalkDir(s.root, func(path string, d fs.DirEntry, err error) error {
+	err := s.walkMatching(ctx, func(mf matchedFile) error {
+		return s.parseFileInto(mf.absPath, mf.relPath, mf.modTime, mtimes, tasks)
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	s.mtimes = mtimes
+	s.tasks = tasks
+
+	return s.allTasks(), nil
+}
+
+// Refresh does an incremental scan. Only re-parses files whose mtime has
+// changed since the last scan. Removes tasks from deleted files.
+func (s *Scanner) Refresh(ctx context.Context) ([]model.Task, error) {
+	// Collect the set of files currently on disk that match our patterns
+	onDisk := make(map[string]bool)
+
+	err := s.walkMatching(ctx, func(mf matchedFile) error {
+		onDisk[mf.relPath] = true
+
+		prevMtime, seen := s.mtimes[mf.relPath]
+		if !seen || mf.modTime.After(prevMtime) {
+			// File is new or modified — re-parse
+			return s.parseFileInto(mf.absPath, mf.relPath, mf.modTime, s.mtimes, s.tasks)
+		}
+
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	// Remove tasks for files that no longer exist
+	for relPath := range s.tasks {
+		if !onDisk[relPath] {
+			delete(s.tasks, relPath)
+			delete(s.mtimes, relPath)
+		}
+	}
+
+	return s.allTasks(), nil
+}
+
+// walkMatching walks the root directory and calls fn for each file matching
+// include/exclude patterns. Respects context cancellation.
+func (s *Scanner) walkMatching(ctx context.Context, fn func(matchedFile) error) error {
+	return filepath.WalkDir(s.root, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return nil // skip problematic entries, continue scanning
+		}
+		// Check for cancellation periodically
+		if ctx.Err() != nil {
+			return ctx.Err()
 		}
 		if d.IsDir() {
 			return nil
@@ -79,77 +139,13 @@ func (s *Scanner) Scan() ([]model.Task, error) {
 		if err != nil {
 			return nil // skip problematic entries
 		}
-		mtime := info.ModTime()
 
-		return s.parseFileInto(path, relPath, mtime, mtimes, tasks)
+		return fn(matchedFile{
+			absPath: path,
+			relPath: relPath,
+			modTime: info.ModTime(),
+		})
 	})
-	if err != nil {
-		return nil, err
-	}
-
-	s.mtimes = mtimes
-	s.tasks = tasks
-
-	return s.allTasks(), nil
-}
-
-// Refresh does an incremental scan. Only re-parses files whose mtime has
-// changed since the last scan. Removes tasks from deleted files.
-func (s *Scanner) Refresh() ([]model.Task, error) {
-	// Collect the set of files currently on disk that match our patterns
-	onDisk := make(map[string]bool)
-
-	err := filepath.WalkDir(s.root, func(path string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return nil // skip problematic entries, continue scanning
-		}
-		if d.IsDir() {
-			return nil
-		}
-
-		relPath, err := filepath.Rel(s.root, path)
-		if err != nil {
-			return err
-		}
-		relPath = filepath.ToSlash(relPath)
-
-		if !s.matchesInclude(relPath) {
-			return nil
-		}
-		if s.matchesExclude(relPath) {
-			return nil
-		}
-
-		onDisk[relPath] = true
-
-		// Check mtime
-		info, err := d.Info()
-		if err != nil {
-			return nil // skip problematic entries
-		}
-		mtime := info.ModTime()
-
-		prevMtime, seen := s.mtimes[relPath]
-		if !seen || mtime.After(prevMtime) {
-			// File is new or modified — re-parse
-			return s.parseFileInto(path, relPath, mtime, s.mtimes, s.tasks)
-		}
-
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	// Remove tasks for files that no longer exist
-	for relPath := range s.tasks {
-		if !onDisk[relPath] {
-			delete(s.tasks, relPath)
-			delete(s.mtimes, relPath)
-		}
-	}
-
-	return s.allTasks(), nil
 }
 
 // parseFileInto reads a file, extracts tasks, and stores the results into the

@@ -1,32 +1,53 @@
 package toggle
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
+)
+
+// Sentinel errors for programmatic handling.
+var (
+	ErrStaleData      = errors.New("stale data: file changed externally")
+	ErrLineOutOfRange = errors.New("line number out of range")
 )
 
 var completedTagRe = regexp.MustCompile(`\s*@completed(\([^)]*\))?(?:\s|$)`)
 var hiddenTagRe = regexp.MustCompile(`\s*@hidden(?:\s|$)`)
 
+// fileMu provides per-file locking to prevent concurrent mutations from racing.
+var fileMu sync.Map // map[string]*sync.Mutex
+
+func lockFile(path string) *sync.Mutex {
+	v, _ := fileMu.LoadOrStore(path, &sync.Mutex{})
+	mu := v.(*sync.Mutex)
+	mu.Lock()
+	return mu
+}
+
 // Complete marks an open checkbox task as completed by modifying the source file.
 // Replaces - [ ] with - [x] and appends @completed(YYYY-MM-DD).
 // Returns an error if the line doesn't contain - [ ] (stale data).
 func Complete(filePath string, line int, date time.Time) error {
+	mu := lockFile(filePath)
+	defer mu.Unlock()
+
 	lines, err := readLines(filePath)
 	if err != nil {
 		return err
 	}
 	if line < 1 || line > len(lines) {
-		return fmt.Errorf("line %d out of range (file has %d lines)", line, len(lines))
+		return fmt.Errorf("%w: line %d (file has %d lines)", ErrLineOutOfRange, line, len(lines))
 	}
 
 	idx := line - 1
 	l := lines[idx]
 	if !strings.Contains(l, "- [ ]") {
-		return fmt.Errorf("line %d does not contain '- [ ]': %q", line, l)
+		return fmt.Errorf("%w: line %d does not contain '- [ ]'", ErrStaleData, line)
 	}
 
 	l = strings.Replace(l, "- [ ]", "- [x]", 1)
@@ -40,18 +61,21 @@ func Complete(filePath string, line int, date time.Time) error {
 // Replaces - [x] with - [ ] and removes @completed(...) tag.
 // Returns an error if the line doesn't contain - [x] (stale data).
 func Uncomplete(filePath string, line int) error {
+	mu := lockFile(filePath)
+	defer mu.Unlock()
+
 	lines, err := readLines(filePath)
 	if err != nil {
 		return err
 	}
 	if line < 1 || line > len(lines) {
-		return fmt.Errorf("line %d out of range (file has %d lines)", line, len(lines))
+		return fmt.Errorf("%w: line %d (file has %d lines)", ErrLineOutOfRange, line, len(lines))
 	}
 
 	idx := line - 1
 	l := lines[idx]
 	if !strings.Contains(l, "- [x]") {
-		return fmt.Errorf("line %d does not contain '- [x]': %q", line, l)
+		return fmt.Errorf("%w: line %d does not contain '- [x]'", ErrStaleData, line)
 	}
 
 	l = strings.Replace(l, "- [x]", "- [ ]", 1)
@@ -74,12 +98,15 @@ func Uncomplete(filePath string, line int) error {
 
 // ToggleHidden adds @hidden to a task line if absent, or removes it if present.
 func ToggleHidden(filePath string, line int) error {
+	mu := lockFile(filePath)
+	defer mu.Unlock()
+
 	lines, err := readLines(filePath)
 	if err != nil {
 		return err
 	}
 	if line < 1 || line > len(lines) {
-		return fmt.Errorf("line %d out of range (file has %d lines)", line, len(lines))
+		return fmt.Errorf("%w: line %d (file has %d lines)", ErrLineOutOfRange, line, len(lines))
 	}
 
 	idx := line - 1
@@ -115,7 +142,12 @@ func readLines(path string) ([]string, error) {
 	return strings.Split(s, "\n"), nil
 }
 
+// writeLines writes lines atomically using write-to-temp + rename.
 func writeLines(path string, lines []string) error {
 	content := strings.Join(lines, "\n") + "\n"
-	return os.WriteFile(path, []byte(content), 0o644)
+	tmp := path + ".pike-tmp"
+	if err := os.WriteFile(tmp, []byte(content), 0o644); err != nil {
+		return err
+	}
+	return os.Rename(tmp, path)
 }

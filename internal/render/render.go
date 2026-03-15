@@ -10,20 +10,16 @@ import (
 
 // FormatTask formats a single task for non-interactive output.
 func FormatTask(task model.Task, tagColors map[string]string, noColor bool) string {
-	state := " "
-	if task.State == model.Completed {
-		state = "x"
-	}
-
 	text := task.Text
 	if !noColor && tagColors != nil {
 		text = style.ColorizeTags(text, task.Tags, tagColors, style.ANSIStyleFunc())
 	}
 
+	marker := style.TaskMarker(task, false)
 	if task.HasCheckbox {
-		return fmt.Sprintf("%s:%d  - [%s] %s", task.File, task.Line, state, text)
+		return fmt.Sprintf("%s:%d  - %s %s", task.File, task.Line, marker, text)
 	}
-	return fmt.Sprintf("%s:%d  - %s", task.File, task.Line, text)
+	return fmt.Sprintf("%s:%d  %s %s", task.File, task.Line, marker, text)
 }
 
 // FormatSummary formats the task summary counts for non-interactive output.

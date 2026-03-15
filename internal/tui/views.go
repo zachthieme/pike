@@ -44,8 +44,8 @@ func (m Model) viewDashboard() string {
 	lineWidth := max(0, m.width-lipgloss.Width(label))
 	footer := FooterStyle().Render(strings.Repeat("\u2500", lineWidth) + label)
 
-	if m.queryErr != nil {
-		footer += "\n" + FooterStyle().Render("  "+m.queryErr.Error())
+	if m.filter.QueryErr != nil {
+		footer += "\n" + FooterStyle().Render("  "+m.filter.QueryErr.Error())
 	}
 
 	full := body + "\n" + footer
@@ -54,8 +54,8 @@ func (m Model) viewDashboard() string {
 
 func (m Model) viewFocused() string {
 	body, count := m.renderSections()
-	if m.queryErr != nil {
-		body += "\n" + FooterStyle().Render("  "+m.queryErr.Error())
+	if m.filter.QueryErr != nil {
+		body += "\n" + FooterStyle().Render("  "+m.filter.QueryErr.Error())
 	}
 	if count == 0 {
 		return body + "\nNo tasks"
@@ -93,10 +93,10 @@ func (m Model) viewAllTasks() string {
 	var parts []string
 
 	// Always show the search bar in all-tasks mode.
-	parts = append(parts, m.filterInput.View())
+	parts = append(parts, m.filter.Input.View())
 
-	if m.queryErr != nil {
-		parts = append(parts, FooterStyle().Render("  "+m.queryErr.Error()))
+	if m.filter.QueryErr != nil {
+		parts = append(parts, FooterStyle().Render("  "+m.filter.QueryErr.Error()))
 	}
 
 	sections := m.displaySections()
@@ -155,7 +155,7 @@ func (m Model) viewAllTasks() string {
 func (m Model) viewTagSearch() string {
 	var parts []string
 
-	parts = append(parts, m.filterInput.View())
+	parts = append(parts, m.filter.Input.View())
 
 	filtered := m.filteredTags()
 	if len(m.tagList) == 0 {
@@ -203,7 +203,7 @@ func (m Model) viewTagSearch() string {
 		parts = append(parts, "  "+strings.Join(tagParts, delim))
 	}
 
-	if len(filtered) == 0 && m.filterText != "" {
+	if len(filtered) == 0 && m.filter.Text != "" {
 		parts = append(parts, "")
 		parts = append(parts, "  No matching tags")
 	}
@@ -265,8 +265,8 @@ func flowWrap(parts []string, delim string, maxWidth int) string {
 func (m Model) renderSections() (string, int) {
 	var parts []string
 
-	if m.filtering {
-		parts = append(parts, m.filterInput.View())
+	if m.filter.Active {
+		parts = append(parts, m.filter.Input.View())
 		parts = append(parts, "")
 	}
 

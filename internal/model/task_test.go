@@ -29,6 +29,7 @@ func TestHasTag(t *testing.T) {
 			{Name: "today"},
 			{Name: "due", Value: "2026-03-15"},
 		},
+		TagSet: map[string]bool{"today": true, "due": true},
 	}
 	if !task.HasTag("today") {
 		t.Error("expected HasTag('today') to be true")

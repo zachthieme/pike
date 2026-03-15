@@ -47,7 +47,7 @@ func (m Model) renderSection(title string, tasks []model.Task, color string, sec
 	var lines []string
 	for i, task := range tasks {
 		flatIdx := sectionStart + i
-		selected := flatIdx == m.cursor && !(m.filtering && m.filterInput.Focused())
+		selected := flatIdx == m.cursor && !(m.filter.Active && m.filter.Input.Focused())
 		line := formatTaskLine(task, m.tagColors, linkColor, selected)
 		lines = append(lines, line)
 	}
@@ -80,15 +80,7 @@ func formatTaskLine(task model.Task, tagColors map[string]string, linkColor stri
 		text = style.PrettifyText(text)
 	}
 
-	var marker string
-	if task.HasCheckbox {
-		marker = "○"
-		if task.State == model.Completed {
-			marker = "●"
-		}
-	} else {
-		marker = "▸"
-	}
+	marker := style.TaskMarker(task, true)
 
 	if selected {
 		marker = TaskStyle(true).Render(marker)

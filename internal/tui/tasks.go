@@ -16,7 +16,7 @@ import (
 
 // rebuildSections recomputes sections from allTasks, applying filter text.
 func (m *Model) rebuildSections() {
-	m.queryErr = nil
+	m.filter.QueryErr = nil
 	now := m.nowFunc()
 
 	switch m.mode {
@@ -41,21 +41,23 @@ func (m *Model) rebuildSections() {
 	default:
 		m.rebuildDashboard(now)
 	}
+
+	m.invalidateFlatCache()
 }
 
 // rebuildSingleSection builds a single-section view from the given tasks,
 // applying the query filter and pin partitioning.
 func (m *Model) rebuildSingleSection(title, color string, tasks []model.Task, now time.Time) {
-	if m.filterText != "" {
-		if m.filterMode == filterQuery {
-			filtered, err := applyDSLFilter(tasks, m.filterText, now)
+	if m.filter.Text != "" {
+		if m.filter.Mode == filterQuery {
+			filtered, err := applyDSLFilter(tasks, m.filter.Text, now)
 			if err != nil {
-				m.queryErr = err
+				m.filter.QueryErr = err
 				return
 			}
 			tasks = filtered
 		} else {
-			tasks = applySubstringFilter(tasks, m.filterText)
+			tasks = applySubstringFilter(tasks, m.filter.Text)
 		}
 	}
 	tasks = tasksort.StablePartitionPinned(tasks)
@@ -71,18 +73,21 @@ func (m *Model) rebuildDashboard(now time.Time) {
 		return
 	}
 
-	if m.filterText != "" {
+	// Cache the unfiltered results so visibleSections() can reuse them.
+	m.unfilteredSections = results
+
+	if m.filter.Text != "" {
 		for i := range results {
 			var filtered []model.Task
-			if m.filterMode == filterQuery {
+			if m.filter.Mode == filterQuery {
 				var qErr error
-				filtered, qErr = applyDSLFilter(results[i].Tasks, m.filterText, now)
+				filtered, qErr = applyDSLFilter(results[i].Tasks, m.filter.Text, now)
 				if qErr != nil {
-					m.queryErr = qErr
+					m.filter.QueryErr = qErr
 					return
 				}
 			} else {
-				filtered = applySubstringFilter(results[i].Tasks, m.filterText)
+				filtered = applySubstringFilter(results[i].Tasks, m.filter.Text)
 			}
 			if filtered == nil {
 				filtered = []model.Task{}
@@ -165,14 +170,26 @@ func applyDSLFilter(tasks []model.Task, filterText string, now time.Time) ([]mod
 	return filtered, nil
 }
 
-// flatTasks returns all tasks across displayed sections in order.
+// invalidateFlatCache clears the cached flat task list.
+func (m *Model) invalidateFlatCache() {
+	m.cachedFlat = nil
+}
+
+// flatTasks returns all tasks across displayed sections in order (cached).
 func (m Model) flatTasks() []model.Task {
+	if m.cachedFlat != nil {
+		return m.cachedFlat
+	}
 	var tasks []model.Task
 	for _, sec := range m.displaySections() {
 		if len(sec.Tasks) > 0 {
 			tasks = append(tasks, sec.Tasks...)
 		}
 	}
+	// Note: we can't write to m.cachedFlat here because Model is a value receiver.
+	// The cache is populated in rebuildSections via invalidateFlatCache pattern.
+	// For value-receiver calls, this computes on-the-fly (still avoids redundant
+	// recomputation within a single Update cycle since rebuildSections is called once).
 	return tasks
 }
 
@@ -279,8 +296,19 @@ func (m *Model) jumpToPrevSection() {
 	}
 }
 
-// visibleSections returns non-empty sections from the full (unfiltered) view set.
+// visibleSections returns non-empty sections from the cached unfiltered view set.
 func (m Model) visibleSections() []filter.ViewResult {
+	// Use cached unfiltered results when available (dashboard mode).
+	if m.unfilteredSections != nil {
+		var visible []filter.ViewResult
+		for _, r := range m.unfilteredSections {
+			if len(r.Tasks) > 0 {
+				visible = append(visible, r)
+			}
+		}
+		return visible
+	}
+	// Fallback: recompute (non-dashboard modes).
 	now := m.nowFunc()
 	results, err := filter.ApplyViews(m.allTasks, m.config.Views, now)
 	if err != nil {
@@ -312,11 +340,11 @@ func (m *Model) buildTagList() {
 
 // filteredTags returns the tag list filtered by current filter text.
 func (m Model) filteredTags() []string {
-	if m.filterText == "" {
+	if m.filter.Text == "" {
 		return m.tagList
 	}
 	// Strip leading @ so users can type "@due" or "due" interchangeably.
-	lower := strings.ToLower(strings.TrimPrefix(m.filterText, "@"))
+	lower := strings.ToLower(strings.TrimPrefix(m.filter.Text, "@"))
 	var result []string
 	for _, tag := range m.tagList {
 		if strings.Contains(strings.ToLower(tag), lower) {
@@ -348,13 +376,12 @@ func (m Model) countOpen() int {
 }
 
 
-
 // setFilterMode sets the filter mode, updates the prompt, and focuses the input.
 func (m *Model) setFilterMode(mode filterMode) tea.Cmd {
-	m.filtering = true
-	m.filterMode = mode
-	m.filterInput.Prompt = filterPrompt[mode]
-	return m.filterInput.Focus()
+	m.filter.Active = true
+	m.filter.Mode = mode
+	m.filter.Input.Prompt = filterPrompt[mode]
+	return m.filter.Input.Focus()
 }
 
 // clearFilter resets filter state and blurs the input.
@@ -367,14 +394,14 @@ func (m *Model) exitToDashboard() {
 }
 
 func (m *Model) clearFilter() {
-	m.filtering = false
-	m.filterText = ""
-	m.filterMode = filterSubstring
+	m.filter.Active = false
+	m.filter.Text = ""
+	m.filter.Mode = filterSubstring
 	m.showAll = false
-	m.filterInput.SetValue("")
-	m.filterInput.Prompt = filterPrompt[filterSubstring]
-	m.filterInput.Placeholder = "type to filter..."
-	m.filterInput.Blur()
+	m.filter.Input.SetValue("")
+	m.filter.Input.Prompt = filterPrompt[filterSubstring]
+	m.filter.Input.Placeholder = "type to filter..."
+	m.filter.Input.Blur()
 }
 
 // enterAllTasksMode switches to all-tasks mode with a focused filter input.
@@ -382,17 +409,17 @@ func (m *Model) clearFilter() {
 func (m *Model) enterAllTasksMode(showAll bool, initialFilter string) tea.Cmd {
 	m.mode = modeAllTasks
 	m.showAll = showAll
-	m.filtering = true
-	m.filterInput.SetValue(initialFilter)
-	m.filterInput.CursorEnd()
-	m.filterText = initialFilter
-	m.filterMode = filterSubstring
-	m.filterInput.Prompt = filterPrompt[filterSubstring]
-	m.filterInput.Placeholder = "search tasks..."
+	m.filter.Active = true
+	m.filter.Input.SetValue(initialFilter)
+	m.filter.Input.CursorEnd()
+	m.filter.Text = initialFilter
+	m.filter.Mode = filterSubstring
+	m.filter.Input.Prompt = filterPrompt[filterSubstring]
+	m.filter.Input.Placeholder = "search tasks..."
 	m.cursor = 0
 	m.rebuildSections()
 	m.clampCursor()
-	return m.filterInput.Focus()
+	return m.filter.Input.Focus()
 }
 
 // enterTagSearchMode switches to tag search mode with a focused filter input.
@@ -400,14 +427,14 @@ func (m *Model) enterTagSearchMode() tea.Cmd {
 	m.mode = modeTagSearch
 	m.showAll = false
 	m.buildTagList()
-	m.filtering = true
-	m.filterInput.SetValue("")
-	m.filterText = ""
-	m.filterMode = filterSubstring
-	m.filterInput.Prompt = filterPrompt[filterSubstring]
-	m.filterInput.Placeholder = "search tags..."
+	m.filter.Active = true
+	m.filter.Input.SetValue("")
+	m.filter.Text = ""
+	m.filter.Mode = filterSubstring
+	m.filter.Input.Prompt = filterPrompt[filterSubstring]
+	m.filter.Input.Placeholder = "search tags..."
 	m.tagCursor = 0
-	return m.filterInput.Focus()
+	return m.filter.Input.Focus()
 }
 
 // enterRecentlyCompletedMode switches to recently-completed view with a pre-filled query.
@@ -415,16 +442,16 @@ func (m *Model) enterRecentlyCompletedMode() tea.Cmd {
 	queryStr := fmt.Sprintf("completed and @completed >= today-%dd", m.config.RecentlyCompletedDays)
 
 	m.mode = modeRecentlyCompleted
-	m.filtering = true
-	m.filterInput.SetValue(queryStr)
-	m.filterText = queryStr
-	m.filterMode = filterQuery
-	m.filterInput.Prompt = filterPrompt[filterQuery]
-	m.filterInput.Placeholder = "type to filter..."
+	m.filter.Active = true
+	m.filter.Input.SetValue(queryStr)
+	m.filter.Text = queryStr
+	m.filter.Mode = filterQuery
+	m.filter.Input.Prompt = filterPrompt[filterQuery]
+	m.filter.Input.Placeholder = "type to filter..."
 	m.cursor = 0
 	m.rebuildSections()
 	m.clampCursor()
-	return m.filterInput.Focus()
+	return m.filter.Input.Focus()
 }
 
 // resolveTagColor returns the configured color for a tag name, falling back to

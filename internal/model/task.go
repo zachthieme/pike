@@ -26,22 +26,18 @@ type Tag struct {
 }
 
 type Task struct {
-	Text        string     // Full line text after "- [ ] " / "- [x] " or "- "
-	State       TaskState  // Open or Completed
-	File        string     // Relative path from notes_dir
-	Line        int        // 1-based line number
-	Tags        []Tag      // Parsed @tag tokens
-	Due         *time.Time // Parsed from @due(YYYY-MM-DD), nil if absent
-	Completed   *time.Time // Parsed from @completed(YYYY-MM-DD), nil if absent
-	HasCheckbox bool       // true if line had - [ ] or - [x], false for plain bullets
+	Text        string          // Full line text after "- [ ] " / "- [x] " or "- "
+	State       TaskState       // Open or Completed
+	File        string          // Relative path from notes_dir
+	Line        int             // 1-based line number
+	Tags        []Tag           // Parsed @tag tokens
+	TagSet      map[string]bool // O(1) tag lookup by name, populated at parse time
+	Due         *time.Time      // Parsed from @due(YYYY-MM-DD), nil if absent
+	Completed   *time.Time      // Parsed from @completed(YYYY-MM-DD), nil if absent
+	HasCheckbox bool            // true if line had - [ ] or - [x], false for plain bullets
 }
 
-// HasTag returns true if the task has a tag with the given name.
+// HasTag returns true if the task has a tag with the given name (O(1) lookup).
 func (t *Task) HasTag(name string) bool {
-	for _, tag := range t.Tags {
-		if tag.Name == name {
-			return true
-		}
-	}
-	return false
+	return t.TagSet[name]
 }
