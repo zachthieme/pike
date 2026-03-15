@@ -160,9 +160,9 @@ func TestDirShortFlag(t *testing.T) {
 }
 
 func TestExpandShortFlags(t *testing.T) {
-	input := []string{"-d", "/tmp", "-q", "open", "-h"}
+	input := []string{"-d", "/tmp", "-q", "open", "-h", "-v", "-w", "Today"}
 	got := expandShortFlags(input)
-	expected := []string{"--dir", "/tmp", "--query", "open", "--help"}
+	expected := []string{"--dir", "/tmp", "--query", "open", "--help", "--version", "--view", "Today"}
 	if len(got) != len(expected) {
 		t.Fatalf("expected %d args, got %d", len(expected), len(got))
 	}
@@ -170,5 +170,54 @@ func TestExpandShortFlags(t *testing.T) {
 		if got[i] != expected[i] {
 			t.Errorf("arg %d: expected %q, got %q", i, expected[i], got[i])
 		}
+	}
+}
+
+func TestVersionShortFlag(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	err := run([]string{"-v"}, &stdout, &stderr)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(stdout.String(), "pike "+version) {
+		t.Errorf("expected version output, got %q", stdout.String())
+	}
+}
+
+func TestCountFlag(t *testing.T) {
+	dir := t.TempDir()
+	content := "# Test\n- [ ] Task one\n- [ ] Task two\n- [x] Done\n"
+	if err := os.WriteFile(filepath.Join(dir, "test.md"), []byte(content), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	err := run([]string{"--dir", dir, "-q", "open", "--count"}, &stdout, &stderr)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if strings.TrimSpace(stdout.String()) != "2" {
+		t.Errorf("expected count '2', got %q", stdout.String())
+	}
+}
+
+func TestJSONFlag(t *testing.T) {
+	dir := t.TempDir()
+	content := "# Test\n- [ ] Buy milk @today\n"
+	if err := os.WriteFile(filepath.Join(dir, "test.md"), []byte(content), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	err := run([]string{"--dir", dir, "-q", "open", "--json"}, &stdout, &stderr)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	out := stdout.String()
+	if !strings.Contains(out, `"text"`) {
+		t.Errorf("expected JSON output with 'text' field, got %q", out)
+	}
+	if !strings.Contains(out, "Buy milk") {
+		t.Errorf("expected JSON to contain 'Buy milk', got %q", out)
 	}
 }

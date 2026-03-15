@@ -31,14 +31,16 @@ Usage:
 Flags:
   --dir, -d <path>       Notes directory (overrides config/env)
   --config, -c <path>    Config file path
-  --view, -v <name>      Start focused on a specific section
+  --view, -w <name>      Start focused on a specific section
   --summary              Print summary counts to stdout and exit
   --query, -q <query>    Run a one-shot query, print results to stdout and exit
   --sort <order>         Sort order for --query mode (default: "file")
+  --count                Print result count only (use with --query)
+  --json                 Output results as JSON (use with --query)
   --color                Force color output
   --no-color             Disable color output
   --help, -h             Show help
-  --version              Show version
+  --version, -v          Show version
 `
 
 func main() {
@@ -62,6 +64,8 @@ func run(args []string, stdout, stderr io.Writer) error {
 		summaryFlag bool
 		queryFlag   string
 		sortFlag    string
+		countFlag   bool
+		jsonFlag    bool
 		colorFlag   bool
 		noColorFlag bool
 		helpFlag    bool
@@ -74,6 +78,8 @@ func run(args []string, stdout, stderr io.Writer) error {
 	fs.BoolVar(&summaryFlag, "summary", false, "Print summary counts")
 	fs.StringVar(&queryFlag, "query", "", "Run a one-shot query")
 	fs.StringVar(&sortFlag, "sort", "file", "Sort order for --query mode")
+	fs.BoolVar(&countFlag, "count", false, "Print result count only")
+	fs.BoolVar(&jsonFlag, "json", false, "Output results as JSON")
 	fs.BoolVar(&colorFlag, "color", false, "Force color output")
 	fs.BoolVar(&noColorFlag, "no-color", false, "Disable color output")
 	fs.BoolVar(&helpFlag, "help", false, "Show help")
@@ -98,9 +104,15 @@ func run(args []string, stdout, stderr io.Writer) error {
 		fmt.Fprintf(stderr, "warning: both --color and --no-color specified; using --no-color\n")
 	}
 
-	// Warn if --sort is provided without --query.
+	// Warn if query-only flags are provided without --query.
 	if sortFlag != "file" && queryFlag == "" {
 		fmt.Fprintf(stderr, "warning: --sort is only used with --query\n")
+	}
+	if countFlag && queryFlag == "" {
+		fmt.Fprintf(stderr, "warning: --count is only used with --query\n")
+	}
+	if jsonFlag && queryFlag == "" {
+		fmt.Fprintf(stderr, "warning: --json is only used with --query\n")
 	}
 
 	// Determine color mode.
@@ -137,7 +149,7 @@ func run(args []string, stdout, stderr io.Writer) error {
 	case summaryFlag:
 		return runSummary(stdout, tasks, now, noColor)
 	case queryFlag != "":
-		return runQuery(stdout, tasks, queryFlag, sortFlag, cfg.TagColors, now, noColor)
+		return runQuery(stdout, tasks, queryFlag, sortFlag, cfg.TagColors, now, noColor, countFlag, jsonFlag)
 	default:
 		return runTUI(stdout, cfg, tasks, sc, viewFlag, configFlag)
 	}
@@ -149,9 +161,10 @@ func expandShortFlags(args []string) []string {
 	shortToLong := map[string]string{
 		"-d": "--dir",
 		"-c": "--config",
-		"-v": "--view",
+		"-w": "--view",
 		"-q": "--query",
 		"-h": "--help",
+		"-v": "--version",
 	}
 
 	out := make([]string, 0, len(args))
@@ -225,10 +238,19 @@ func runSummary(w io.Writer, tasks []model.Task, now time.Time, noColor bool) er
 	return nil
 }
 
-func runQuery(w io.Writer, tasks []model.Task, queryStr, sortOrder string, tagColors map[string]string, now time.Time, noColor bool) error {
+func runQuery(w io.Writer, tasks []model.Task, queryStr, sortOrder string, tagColors map[string]string, now time.Time, noColor bool, count bool, jsonOutput bool) error {
 	results, err := filter.Apply(tasks, queryStr, sortOrder, now)
 	if err != nil {
 		return fmt.Errorf("query: %w", err)
+	}
+
+	if count {
+		fmt.Fprintln(w, len(results))
+		return nil
+	}
+
+	if jsonOutput {
+		return render.FormatJSON(w, results)
 	}
 
 	var lines []string

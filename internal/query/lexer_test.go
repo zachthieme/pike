@@ -219,6 +219,35 @@ func TestLexErrorUnterminatedRegex(t *testing.T) {
 	}
 }
 
+func TestLexTomorrowYesterday(t *testing.T) {
+	tests := []struct {
+		input      string
+		wantType   TokenType
+		wantOffset int
+	}{
+		{"tomorrow", TokOffset, 1},
+		{"yesterday", TokOffset, -1},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			tokens, err := Lex(tt.input)
+			if err != nil {
+				t.Fatalf("Lex(%q) error: %v", tt.input, err)
+			}
+			if len(tokens) != 2 {
+				t.Fatalf("expected 2 tokens, got %d", len(tokens))
+			}
+			if tokens[0].Type != tt.wantType {
+				t.Errorf("token type = %v, want %v", tokens[0].Type, tt.wantType)
+			}
+			if tokens[0].Offset != tt.wantOffset {
+				t.Errorf("offset = %d, want %d", tokens[0].Offset, tt.wantOffset)
+			}
+		})
+	}
+}
+
 func TestLexToday(t *testing.T) {
 	tokens, err := Lex("today")
 	if err != nil {

@@ -218,6 +218,10 @@ func Lex(input string) ([]Token, error) {
 				tokens = append(tokens, Token{Type: TokOr, Value: word})
 			case "not":
 				tokens = append(tokens, Token{Type: TokNot, Value: word})
+			case "tomorrow":
+				tokens = append(tokens, Token{Type: TokOffset, Value: "tomorrow", Offset: 1})
+			case "yesterday":
+				tokens = append(tokens, Token{Type: TokOffset, Value: "yesterday", Offset: -1})
 			case "today":
 				// Check for today+Nd or today-Nd
 				if i < len(runes) && (runes[i] == '+' || runes[i] == '-') {

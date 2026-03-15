@@ -165,6 +165,8 @@ func TestParseDateComparisons(t *testing.T) {
 		{"@due < 2026-03-15", "due", "<", 0, true, 2026, time.March, 15},
 		{"@due = today", "due", "=", 0, false, 0, 0, 0},
 		{"@due == 2026-03-15", "due", "=", 0, true, 2026, time.March, 15},
+		{"@due < tomorrow", "due", "<", 1, false, 0, 0, 0},
+		{"@due >= yesterday", "due", ">=", -1, false, 0, 0, 0},
 	}
 
 	for _, tt := range tests {
