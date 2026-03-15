@@ -23,6 +23,7 @@ type Config struct {
 	LinkColor              string            `yaml:"-"`
 	HiddenColor            string            `yaml:"-"` // color for ◌ icon (hidden tasks concealed)
 	VisibleColor           string            `yaml:"-"` // color for ◉ icon (hidden tasks revealed)
+	WeekStartDay           int               `yaml:"-"` // 0=Sunday, 1=Monday, ..., 6=Saturday
 	RecentlyCompletedDays  int               `yaml:"-"`
 	Views                  []ViewConfig      `yaml:"-"`
 }
@@ -47,6 +48,7 @@ type rawConfig struct {
 	LinkColor              string            `yaml:"link_color"`
 	HiddenColor            string            `yaml:"hidden_color"`
 	VisibleColor           string            `yaml:"visible_color"`
+	WeekStartDay           *int              `yaml:"week_start_day"`
 	RecentlyCompletedDays  *int              `yaml:"recently_completed_days"`
 	Views                  []ViewConfig      `yaml:"views"`
 }
@@ -179,6 +181,13 @@ func applyDefaults(raw *rawConfig) (*Config, error) {
 		cfg.VisibleColor = raw.VisibleColor
 	} else {
 		cfg.VisibleColor = "212"
+	}
+
+	// WeekStartDay: default to 0 (Sunday)
+	if raw.WeekStartDay != nil && *raw.WeekStartDay >= 0 && *raw.WeekStartDay <= 6 {
+		cfg.WeekStartDay = *raw.WeekStartDay
+	} else {
+		cfg.WeekStartDay = 0
 	}
 
 	// RecentlyCompletedDays: default to 7

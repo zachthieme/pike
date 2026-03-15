@@ -61,6 +61,8 @@ type Model struct {
 	unfilteredSections []filter.ViewResult
 	hiddenCounts       []int        // per-section count of @hidden tasks that were removed
 	openCount          int          // cached count of open checkbox tasks, updated on rebuild
+	completedThisWeek  int          // cached count of tasks completed since start of week
+	displayedCount     int          // cached count of tasks in displayed sections
 	cursor             int          // index into flat task list across all sections
 	focusedView        string       // "" = dashboard, otherwise title of focused section
 	viewLocked         bool         // when true, block mode-switching keys and prevent unfocusing (set via --view flag)

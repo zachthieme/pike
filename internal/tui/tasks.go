@@ -42,14 +42,44 @@ func (m *Model) rebuildSections() {
 		m.rebuildDashboard(now)
 	}
 
-	// Cache the open task count so View() doesn't rescan allTasks.
-	count := 0
+	// Cache counts so View() doesn't rescan.
+	weekStart := startOfWeek(now, m.weekStartDay())
+
+	openCount := 0
+	completedThisWeek := 0
 	for _, t := range m.allTasks {
 		if t.HasCheckbox && t.State == model.Open {
-			count++
+			openCount++
+		}
+		if t.Completed != nil && !t.Completed.Before(weekStart) {
+			completedThisWeek++
 		}
 	}
-	m.openCount = count
+	m.openCount = openCount
+	m.completedThisWeek = completedThisWeek
+
+	displayed := 0
+	for _, sec := range m.displaySections() {
+		displayed += len(sec.Tasks)
+	}
+	m.displayedCount = displayed
+}
+
+// startOfWeek returns midnight of the most recent occurrence of the given weekday.
+// weekday is 0=Sunday, 1=Monday, ..., 6=Saturday.
+func startOfWeek(now time.Time, weekday int) time.Time {
+	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+	current := int(today.Weekday())
+	diff := (current - weekday + 7) % 7
+	return today.AddDate(0, 0, -diff)
+}
+
+// weekStartDay returns the configured week start day, defaulting to Sunday (0).
+func (m Model) weekStartDay() int {
+	if m.config != nil {
+		return m.config.WeekStartDay
+	}
+	return 0
 }
 
 // rebuildSingleSection builds a single-section view from the given tasks,

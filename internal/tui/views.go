@@ -39,8 +39,7 @@ func (m Model) View() string {
 func (m Model) viewDashboard() string {
 	body, _ := m.renderSections()
 
-	openCount := m.countOpen()
-	label := fmt.Sprintf(" %d open tasks", openCount)
+	label := fmt.Sprintf(" ○ %d/%d  ● %d wk", m.displayedCount, m.openCount, m.completedThisWeek)
 	lineWidth := max(0, m.width-lipgloss.Width(label))
 	footer := FooterStyle().Render(strings.Repeat("\u2500", lineWidth) + label)
 
@@ -52,15 +51,26 @@ func (m Model) viewDashboard() string {
 	return m.truncateView(full)
 }
 
+// renderFooterBar renders a right-aligned footer with a horizontal rule and label.
+func (m Model) renderFooterBar(label string) string {
+	lineWidth := max(0, m.width-lipgloss.Width(label))
+	return FooterStyle().Render(strings.Repeat("\u2500", lineWidth) + label)
+}
+
 func (m Model) viewFocused() string {
 	body, count := m.renderSections()
+
+	footer := m.renderFooterBar(fmt.Sprintf(" %d results", count))
 	if m.filter.QueryErr != nil {
-		body += "\n" + FooterStyle().Render("  "+m.filter.QueryErr.Error())
+		footer += "\n" + FooterStyle().Render("  "+m.filter.QueryErr.Error())
 	}
+
 	if count == 0 {
-		return body + "\nNo tasks"
+		return body + "\nNo results"
 	}
-	return m.truncateView(body)
+
+	full := body + "\n" + footer
+	return m.truncateView(full)
 }
 
 func (m Model) viewSummary() string {
@@ -101,7 +111,7 @@ func (m Model) viewAllTasks() string {
 
 	sections := m.displaySections()
 	if len(sections) == 0 || len(sections[0].Tasks) == 0 {
-		parts = append(parts, "  No matching tasks")
+		parts = append(parts, "  No results")
 		return strings.Join(parts, "\n")
 	}
 
@@ -124,7 +134,7 @@ func (m Model) viewAllTasks() string {
 
 	for maxTasks > 1 {
 		start, end := scrollWindow(m.cursor, len(tasks), maxTasks)
-		rendered := m.renderSection(sec.Title, tasks[start:end], sec.Color, start, hiddenCount)
+		rendered := m.renderSection(sec.Title, tasks[start:end], sec.Color, start, hiddenCount, len(tasks))
 		renderedHeight := lipgloss.Height(rendered)
 		needsFooter := end-start < len(tasks)
 		if needsFooter {
@@ -133,7 +143,7 @@ func (m Model) viewAllTasks() string {
 		if renderedHeight <= available {
 			parts = append(parts, rendered)
 			if needsFooter {
-				parts = append(parts, FooterStyle().Render(fmt.Sprintf("  %d–%d of %d tasks", start+1, end, len(tasks))))
+				parts = append(parts, FooterStyle().Render(fmt.Sprintf("  %d–%d of %d results", start+1, end, len(tasks))))
 			}
 			return strings.Join(parts, "\n")
 		}
@@ -142,10 +152,10 @@ func (m Model) viewAllTasks() string {
 
 	// Minimal case: 1 task.
 	start, end := scrollWindow(m.cursor, len(tasks), 1)
-	rendered := m.renderSection(sec.Title, tasks[start:end], sec.Color, start, hiddenCount)
+	rendered := m.renderSection(sec.Title, tasks[start:end], sec.Color, start, hiddenCount, len(tasks))
 	parts = append(parts, rendered)
 	if len(tasks) > 1 {
-		parts = append(parts, FooterStyle().Render(fmt.Sprintf("  %d–%d of %d tasks", start+1, end, len(tasks))))
+		parts = append(parts, FooterStyle().Render(fmt.Sprintf("  %d–%d of %d results", start+1, end, len(tasks))))
 	}
 	return strings.Join(parts, "\n")
 }
@@ -205,7 +215,7 @@ func (m Model) viewTagSearch() string {
 
 	if len(filtered) == 0 && m.filter.Text != "" {
 		parts = append(parts, "")
-		parts = append(parts, "  No matching tags")
+		parts = append(parts, "  No results")
 	}
 
 	return strings.Join(parts, "\n")
