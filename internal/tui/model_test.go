@@ -463,7 +463,7 @@ func TestViewRendersWithSummary(t *testing.T) {
 	}
 
 	// Description
-	if !strings.Contains(view, "terminal task dashboard") {
+	if !strings.Contains(view, "Pike reaches in") {
 		t.Error("expected summary to contain description")
 	}
 

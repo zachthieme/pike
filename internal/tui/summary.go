@@ -20,7 +20,12 @@ func RenderSummary(version string, width int) string {
 		versionStr = " " + version
 	}
 	lines = append(lines, boldStyle.Render("pike"+versionStr))
-	lines = append(lines, faintStyle.Render("terminal task dashboard for markdown notes"))
+	lines = append(lines, "")
+	lines = append(lines, faintStyle.Render("  A long pointed tool, used to pick"))
+	lines = append(lines, faintStyle.Render("  through things quickly and with"))
+	lines = append(lines, faintStyle.Render("  precision. Your tasks are scattered"))
+	lines = append(lines, faintStyle.Render("  across dozens of markdown files."))
+	lines = append(lines, faintStyle.Render("  Pike reaches in and pulls them out."))
 	lines = append(lines, "")
 
 	// Keybindings
@@ -46,25 +51,23 @@ func RenderSummary(version string, width int) string {
 		{"q", "quit"},
 	}
 
-	// Find the widest key to align descriptions.
-	maxKeyWidth := 0
+	// Find the widest key to compute the description column offset.
+	maxKeyLen := 0
 	for _, k := range keys {
-		if len(k.key) > maxKeyWidth {
-			maxKeyWidth = len(k.key)
+		if len(k.key) > maxKeyLen {
+			maxKeyLen = len(k.key)
 		}
 	}
-	colGap := 3
+	colWidth := maxKeyLen + 3
 
 	for _, k := range keys {
 		if k.key == "" {
 			lines = append(lines, "")
 			continue
 		}
-		padding := maxKeyWidth - len(k.key) + colGap
-		lines = append(lines, fmt.Sprintf("  %s%s%s",
-			boldStyle.Render(k.key),
-			strings.Repeat(" ", padding),
-			faintStyle.Render(k.desc)))
+		// Right-pad the key to a fixed column width, then style each part.
+		paddedKey := fmt.Sprintf("%-*s", colWidth, k.key)
+		lines = append(lines, "  "+boldStyle.Render(paddedKey)+faintStyle.Render(k.desc))
 	}
 	lines = append(lines, "")
 
@@ -72,10 +75,7 @@ func RenderSummary(version string, width int) string {
 
 	boxStyle := SummaryStyle()
 	if width > 0 {
-		boxWidth := 48
-		if boxWidth > width-4 {
-			boxWidth = width - 4
-		}
+		boxWidth := min(48, width-4)
 		boxStyle = boxStyle.Width(boxWidth)
 	}
 
