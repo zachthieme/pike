@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"pike/internal/filter"
+	"pike/internal/model"
 
 	"github.com/charmbracelet/lipgloss"
 )
@@ -37,9 +38,19 @@ func (m Model) View() string {
 }
 
 func (m Model) viewDashboard() string {
-	body, displayed := m.renderSections()
+	body, _ := m.renderSections()
 
-	label := fmt.Sprintf(" ○ %d/%d  ● %d wk", displayed, m.openCount, m.completedThisWeek)
+	// Count open tasks visible in the current dashboard sections.
+	displayedOpen := 0
+	for _, sec := range m.displaySections() {
+		for _, t := range sec.Tasks {
+			if t.HasCheckbox && t.State == model.Open {
+				displayedOpen++
+			}
+		}
+	}
+
+	label := fmt.Sprintf(" ○ %d/%d  ● %d wk", displayedOpen, m.openCount, m.completedThisWeek)
 	footer := m.renderFooterBar(label)
 
 	if m.filter.QueryErr != nil {

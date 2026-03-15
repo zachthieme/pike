@@ -51,7 +51,7 @@ func (m *Model) rebuildSections() {
 		if t.HasCheckbox && t.State == model.Open {
 			openCount++
 		}
-		if t.HasCheckbox && t.Completed != nil && !t.Completed.Before(weekStart) {
+		if t.HasCheckbox && t.State == model.Completed && t.Completed != nil && !t.Completed.Before(weekStart) {
 			completedThisWeek++
 		}
 	}
@@ -401,7 +401,6 @@ func (m *Model) setupFilter(mode filterMode, value, placeholder string) tea.Cmd 
 	return m.filter.Input.Focus()
 }
 
-// clearFilter resets filter state and blurs the input.
 // exitToDashboard resets the mode, clears any active filter, and rebuilds.
 func (m *Model) exitToDashboard() {
 	m.mode = modeDashboard
@@ -410,6 +409,7 @@ func (m *Model) exitToDashboard() {
 	m.clampCursor()
 }
 
+// clearFilter resets filter state and blurs the input.
 func (m *Model) clearFilter() {
 	m.filter.Active = false
 	m.filter.Text = ""

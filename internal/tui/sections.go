@@ -19,8 +19,8 @@ func lipglossStyleFunc(text string, color string) string {
 // cursor is the global flat cursor index, sectionStart is the flat index of the
 // first task in this section. hiddenCount is the number of @hidden tasks stripped;
 // when > 0 a ◌ icon is shown. When showHidden is true and the section contains
-// @hidden tasks, a ◉ icon is shown instead. totalCount overrides the header count
-// (use 0 to default to len(tasks)).
+// @hidden tasks, a ◉ icon is shown instead. If totalCount is provided and > 0,
+// it overrides the header count (used when tasks is a windowed slice).
 func (m Model) renderSection(title string, tasks []model.Task, color string, sectionStart int, hiddenCount int, totalCount ...int) string {
 	if len(tasks) == 0 {
 		return ""

@@ -190,6 +190,8 @@ func applyDefaults(raw *rawConfig) (*Config, error) {
 			return nil, fmt.Errorf("week_start_day must be 0-6 (Sunday-Saturday), got %d", *raw.WeekStartDay)
 		}
 		cfg.WeekStartDay = *raw.WeekStartDay
+	} else {
+		cfg.WeekStartDay = 0
 	}
 
 	// RecentlyCompletedDays: default to 7
