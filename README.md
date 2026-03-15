@@ -377,6 +377,8 @@ When you press `Enter` on a task, the configured editor opens the file at the ta
 ## Project Structure
 
 ```
+CHANGELOG.md                   Release history
+docs/query-dsl.md              Query DSL reference
 cmd/pike/main.go               CLI entrypoint and flag parsing
 internal/
   model/task.go                Task, Tag, and TaskState types
@@ -388,19 +390,19 @@ internal/
     parser.go                  Recursive-descent parser
     eval.go                    AST evaluator
   sort/sort.go                 Task sorting (6 orders) and pin partitioning
-  toggle/toggle.go             Task completion toggling (file writes)
+  toggle/toggle.go             Task completion toggling (atomic file writes)
   scanner/scanner.go           File walker with mtime-based caching
   filter/filter.go             Query + sort pipeline, view engine
   editor/editor.go             Editor command construction
-  render/render.go             Non-interactive stdout formatting
-  style/style.go               Tag coloring, link prettification, ANSI helpers
+  render/render.go             Non-interactive stdout and JSON formatting
+  style/style.go               Tag coloring, link prettification, task markers
   tui/
     model.go                   Bubbletea Model struct, Init, Update
     keys.go                    Key handlers and mode transitions
     views.go                   View rendering (dashboard, all-tasks, tag search)
     tasks.go                   Task filtering, sections, cursor, counting
     sections.go                Section rendering with borders
-    styles.go                  Lipgloss style helpers
+    styles.go                  Lipgloss style helpers and caches
     keymap.go                  Key bindings
     summary.go                 Summary overlay
 testdata/                      Golden file test fixtures and expected outputs
