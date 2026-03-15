@@ -449,11 +449,34 @@ func TestWindowSizeMsg(t *testing.T) {
 func TestViewRendersWithSummary(t *testing.T) {
 	m := testModel(testTasks(), testViews())
 	m.showSummary = true
+	m.version = "v1.2.3"
 	m.width = 80
 
 	view := m.View()
+
+	// Task counts
 	if !strings.Contains(view, "Open tasks") {
 		t.Error("expected summary to contain 'Open tasks'")
+	}
+
+	// Version header
+	if !strings.Contains(view, "v1.2.3") {
+		t.Error("expected summary to contain version")
+	}
+	if !strings.Contains(view, "pike") {
+		t.Error("expected summary to contain 'pike'")
+	}
+
+	// Description
+	if !strings.Contains(view, "terminal task dashboard") {
+		t.Error("expected summary to contain description")
+	}
+
+	// Keybindings
+	for _, key := range []string{"Enter", "Tab", "Shift+Tab"} {
+		if !strings.Contains(view, key) {
+			t.Errorf("expected summary to contain keybinding %q", key)
+		}
 	}
 }
 

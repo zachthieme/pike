@@ -244,6 +244,7 @@ func runTUI(_ io.Writer, cfg *config.Config, tasks []model.Task, sc *scanner.Sca
 		return config.Load(configPath)
 	}
 	m := tui.NewModel(cfg, tasks, sc.Refresh, configReload)
+	m.SetVersion(version)
 
 	// If --view flag is set, find and focus that section.
 	if viewFlag != "" {

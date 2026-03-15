@@ -36,6 +36,12 @@ const (
 	filterQuery
 )
 
+// filterPrompt maps each filter mode to its prompt string.
+var filterPrompt = map[filterMode]string{
+	filterSubstring: "/ ",
+	filterQuery:     "? ",
+}
+
 // Model is the main Bubbletea model for the tasks TUI.
 type Model struct {
 	config      *config.Config
@@ -63,6 +69,7 @@ type Model struct {
 	editorCmd   string
 	tagColors   map[string]string
 	keys        KeyMap
+	version     string
 	now         func() time.Time // injectable for testing
 }
 
@@ -94,6 +101,11 @@ func NewModel(cfg *config.Config, tasks []model.Task, scanFunc func() ([]model.T
 	m.clampCursor()
 
 	return m
+}
+
+// SetVersion sets the version string for display in the summary overlay.
+func (m *Model) SetVersion(v string) {
+	m.version = v
 }
 
 // SetFocusedView sets the focused view by section title and rebuilds sections.

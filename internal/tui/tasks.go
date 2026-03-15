@@ -187,50 +187,71 @@ func (m *Model) pageScroll(direction int) {
 	m.clampCursor()
 }
 
+// countFlatTasks returns the total number of tasks across displayed sections.
+func (m Model) countFlatTasks() int {
+	n := 0
+	for _, sec := range m.displaySections() {
+		n += len(sec.Tasks)
+	}
+	return n
+}
+
 // clampCursor ensures cursor is within valid bounds.
 func (m *Model) clampCursor() {
-	flatTasks := m.flatTasks()
-	if len(flatTasks) == 0 {
+	n := m.countFlatTasks()
+	if n == 0 {
 		m.cursor = 0
 		return
 	}
-	if m.cursor >= len(flatTasks) {
-		m.cursor = len(flatTasks) - 1
+	if m.cursor >= n {
+		m.cursor = n - 1
 	}
 	if m.cursor < 0 {
 		m.cursor = 0
 	}
 }
 
-// jumpToNextSection moves the cursor to the first task of the next non-empty section.
-func (m *Model) jumpToNextSection() {
-	sections := m.displaySections()
-	if len(sections) == 0 {
-		return
+// cursorDown moves the cursor down one position if possible.
+func (m *Model) cursorDown() {
+	n := m.countFlatTasks()
+	if n > 0 && m.cursor < n-1 {
+		m.cursor++
 	}
+}
 
-	// Find which section the cursor is currently in.
+// cursorUp moves the cursor up one position if possible.
+func (m *Model) cursorUp() {
+	if m.cursor > 0 {
+		m.cursor--
+	}
+}
+
+// cursorSection returns the index of the section the cursor is currently in,
+// or -1 if no section contains the cursor.
+func (m Model) cursorSection() int {
 	flatIdx := 0
-	currentSection := -1
-	for i, sec := range sections {
+	for i, sec := range m.displaySections() {
 		if len(sec.Tasks) == 0 {
 			continue
 		}
-		sectionEnd := flatIdx + len(sec.Tasks)
-		if m.cursor >= flatIdx && m.cursor < sectionEnd {
-			currentSection = i
-			break
+		if m.cursor >= flatIdx && m.cursor < flatIdx+len(sec.Tasks) {
+			return i
 		}
 		flatIdx += len(sec.Tasks)
 	}
+	return -1
+}
 
-	// Find the next non-empty section.
-	flatIdx = 0
+// jumpToNextSection moves the cursor to the first task of the next non-empty section.
+func (m *Model) jumpToNextSection() {
+	sections := m.displaySections()
+	current := m.cursorSection()
+	flatIdx := 0
 	for i, sec := range sections {
 		if len(sec.Tasks) == 0 {
 			continue
 		}
-		if i > currentSection {
+		if i > current {
 			m.cursor = flatIdx
 			return
 		}
@@ -240,40 +261,19 @@ func (m *Model) jumpToNextSection() {
 
 // jumpToPrevSection moves the cursor to the first task of the previous non-empty section.
 func (m *Model) jumpToPrevSection() {
-	sections := m.displaySections()
-	if len(sections) == 0 {
-		return
-	}
-
-	// Find which section the cursor is currently in.
+	current := m.cursorSection()
 	flatIdx := 0
-	currentSection := -1
-	for i, sec := range sections {
-		if len(sec.Tasks) == 0 {
-			continue
-		}
-		sectionEnd := flatIdx + len(sec.Tasks)
-		if m.cursor >= flatIdx && m.cursor < sectionEnd {
-			currentSection = i
-			break
-		}
-		flatIdx += len(sec.Tasks)
-	}
-
-	// Find the previous non-empty section.
-	flatIdx = 0
 	prevStart := -1
-	for i, sec := range sections {
+	for i, sec := range m.displaySections() {
 		if len(sec.Tasks) == 0 {
 			continue
 		}
-		if i >= currentSection {
+		if i >= current {
 			break
 		}
 		prevStart = flatIdx
 		flatIdx += len(sec.Tasks)
 	}
-
 	if prevStart >= 0 {
 		m.cursor = prevStart
 	}
@@ -388,6 +388,14 @@ func (m Model) countCompletedThisWeek() int {
 	return count
 }
 
+// setFilterMode sets the filter mode, updates the prompt, and focuses the input.
+func (m *Model) setFilterMode(mode filterMode) tea.Cmd {
+	m.filtering = true
+	m.filterMode = mode
+	m.filterInput.Prompt = filterPrompt[mode]
+	return m.filterInput.Focus()
+}
+
 // clearFilter resets filter state and blurs the input.
 func (m *Model) clearFilter() {
 	m.filtering = false
@@ -395,7 +403,7 @@ func (m *Model) clearFilter() {
 	m.filterMode = filterSubstring
 	m.showAll = false
 	m.filterInput.SetValue("")
-	m.filterInput.Prompt = "/ "
+	m.filterInput.Prompt = filterPrompt[filterSubstring]
 	m.filterInput.Placeholder = "type to filter..."
 	m.filterInput.Blur()
 }
@@ -410,7 +418,7 @@ func (m *Model) enterAllTasksMode(showAll bool, initialFilter string) tea.Cmd {
 	m.filterInput.CursorEnd()
 	m.filterText = initialFilter
 	m.filterMode = filterSubstring
-	m.filterInput.Prompt = "/ "
+	m.filterInput.Prompt = filterPrompt[filterSubstring]
 	m.filterInput.Placeholder = "search tasks..."
 	m.cursor = 0
 	m.rebuildSections()
@@ -427,7 +435,7 @@ func (m *Model) enterTagSearchMode() tea.Cmd {
 	m.filterInput.SetValue("")
 	m.filterText = ""
 	m.filterMode = filterSubstring
-	m.filterInput.Prompt = "/ "
+	m.filterInput.Prompt = filterPrompt[filterSubstring]
 	m.filterInput.Placeholder = "search tags..."
 	m.tagCursor = 0
 	return m.filterInput.Focus()
@@ -442,7 +450,7 @@ func (m *Model) enterRecentlyCompletedMode() tea.Cmd {
 	m.filterInput.SetValue(queryStr)
 	m.filterText = queryStr
 	m.filterMode = filterQuery
-	m.filterInput.Prompt = "? "
+	m.filterInput.Prompt = filterPrompt[filterQuery]
 	m.filterInput.Placeholder = "type to filter..."
 	m.cursor = 0
 	m.rebuildSections()

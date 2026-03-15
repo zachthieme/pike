@@ -63,15 +63,10 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 			return m.openEditor()
 		case msg.Type == tea.KeyDown || msg.Type == tea.KeyCtrlN:
-			flatTasks := m.flatTasks()
-			if len(flatTasks) > 0 && m.cursor < len(flatTasks)-1 {
-				m.cursor++
-			}
+			m.cursorDown()
 			return m, nil
 		case msg.Type == tea.KeyUp || msg.Type == tea.KeyCtrlP:
-			if m.cursor > 0 {
-				m.cursor--
-			}
+			m.cursorUp()
 			return m, nil
 		case msg.Type == tea.KeyCtrlD:
 			m.pageScroll(1)
@@ -89,37 +84,21 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			case key.Matches(msg, m.keys.ToggleHiddenTag):
 				return m.toggleHiddenTag()
 			case key.Matches(msg, m.keys.Up):
-				if m.cursor > 0 {
-					m.cursor--
-				}
+				m.cursorUp()
 				return m, nil
 			case key.Matches(msg, m.keys.Down):
-				flatTasks := m.flatTasks()
-				if len(flatTasks) > 0 && m.cursor < len(flatTasks)-1 {
-					m.cursor++
-				}
+				m.cursorDown()
 				return m, nil
 			case key.Matches(msg, m.keys.Top):
 				m.cursor = 0
 				return m, nil
 			case key.Matches(msg, m.keys.Bottom):
-				flatTasks := m.flatTasks()
-				if len(flatTasks) > 0 {
-					m.cursor = len(flatTasks) - 1
-				}
+				m.cursor = max(0, m.countFlatTasks()-1)
 				return m, nil
 			case key.Matches(msg, m.keys.Filter):
-				// / returns focus to query bar and switches to substring mode.
-				m.filterMode = filterSubstring
-				m.filterInput.Prompt = "/ "
-				cmd := m.filterInput.Focus()
-				return m, cmd
+				return m, m.setFilterMode(filterSubstring)
 			case key.Matches(msg, m.keys.Query):
-				// ? returns focus to query bar and switches to query mode.
-				m.filterMode = filterQuery
-				m.filterInput.Prompt = "? "
-				cmd := m.filterInput.Focus()
-				return m, cmd
+				return m, m.setFilterMode(filterQuery)
 			case key.Matches(msg, m.keys.PrevSection):
 				m.jumpToPrevSection()
 				return m, nil
@@ -163,16 +142,11 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case key.Matches(msg, m.keys.Down):
-		flatTasks := m.flatTasks()
-		if len(flatTasks) > 0 && m.cursor < len(flatTasks)-1 {
-			m.cursor++
-		}
+		m.cursorDown()
 		return m, nil
 
 	case key.Matches(msg, m.keys.Up):
-		if m.cursor > 0 {
-			m.cursor--
-		}
+		m.cursorUp()
 		return m, nil
 
 	case key.Matches(msg, m.keys.Top):
@@ -180,10 +154,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case key.Matches(msg, m.keys.Bottom):
-		flatTasks := m.flatTasks()
-		if len(flatTasks) > 0 {
-			m.cursor = len(flatTasks) - 1
-		}
+		m.cursor = max(0, m.countFlatTasks()-1)
 		return m, nil
 
 	case msg.Type == tea.KeyCtrlD:
@@ -207,18 +178,10 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case key.Matches(msg, m.keys.Filter):
-		m.filtering = true
-		m.filterMode = filterSubstring
-		m.filterInput.Prompt = "/ "
-		cmd := m.filterInput.Focus()
-		return m, cmd
+		return m, m.setFilterMode(filterSubstring)
 
 	case key.Matches(msg, m.keys.Query):
-		m.filtering = true
-		m.filterMode = filterQuery
-		m.filterInput.Prompt = "? "
-		cmd := m.filterInput.Focus()
-		return m, cmd
+		return m, m.setFilterMode(filterQuery)
 
 	case key.Matches(msg, m.keys.AllTasks):
 		focusCmd := m.enterAllTasksMode(false, "")

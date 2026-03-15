@@ -69,7 +69,7 @@ func (m Model) viewSummary() string {
 	dueThisWeek := m.countDueThisWeek()
 	completedThisWeek := m.countCompletedThisWeek()
 
-	return RenderSummary(open, overdue, dueThisWeek, completedThisWeek, m.width)
+	return RenderSummary(m.version, open, overdue, dueThisWeek, completedThisWeek, m.width)
 }
 
 // displaySections returns the sections to display based on focus mode.
