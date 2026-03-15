@@ -1,0 +1,28 @@
+version: 2
+
+builds:
+  - main: ./cmd/pike
+    binary: pike
+    ldflags:
+      - -s -w -X main.version={{ .Tag }}
+    goos:
+      - linux
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+
+archives:
+  - format: tar.gz
+    name_template: "pike_{{ .Os }}_{{ .Arch }}"
+    files:
+      - none*
+
+checksum:
+  name_template: "pike_checksums.txt"
+  algorithm: sha256
+
+release:
+  github:
+    owner: zachthieme
+    name: pike
