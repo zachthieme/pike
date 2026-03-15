@@ -31,6 +31,29 @@ The biggest day. Started with a major refactor — extracted a shared `style` pa
 - **Simplification pass** — extracted `cursorUp`/`cursorDown`/`cursorSection`/`countFlatTasks` helpers, centralized filter mode activation via `setFilterMode` and `filterPrompt` map
 - **Summary overlay** — full-screen layout with version, README description, and keybindings organized into sections (Navigation, Actions, Search & Filter, Other)
 
+### v1.1.1 — March 15: CLI, DSL & Bubbletea Best Practices
+
+**New features:**
+- `tomorrow` and `yesterday` DSL date keywords (`@due < tomorrow`)
+- `--count` flag: print result count only (`pike -q "open" --count`)
+- `--json` flag: output results as JSON array (`pike -q "open" --json`)
+- `-v` reassigned to `--version` (Unix convention), `-w` for `--view`
+- Context-aware footer bars: dashboard shows `○ 12/42  ● 5 wk`, other views show result count
+- `week_start_day` config option (0=Sunday through 6=Saturday)
+
+**Bubbletea best practices:**
+- Async I/O: file toggles and scan/config reload wrapped in `tea.Cmd` (non-blocking Update)
+- Cached lipgloss styles at package level with `sync.Map` for parameterized styles
+- All key bindings routed through KeyMap (`PageDown`/`PageUp`, `Ctrl+N`/`Ctrl+P` added)
+- No more raw `msg.Type` checks in key handlers
+
+**Fixes:**
+- Dashboard footer counts only open tasks in displayed sections (was mixing open + completed)
+- `completedThisWeek` gated on `t.State == model.Completed`
+- `viewFocused` shows QueryErr even when result count is 0
+- Config-only scan result now triggers section rebuild (prevents stale display)
+- Hidden icon changed to `○`/`◉` toggle pair for better visibility (default color 245)
+
 ### v1.1.0 — March 15: Architecture & Release Automation
 
 **Architecture improvements (12 changes):**
@@ -48,8 +71,8 @@ The biggest day. Started with a major refactor — extracted a shared `style` pa
 - Shared `style.TaskMarker` for consistent markers across render paths
 
 **Visibility icons:**
-- `◌`/`◉` icons replace `🔒` on section headers for hidden task visibility
-- `◌` (configurable color) shown when hidden tasks are concealed
+- `○`/`◉` icons replace `🔒` on section headers for hidden task visibility
+- `○` (configurable color) shown when hidden tasks are concealed
 - `◉` (configurable color) shown when hidden tasks are revealed via `h`
 - New config options: `hidden_color` and `visible_color`
 - `h` key now works when filter results are focused
