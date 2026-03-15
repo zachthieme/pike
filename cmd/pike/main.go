@@ -149,7 +149,14 @@ func run(args []string, stdout, stderr io.Writer) error {
 	case summaryFlag:
 		return runSummary(stdout, tasks, now, noColor)
 	case queryFlag != "":
-		return runQuery(stdout, tasks, queryFlag, sortFlag, cfg.TagColors, now, noColor, countFlag, jsonFlag)
+		return runQuery(stdout, tasks, queryFlag, queryOpts{
+			sortOrder:  sortFlag,
+			tagColors:  cfg.TagColors,
+			now:        now,
+			noColor:    noColor,
+			count:      countFlag,
+			jsonOutput: jsonFlag,
+		})
 	default:
 		return runTUI(stdout, cfg, tasks, sc, viewFlag, configFlag)
 	}
@@ -238,24 +245,34 @@ func runSummary(w io.Writer, tasks []model.Task, now time.Time, noColor bool) er
 	return nil
 }
 
-func runQuery(w io.Writer, tasks []model.Task, queryStr, sortOrder string, tagColors map[string]string, now time.Time, noColor bool, count bool, jsonOutput bool) error {
-	results, err := filter.Apply(tasks, queryStr, sortOrder, now)
+// queryOpts groups output-mode options for runQuery.
+type queryOpts struct {
+	sortOrder  string
+	tagColors  map[string]string
+	now        time.Time
+	noColor    bool
+	count      bool
+	jsonOutput bool
+}
+
+func runQuery(w io.Writer, tasks []model.Task, queryStr string, opts queryOpts) error {
+	results, err := filter.Apply(tasks, queryStr, opts.sortOrder, opts.now)
 	if err != nil {
 		return fmt.Errorf("query: %w", err)
 	}
 
-	if count {
+	if opts.count {
 		fmt.Fprintln(w, len(results))
 		return nil
 	}
 
-	if jsonOutput {
+	if opts.jsonOutput {
 		return render.FormatJSON(w, results)
 	}
 
 	var lines []string
 	for _, task := range results {
-		lines = append(lines, render.FormatTask(task, tagColors, noColor))
+		lines = append(lines, render.FormatTask(task, opts.tagColors, opts.noColor))
 	}
 	if len(lines) > 0 {
 		fmt.Fprintln(w, strings.Join(lines, "\n"))

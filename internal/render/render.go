@@ -48,11 +48,7 @@ func FormatJSON(w io.Writer, tasks []model.Task) error {
 			HasCheckbox: t.HasCheckbox,
 		}
 		for _, tag := range t.Tags {
-			if tag.Value != "" {
-				jt.Tags = append(jt.Tags, tag.Name+"("+tag.Value+")")
-			} else {
-				jt.Tags = append(jt.Tags, tag.Name)
-			}
+			jt.Tags = append(jt.Tags, style.TagToken(tag))
 		}
 		if t.Due != nil {
 			jt.Due = t.Due.Format("2006-01-02")
