@@ -42,8 +42,8 @@ var filterPrompt = map[filterMode]string{
 	filterQuery:     "? ",
 }
 
-// FilterState encapsulates all filter-related state.
-type FilterState struct {
+// filterState encapsulates all filter-related state.
+type filterState struct {
 	Active   bool
 	Text     string
 	Mode     filterMode
@@ -60,11 +60,12 @@ type Model struct {
 	// visibleSections() doesn't have to recompute every query on each keypress.
 	unfilteredSections []filter.ViewResult
 	hiddenCounts       []int        // per-section count of @hidden tasks that were removed
+	openCount          int          // cached count of open checkbox tasks, updated on rebuild
 	cursor             int          // index into flat task list across all sections
 	focusedView        string       // "" = dashboard, otherwise title of focused section
 	viewLocked         bool         // when true, block mode-switching keys and prevent unfocusing (set via --view flag)
 	showSummary        bool
-	filter             FilterState
+	filter             filterState
 	mode               viewMode
 	tagList            []string // unique tags for tag search mode
 	tagCursor          int      // cursor in tag list
@@ -95,7 +96,7 @@ func NewModel(cfg *config.Config, tasks []model.Task, scanFunc func() ([]model.T
 		config:      cfg,
 		allTasks:    tasks,
 		focusedView: "",
-		filter:      FilterState{Input: ti},
+		filter:      filterState{Input: ti},
 		scanFunc:    scanFunc,
 		editorCmd:   cfg.Editor,
 		tagColors:   cfg.TagColors,

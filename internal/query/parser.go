@@ -168,6 +168,9 @@ func (p *parser) parseTagOrDateCmp() (Node, error) {
 		}
 		opTok := p.advance() // consume the operator
 		op := opTok.Value
+		if op == "==" {
+			op = "=" // normalize equality operator
+		}
 
 		// Parse the date value: today, today+Nd, today-Nd, or YYYY-MM-DD
 		dateTok := p.current()

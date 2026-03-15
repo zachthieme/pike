@@ -42,6 +42,14 @@ func (m *Model) rebuildSections() {
 		m.rebuildDashboard(now)
 	}
 
+	// Cache the open task count so View() doesn't rescan allTasks.
+	count := 0
+	for _, t := range m.allTasks {
+		if t.HasCheckbox && t.State == model.Open {
+			count++
+		}
+	}
+	m.openCount = count
 }
 
 // rebuildSingleSection builds a single-section view from the given tasks,
@@ -100,29 +108,27 @@ func (m *Model) rebuildDashboard(now time.Time) {
 	m.applyHiddenFilter()
 }
 
-// applyHiddenFilter strips @hidden tasks from each section when showHidden is
-// false, and populates hiddenCounts so the renderer can show a lock icon.
+// applyHiddenFilter counts @hidden tasks per section and, when showHidden is
+// false, strips them from the section task lists. hiddenCounts is always
+// populated so the renderer can show visibility icons without rescanning.
 func (m *Model) applyHiddenFilter() {
 	m.hiddenCounts = make([]int, len(m.sections))
-	if m.showHidden {
-		return
-	}
 	for i, sec := range m.sections {
-		var kept []model.Task
 		hidden := 0
 		for _, t := range sec.Tasks {
 			if t.HasTag("hidden") {
 				hidden++
-			} else {
-				kept = append(kept, t)
 			}
 		}
-		if hidden > 0 {
-			if kept == nil {
-				kept = []model.Task{}
+		m.hiddenCounts[i] = hidden
+		if hidden > 0 && !m.showHidden {
+			kept := make([]model.Task, 0, len(sec.Tasks)-hidden)
+			for _, t := range sec.Tasks {
+				if !t.HasTag("hidden") {
+					kept = append(kept, t)
+				}
 			}
 			m.sections[i].Tasks = kept
-			m.hiddenCounts[i] = hidden
 		}
 	}
 }
@@ -352,23 +358,28 @@ func (m Model) hiddenCountFor(title string) int {
 	return 0
 }
 
-// countOpen returns the total count of open checkbox tasks.
+// countOpen returns the cached count of open checkbox tasks.
 func (m Model) countOpen() int {
-	count := 0
-	for _, t := range m.allTasks {
-		if t.HasCheckbox && t.State == model.Open {
-			count++
-		}
-	}
-	return count
+	return m.openCount
 }
 
 
 // setFilterMode sets the filter mode, updates the prompt, and focuses the input.
 func (m *Model) setFilterMode(mode filterMode) tea.Cmd {
+	return m.setupFilter(mode, "", "type to filter...")
+}
+
+// setupFilter configures the filter with a mode, initial value, and placeholder, then focuses the input.
+func (m *Model) setupFilter(mode filterMode, value, placeholder string) tea.Cmd {
 	m.filter.Active = true
 	m.filter.Mode = mode
+	m.filter.Input.SetValue(value)
+	if value != "" {
+		m.filter.Input.CursorEnd()
+	}
+	m.filter.Text = value
 	m.filter.Input.Prompt = filterPrompt[mode]
+	m.filter.Input.Placeholder = placeholder
 	return m.filter.Input.Focus()
 }
 
@@ -397,17 +408,11 @@ func (m *Model) clearFilter() {
 func (m *Model) enterAllTasksMode(showAll bool, initialFilter string) tea.Cmd {
 	m.mode = modeAllTasks
 	m.showAll = showAll
-	m.filter.Active = true
-	m.filter.Input.SetValue(initialFilter)
-	m.filter.Input.CursorEnd()
-	m.filter.Text = initialFilter
-	m.filter.Mode = filterSubstring
-	m.filter.Input.Prompt = filterPrompt[filterSubstring]
-	m.filter.Input.Placeholder = "search tasks..."
 	m.cursor = 0
+	cmd := m.setupFilter(filterSubstring, initialFilter, "search tasks...")
 	m.rebuildSections()
 	m.clampCursor()
-	return m.filter.Input.Focus()
+	return cmd
 }
 
 // enterTagSearchMode switches to tag search mode with a focused filter input.
@@ -415,31 +420,19 @@ func (m *Model) enterTagSearchMode() tea.Cmd {
 	m.mode = modeTagSearch
 	m.showAll = false
 	m.buildTagList()
-	m.filter.Active = true
-	m.filter.Input.SetValue("")
-	m.filter.Text = ""
-	m.filter.Mode = filterSubstring
-	m.filter.Input.Prompt = filterPrompt[filterSubstring]
-	m.filter.Input.Placeholder = "search tags..."
 	m.tagCursor = 0
-	return m.filter.Input.Focus()
+	return m.setupFilter(filterSubstring, "", "search tags...")
 }
 
 // enterRecentlyCompletedMode switches to recently-completed view with a pre-filled query.
 func (m *Model) enterRecentlyCompletedMode() tea.Cmd {
 	queryStr := fmt.Sprintf("completed and @completed >= today-%dd", m.config.RecentlyCompletedDays)
-
 	m.mode = modeRecentlyCompleted
-	m.filter.Active = true
-	m.filter.Input.SetValue(queryStr)
-	m.filter.Text = queryStr
-	m.filter.Mode = filterQuery
-	m.filter.Input.Prompt = filterPrompt[filterQuery]
-	m.filter.Input.Placeholder = "type to filter..."
 	m.cursor = 0
+	cmd := m.setupFilter(filterQuery, queryStr, "type to filter...")
 	m.rebuildSections()
 	m.clampCursor()
-	return m.filter.Input.Focus()
+	return cmd
 }
 
 // resolveTagColor returns the configured color for a tag name, falling back to

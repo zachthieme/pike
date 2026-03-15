@@ -58,9 +58,11 @@ func (m Model) renderSection(title string, tasks []model.Task, color string, sec
 	headerLabel := fmt.Sprintf(" %s (%d) ", title, len(tasks))
 	hiddenIcon := ""
 	if hiddenCount > 0 && m.config != nil {
-		hiddenIcon = lipgloss.NewStyle().Foreground(resolveColor(m.config.HiddenColor)).Render("◌")
-	} else if m.showHidden && hasHiddenTasks(tasks) && m.config != nil {
-		hiddenIcon = lipgloss.NewStyle().Foreground(resolveColor(m.config.VisibleColor)).Render("◉")
+		if m.showHidden {
+			hiddenIcon = lipglossStyleFunc("◉", m.config.VisibleColor)
+		} else {
+			hiddenIcon = lipglossStyleFunc("◌", m.config.HiddenColor)
+		}
 	}
 	headerText := headerStyle.Render(headerLabel)
 	if hiddenIcon != "" {
@@ -94,14 +96,4 @@ func formatTaskLine(task model.Task, tagColors map[string]string, linkColor stri
 	}
 
 	return fmt.Sprintf("%s %s", marker, text)
-}
-
-// hasHiddenTasks returns true if any task in the slice has the @hidden tag.
-func hasHiddenTasks(tasks []model.Task) bool {
-	for _, t := range tasks {
-		if t.HasTag("hidden") {
-			return true
-		}
-	}
-	return false
 }

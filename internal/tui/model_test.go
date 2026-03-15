@@ -249,8 +249,7 @@ func TestSubstringFilterWithTags(t *testing.T) {
 	tasks := []model.Task{
 		taskWithTagSet(model.Task{Text: "Fix bug @delegated to bob", State: model.Open, File: "t.md", Line: 1,
 			Tags: []model.Tag{{Name: "delegated"}}, HasCheckbox: true}),
-		{Text: "Write docs", State: model.Open, File: "t.md", Line: 2, HasCheckbox: true,
-			TagSet: map[string]bool{}},
+		taskWithTagSet(model.Task{Text: "Write docs", State: model.Open, File: "t.md", Line: 2, HasCheckbox: true}),
 	}
 	views := []config.ViewConfig{
 		{Title: "All", Query: "open", Sort: "file", Color: "green"},

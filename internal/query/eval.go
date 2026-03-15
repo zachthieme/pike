@@ -97,7 +97,7 @@ func evalDateCmp(n *DateCmpNode, task *model.Task, now time.Time) bool {
 		return !td.After(target)
 	case ">=":
 		return !td.Before(target)
-	case "=", "==":
+	case "=":
 		return td.Equal(target)
 	default:
 		return false
