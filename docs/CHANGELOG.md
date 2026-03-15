@@ -31,6 +31,35 @@ The biggest day. Started with a major refactor — extracted a shared `style` pa
 - **Simplification pass** — extracted `cursorUp`/`cursorDown`/`cursorSection`/`countFlatTasks` helpers, centralized filter mode activation via `setFilterMode` and `filterPrompt` map
 - **Summary overlay** — full-screen layout with version, README description, and keybindings organized into sections (Navigation, Actions, Search & Filter, Other)
 
+### v1.1.0 — March 15: Architecture & Release Automation
+
+**Architecture improvements (12 changes):**
+- Atomic file writes in toggle (write-to-temp + rename) for crash safety
+- Per-file mutex locking to prevent concurrent mutation races
+- Typed sentinel errors (`ErrStaleData`, `ErrLineOutOfRange`) for programmatic handling
+- O(1) `HasTag` via `TagSet` map populated at parse time
+- `=` and `==` operators in query DSL for date equality (`@due = today`)
+- Deduplicated scanner walk logic into shared `walkMatching` helper
+- `context.Context` threading through scanner for cancellation support
+- Extracted `FilterState` struct from TUI Model
+- Cached unfiltered sections so `visibleSections()` avoids recomputing queries per keypress
+- Cached `openCount` in `rebuildSections` instead of rescanning on every `View()`
+- Config reload errors now surface in TUI footer
+- Shared `style.TaskMarker` for consistent markers across render paths
+
+**Visibility icons:**
+- `◌`/`◉` icons replace `🔒` on section headers for hidden task visibility
+- `◌` (configurable color) shown when hidden tasks are concealed
+- `◉` (configurable color) shown when hidden tasks are revealed via `h`
+- New config options: `hidden_color` and `visible_color`
+- `h` key now works when filter results are focused
+
+**Release automation:**
+- GitHub Actions workflow triggers on `v*` tag push
+- GoReleaser builds binaries for linux/darwin x amd64/arm64
+- Nix flake restructured: `pike-bin` (prebuilt, default) and `pike-src` (source build)
+- Workflow auto-updates flake.nix with version and binary hashes
+
 ### v1.0.1 — March 15: Bug Fixes
 
 - **`--view` lock** — Starting pike with `-v <view>` now locks the TUI to that view. Mode-switching keys (`a`/`t`/`s`/`c`/`1`-`9`) are disabled and Escape cannot unfocus the view.
@@ -51,7 +80,7 @@ The biggest day. Started with a major refactor — extracted a shared `style` pa
 - Boolean operators: `and`, `or`, `not`, parentheses
 - State filters: `open`, `completed`
 - Tag filters: `@tag`, with partial matching (`@du` matches `@due`)
-- Date comparisons: `@due < today`, `@completed >= today-7d`
+- Date comparisons: `@due < today`, `@completed >= today-7d`, `@due = today`
 - Relative dates: `today+3d`, `today-7d`
 - Regex: `/pattern/`
 - Text literals: `"multi word"`, `word`
@@ -100,7 +129,8 @@ The biggest day. Started with a major refactor — extracted a shared `style` pa
 
 ### Installation
 - `go install` / `go build`
-- Nix flake (`nix run github:zachthieme/pike`)
+- Nix flake: `nix run github:zachthieme/pike` (prebuilt binary) or `nix build .#pike-src` (from source)
+- GitHub Releases: prebuilt binaries for linux/darwin x amd64/arm64
 
 ---
 

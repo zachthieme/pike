@@ -15,11 +15,14 @@ Pike scans your notes directory for checkbox items (`- [ ]`/`- [x]`) and tagged 
 ### Nix
 
 ```bash
-# Run directly
+# Run directly (uses prebuilt binary)
 nix run github:zachthieme/pike
 
 # Install into profile
 nix profile install github:zachthieme/pike
+
+# Build from source instead
+nix build github:zachthieme/pike#pike-src
 ```
 
 ### Go
@@ -153,6 +156,10 @@ link_color: blue
 # Days to show in recently-completed view (default: 7)
 recently_completed_days: 7
 
+# Colors for hidden-task visibility icons (ANSI number, name, or hex)
+hidden_color: "238"     # ◌ icon when hidden tasks are concealed
+visible_color: "212"    # ◉ icon when hidden tasks are revealed
+
 # Map tag names to display colors
 # Supports named colors (red, green, yellow, blue, magenta, cyan, white)
 # and hex colors (#FF5733)
@@ -243,7 +250,7 @@ atom     = "open" | "completed" | @tag | @tag <op> <date> | /regex/ | "text" | w
 | `and` | Both sides must match |
 | `or` | Either side must match |
 | `not` | Negates the following expression |
-| `<`, `>`, `<=`, `>=` | Date comparisons |
+| `<`, `>`, `<=`, `>=`, `=` | Date comparisons (`==` is also accepted) |
 
 ### Date Values
 
@@ -266,6 +273,7 @@ open and not @risk                      # open, excluding risk
 /deploy/                                # regex matches "deploy"
 open and deploy                         # open tasks containing "deploy"
 open and "meeting notes"                # open tasks containing "meeting notes"
+open and @due = today                  # due exactly today
 ```
 
 ## Sort Orders
@@ -360,7 +368,7 @@ Press `t` to browse all tags found in your notes. Tags are displayed in a compac
 
 ### Hidden Tasks
 
-Tasks tagged `@hidden` are excluded from all views by default. Sections that contain hidden tasks display a 🔒 icon next to their title. Press `h` to toggle visibility — when enabled, hidden tasks appear normally and the lock icons disappear.
+Tasks tagged `@hidden` are excluded from all views by default. Sections that contain hidden tasks display a `◌` icon next to their title. Press `h` to toggle visibility — when enabled, hidden tasks appear normally and the icon changes to `◉`. Both icon colors are configurable via `hidden_color` and `visible_color` in config.
 
 This is useful for tasks you want to keep in your notes but don't need to see day-to-day (e.g., deferred items, low-priority backlog, sensitive tasks).
 
@@ -385,7 +393,7 @@ Tasks tagged `@pin` float to the top of their section, regardless of sort order.
 
 ## Display
 
-Section headers show the task count: `Today (3)`. When hidden tasks exist, a lock icon appears: `Today (3) 🔒`.
+Section headers show the task count: `Today (3)`. When hidden tasks exist, a visibility icon appears: `Today (3) ◌` (concealed) or `Today (3) ◉` (revealed via `h`).
 
 ### Task Markers
 
