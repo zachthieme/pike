@@ -60,7 +60,6 @@ type Model struct {
 	// visibleSections() doesn't have to recompute every query on each keypress.
 	unfilteredSections []filter.ViewResult
 	hiddenCounts       []int        // per-section count of @hidden tasks that were removed
-	cachedFlat         []model.Task // cached flat task list, invalidated with sections
 	cursor             int          // index into flat task list across all sections
 	focusedView        string       // "" = dashboard, otherwise title of focused section
 	viewLocked         bool         // when true, block mode-switching keys and prevent unfocusing (set via --view flag)

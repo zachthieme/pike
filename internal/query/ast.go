@@ -34,7 +34,7 @@ func (n *TagNode) nodeType() string { return "tag" }
 // If Literal is non-nil, it's a literal YYYY-MM-DD date and Days is ignored.
 type DateCmpNode struct {
 	Field   string     // "due" or "completed"
-	Op      string     // "<", ">", "<=", ">="
+	Op      string     // "<", ">", "<=", ">=", "=", "=="
 	Days    int        // relative to now
 	Literal *time.Time // if non-nil, use this instead of Days
 }

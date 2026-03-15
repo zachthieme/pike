@@ -42,12 +42,12 @@ func (m *Model) rebuildSections() {
 		m.rebuildDashboard(now)
 	}
 
-	m.invalidateFlatCache()
 }
 
 // rebuildSingleSection builds a single-section view from the given tasks,
 // applying the query filter and pin partitioning.
 func (m *Model) rebuildSingleSection(title, color string, tasks []model.Task, now time.Time) {
+	m.unfilteredSections = nil
 	if m.filter.Text != "" {
 		if m.filter.Mode == filterQuery {
 			filtered, err := applyDSLFilter(tasks, m.filter.Text, now)
@@ -170,26 +170,14 @@ func applyDSLFilter(tasks []model.Task, filterText string, now time.Time) ([]mod
 	return filtered, nil
 }
 
-// invalidateFlatCache clears the cached flat task list.
-func (m *Model) invalidateFlatCache() {
-	m.cachedFlat = nil
-}
-
-// flatTasks returns all tasks across displayed sections in order (cached).
+// flatTasks returns all tasks across displayed sections in order.
 func (m Model) flatTasks() []model.Task {
-	if m.cachedFlat != nil {
-		return m.cachedFlat
-	}
 	var tasks []model.Task
 	for _, sec := range m.displaySections() {
 		if len(sec.Tasks) > 0 {
 			tasks = append(tasks, sec.Tasks...)
 		}
 	}
-	// Note: we can't write to m.cachedFlat here because Model is a value receiver.
-	// The cache is populated in rebuildSections via invalidateFlatCache pattern.
-	// For value-receiver calls, this computes on-the-fly (still avoids redundant
-	// recomputation within a single Update cycle since rebuildSections is called once).
 	return tasks
 }
 
