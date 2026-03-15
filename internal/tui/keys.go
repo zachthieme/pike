@@ -21,6 +21,11 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if m.filtering {
 		switch {
 		case key.Matches(msg, m.keys.Escape):
+			// Recently completed is query-driven; escape always exits to dashboard.
+			if m.mode == modeRecentlyCompleted {
+				m.exitToDashboard()
+				return m, nil
+			}
 			// If query bar has content, clear it (regardless of focus).
 			if m.filterInput.Value() != "" {
 				m.filterInput.SetValue("")
@@ -29,7 +34,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 					m.filterInput.Focus()
 				}
 				// If we came from tag search, return there instead of showing empty results.
-				if m.showAll && m.mode != modeRecentlyCompleted {
+				if m.showAll {
 					focusCmd := m.enterTagSearchMode()
 					return m, focusCmd
 				}
@@ -39,7 +44,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 			// No query: exit filter mode and return to dashboard.
 			m.clearFilter()
-			if m.mode == modeAllTasks || m.mode == modeRecentlyCompleted {
+			if m.mode == modeAllTasks {
 				m.mode = modeDashboard
 			}
 			m.rebuildSections()
@@ -129,11 +134,8 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if m.showSummary {
 			m.showSummary = false
 		} else if m.mode != modeDashboard {
-			m.mode = modeDashboard
-			m.showAll = false
-			m.rebuildSections()
-			m.clampCursor()
-		} else if m.focusedView != "" {
+			m.exitToDashboard()
+		} else if m.focusedView != "" && !m.viewLocked {
 			m.focusedView = ""
 			m.rebuildSections()
 			m.clampCursor()
@@ -217,15 +219,17 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 
 	// Check focus section keys 1-9.
-	for i := 0; i < 9; i++ {
-		if key.Matches(msg, m.keys.FocusSection[i]) {
-			sections := m.visibleSections()
-			if i < len(sections) {
-				m.focusedView = sections[i].Title
-				m.rebuildSections()
-				m.cursor = 0
+	if !m.viewLocked {
+		for i := range 9 {
+			if key.Matches(msg, m.keys.FocusSection[i]) {
+				sections := m.visibleSections()
+				if i < len(sections) {
+					m.focusedView = sections[i].Title
+					m.rebuildSections()
+					m.cursor = 0
+				}
+				return m, nil
 			}
-			return m, nil
 		}
 	}
 
@@ -306,10 +310,7 @@ func (m Model) toggleHiddenTag() (tea.Model, tea.Cmd) {
 func (m Model) handleTagSearchKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch {
 	case key.Matches(msg, m.keys.Escape):
-		m.mode = modeDashboard
-		m.clearFilter()
-		m.rebuildSections()
-		m.clampCursor()
+		m.exitToDashboard()
 		return m, nil
 
 	case key.Matches(msg, m.keys.Quit):

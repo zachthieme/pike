@@ -358,6 +358,14 @@ func (m *Model) setFilterMode(mode filterMode) tea.Cmd {
 }
 
 // clearFilter resets filter state and blurs the input.
+// exitToDashboard resets the mode, clears any active filter, and rebuilds.
+func (m *Model) exitToDashboard() {
+	m.mode = modeDashboard
+	m.clearFilter()
+	m.rebuildSections()
+	m.clampCursor()
+}
+
 func (m *Model) clearFilter() {
 	m.filtering = false
 	m.filterText = ""

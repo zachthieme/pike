@@ -50,6 +50,7 @@ type Model struct {
 	hiddenCounts []int // per-section count of @hidden tasks that were removed
 	cursor       int   // index into flat task list across all sections
 	focusedView string // "" = dashboard, otherwise title of focused section
+	viewLocked  bool   // when true, block mode-switching keys and prevent unfocusing (set via --view flag)
 	showSummary bool
 	filterInput textinput.Model
 	filtering   bool
@@ -108,9 +109,18 @@ func (m *Model) SetVersion(v string) {
 	m.version = v
 }
 
-// SetFocusedView sets the focused view by section title and rebuilds sections.
+// SetFocusedView sets the focused view by section title, locks the view so
+// mode-switching keys (a/t/s/c/1-9) are disabled, and rebuilds sections.
 func (m *Model) SetFocusedView(title string) {
 	m.focusedView = title
+	m.viewLocked = true
+	m.keys.Summary.SetEnabled(false)
+	m.keys.AllTasks.SetEnabled(false)
+	m.keys.TagSearch.SetEnabled(false)
+	m.keys.RecentlyCompleted.SetEnabled(false)
+	for i := range m.keys.FocusSection {
+		m.keys.FocusSection[i].SetEnabled(false)
+	}
 	m.rebuildSections()
 	m.clampCursor()
 }
