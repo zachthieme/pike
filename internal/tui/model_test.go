@@ -282,14 +282,21 @@ func TestEscapeDismissesFilter(t *testing.T) {
 	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("test")})
 	m = updated.(Model)
 
-	// Escape should dismiss filter and clear text
+	// First Escape clears query text but stays in filter mode.
+	updated, _ = sendSpecialKey(m, tea.KeyEscape)
+	m = updated.(Model)
+	if !m.filtering {
+		t.Error("expected filtering to still be true after first Esc")
+	}
+	if m.filterText != "" {
+		t.Errorf("expected filterText to be empty, got %q", m.filterText)
+	}
+
+	// Second Escape exits filter mode entirely.
 	updated, _ = sendSpecialKey(m, tea.KeyEscape)
 	m2 := updated.(Model)
 	if m2.filtering {
-		t.Error("expected filtering to be false after Esc")
-	}
-	if m2.filterText != "" {
-		t.Errorf("expected filterText to be empty, got %q", m2.filterText)
+		t.Error("expected filtering to be false after second Esc")
 	}
 }
 
@@ -573,7 +580,11 @@ func TestTagSelectEscapeClearsShowAll(t *testing.T) {
 		t.Fatal("expected showAll after tag selection")
 	}
 
-	// Escape back to dashboard.
+	// First Escape clears query text (filter had @tag content).
+	updated, _ = sendSpecialKey(m, tea.KeyEscape)
+	m = updated.(Model)
+
+	// Second Escape exits filter mode and returns to dashboard.
 	updated, _ = sendSpecialKey(m, tea.KeyEscape)
 	m = updated.(Model)
 
@@ -775,6 +786,11 @@ func TestRecentlyCompletedEscapeReturnsToDashboard(t *testing.T) {
 	updated, _ := sendKey(m, "c")
 	m = updated.(Model)
 
+	// First Escape clears the pre-filled query.
+	updated, _ = sendSpecialKey(m, tea.KeyEscape)
+	m = updated.(Model)
+
+	// Second Escape exits filter mode and returns to dashboard.
 	updated, _ = sendSpecialKey(m, tea.KeyEscape)
 	m = updated.(Model)
 

@@ -26,6 +26,19 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				cmd := m.filterInput.Focus()
 				return m, cmd
 			}
+			// If query bar has content, clear it; otherwise exit filter mode.
+			if m.filterInput.Value() != "" {
+				m.filterInput.SetValue("")
+				m.filterText = ""
+				// If we came from tag search, return there instead of showing empty results.
+				if m.showAll && m.mode != modeRecentlyCompleted {
+					m.enterTagSearchMode()
+					return m, nil
+				}
+				m.rebuildSections()
+				m.clampCursor()
+				return m, nil
+			}
 			m.clearFilter()
 			if m.mode == modeAllTasks || m.mode == modeRecentlyCompleted {
 				m.mode = modeDashboard
@@ -43,6 +56,11 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 		case msg.Type == tea.KeyEnter:
+			if m.filterInput.Focused() {
+				// Submit query: move focus to results.
+				m.filterInput.Blur()
+				return m, nil
+			}
 			return m.openEditor()
 		case msg.Type == tea.KeyDown || msg.Type == tea.KeyCtrlN:
 			flatTasks := m.flatTasks()

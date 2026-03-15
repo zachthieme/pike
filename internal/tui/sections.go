@@ -47,7 +47,7 @@ func (m Model) renderSection(title string, tasks []model.Task, color string, sec
 	var lines []string
 	for i, task := range tasks {
 		flatIdx := sectionStart + i
-		selected := flatIdx == m.cursor
+		selected := flatIdx == m.cursor && !(m.filtering && m.filterInput.Focused())
 		line := formatTaskLine(task, m.tagColors, linkColor, selected)
 		lines = append(lines, line)
 	}
