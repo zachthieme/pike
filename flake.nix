@@ -15,13 +15,13 @@
         packages = rec {
           pike = pkgs.buildGoModule {
             pname = "pike";
-            version = "1.0.0";
+            version = "1.0.1";
 
             src = ./.;
 
             vendorHash = "sha256-tN+9O4Z1Gtm1AwHTgjM3jJNk4jAhdlb6oOwdaGYpM6o=";
 
-            ldflags = [ "-s" "-w" "-X main.version=v1.0.0" ];
+            ldflags = [ "-s" "-w" "-X main.version=v1.0.1" ];
 
             subPackages = [ "cmd/pike" ];
 
