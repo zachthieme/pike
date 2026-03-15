@@ -453,8 +453,8 @@ func TestLoadBytes_DefaultHiddenColor(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if cfg.HiddenColor != "238" {
-		t.Errorf("HiddenColor = %q, want %q", cfg.HiddenColor, "238")
+	if cfg.HiddenColor != "245" {
+		t.Errorf("HiddenColor = %q, want %q", cfg.HiddenColor, "245")
 	}
 }
 

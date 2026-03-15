@@ -174,7 +174,7 @@ func applyDefaults(raw *rawConfig) (*Config, error) {
 	if raw.HiddenColor != "" {
 		cfg.HiddenColor = raw.HiddenColor
 	} else {
-		cfg.HiddenColor = "238"
+		cfg.HiddenColor = "245"
 	}
 
 	// VisibleColor: default to "212" (pink)

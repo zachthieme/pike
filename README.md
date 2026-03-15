@@ -157,7 +157,7 @@ link_color: blue
 recently_completed_days: 7
 
 # Colors for hidden-task visibility icons (ANSI number, name, or hex)
-hidden_color: "238"     # ◌ icon when hidden tasks are concealed
+hidden_color: "245"     # ○ icon when hidden tasks are concealed
 visible_color: "212"    # ◉ icon when hidden tasks are revealed
 
 # Map tag names to display colors
@@ -371,7 +371,7 @@ Press `t` to browse all tags found in your notes. Tags are displayed in a compac
 
 ### Hidden Tasks
 
-Tasks tagged `@hidden` are excluded from all views by default. Sections that contain hidden tasks display a `◌` icon next to their title. Press `h` to toggle visibility — when enabled, hidden tasks appear normally and the icon changes to `◉`. Both icon colors are configurable via `hidden_color` and `visible_color` in config.
+Tasks tagged `@hidden` are excluded from all views by default. Sections that contain hidden tasks display a `○` icon next to their title. Press `h` to toggle visibility — when enabled, hidden tasks appear normally and the icon changes to `◉`. Both icon colors are configurable via `hidden_color` and `visible_color` in config.
 
 This is useful for tasks you want to keep in your notes but don't need to see day-to-day (e.g., deferred items, low-priority backlog, sensitive tasks).
 
