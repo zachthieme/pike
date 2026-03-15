@@ -218,7 +218,7 @@ views:
 
 ## Query DSL
 
-The query language filters tasks by state, tags, dates, and text patterns. Queries are used in view configs and the `--query` flag. See [QUERY_DSL.md](QUERY_DSL.md) for the full reference (grammar, operators, date expressions, sort orders).
+The query language filters tasks by state, tags, dates, and text patterns. Queries are used in view configs and the `--query` flag. See [docs/query-dsl.md](docs/query-dsl.md) for the full reference (grammar, operators, date expressions, sort orders).
 
 ```
 open and @due < today                   # overdue

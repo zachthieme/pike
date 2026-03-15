@@ -91,4 +91,4 @@ The biggest day. Started with a major refactor — extracted a shared `style` pa
 
 ---
 
-For feature reference, see [README.md](../README.md). For query DSL details, see [QUERY_DSL.md](../QUERY_DSL.md).
+For feature reference, see [README](README.md). For query DSL details, see [docs/query-dsl.md](docs/query-dsl.md).

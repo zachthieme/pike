@@ -64,7 +64,7 @@ Used in view configs (`sort` field) and the `--sort` CLI flag.
 
 ## Tag Format
 
-Tags follow the format `@name` or `@name(value)`. See [README.md](README.md#special-tags) for the full list of special tags (`@due`, `@completed`, `@hidden`, `@pin`).
+Tags follow the format `@name` or `@name(value)`. See [README](../README.md#special-tags) for the full list of special tags (`@due`, `@completed`, `@hidden`, `@pin`).
 
 ## Examples
 
