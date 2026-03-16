@@ -915,7 +915,7 @@ func TestRecentlyCompletedNoOpWhenAlreadyActive(t *testing.T) {
 	}
 }
 
-func TestQuitFromResultsFocused(t *testing.T) {
+func TestQuitFromResultsFocusedReturnsToDashboard(t *testing.T) {
 	m := testModel(testTasks(), testViews())
 
 	// Enter all-tasks mode (activates filter bar with input focused).
@@ -933,18 +933,18 @@ func TestQuitFromResultsFocused(t *testing.T) {
 		t.Fatal("expected filter bar active")
 	}
 
-	// Press q — should quit.
-	_, cmd := sendKey(m, "q")
-	if cmd == nil {
-		t.Fatal("expected non-nil cmd for quit")
+	// Press q — should return to dashboard, not quit.
+	updated, _ = sendKey(m, "q")
+	m = updated.(Model)
+	if m.mode != modeDashboard {
+		t.Errorf("expected modeDashboard after q from results, got %d", m.mode)
 	}
-	msg := cmd()
-	if _, ok := msg.(tea.QuitMsg); !ok {
-		t.Errorf("expected tea.QuitMsg from q with results focused, got %T", msg)
+	if m.filterBar.Active() {
+		t.Error("expected filter bar deactivated after q")
 	}
 }
 
-func TestQuitFromRecentlyCompletedResultsFocused(t *testing.T) {
+func TestQuitFromRecentlyCompletedResultsFocusedReturnsToDashboard(t *testing.T) {
 	m := testModel(testTasks(), testViews())
 
 	// Enter recently-completed mode.
@@ -955,14 +955,11 @@ func TestQuitFromRecentlyCompletedResultsFocused(t *testing.T) {
 	updated, _ = sendSpecialKey(m, tea.KeyTab)
 	m = updated.(Model)
 
-	// Press q — should quit.
-	_, cmd := sendKey(m, "q")
-	if cmd == nil {
-		t.Fatal("expected non-nil cmd for quit")
-	}
-	msg := cmd()
-	if _, ok := msg.(tea.QuitMsg); !ok {
-		t.Errorf("expected tea.QuitMsg from q in recently-completed results, got %T", msg)
+	// Press q — should return to dashboard, not quit.
+	updated, _ = sendKey(m, "q")
+	m = updated.(Model)
+	if m.mode != modeDashboard {
+		t.Errorf("expected modeDashboard after q from recently-completed, got %d", m.mode)
 	}
 }
 

@@ -80,7 +80,7 @@ func (t TagSearch) handleKey(msg tea.KeyMsg) (TagSearch, tea.Cmd) {
 		return t, func() tea.Msg { return TagSearchExitMsg{} }
 
 	case key.Matches(msg, km.Quit):
-		return t, tea.Quit
+		return t, func() tea.Msg { return TagSearchExitMsg{} }
 
 	case key.Matches(msg, km.NextSection) || key.Matches(msg, km.Down):
 		tags := t.filteredTags()

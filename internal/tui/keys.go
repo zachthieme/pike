@@ -58,7 +58,8 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.filterBar, cmd = m.filterBar.Update(msg)
 			return m.processFilterOutput(cmd)
 		case key.Matches(msg, m.keys.Quit):
-			return m, tea.Quit
+			m.exitToDashboard()
+			return m, nil
 		case key.Matches(msg, m.keys.Toggle):
 			return m.toggleTask()
 		case key.Matches(msg, m.keys.ToggleHiddenTag):

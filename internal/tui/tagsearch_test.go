@@ -85,16 +85,16 @@ func TestTagSearchEscapeEmitsExit(t *testing.T) {
 	}
 }
 
-// TestTagSearchQuitEmitsQuit verifies that pressing 'q' returns tea.QuitMsg.
-func TestTagSearchQuitEmitsQuit(t *testing.T) {
+// TestTagSearchQuitEmitsExit verifies that pressing 'q' exits tag search (returns to dashboard).
+func TestTagSearchQuitEmitsExit(t *testing.T) {
 	ts := NewTagSearch()
 	ts, _ = ts.Update(TagSearchActivateMsg{Tags: []string{"due"}})
 
 	_, cmd := ts.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'q'}})
 
 	msg := execCmd(cmd)
-	if _, ok := msg.(tea.QuitMsg); !ok {
-		t.Fatalf("expected tea.QuitMsg, got %T", msg)
+	if _, ok := msg.(TagSearchExitMsg); !ok {
+		t.Fatalf("expected TagSearchExitMsg, got %T", msg)
 	}
 }
 
