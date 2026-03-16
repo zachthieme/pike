@@ -41,3 +41,10 @@ type Task struct {
 func (t *Task) HasTag(name string) bool {
 	return t.TagSet[name]
 }
+
+// Warning represents a non-fatal issue found during parsing.
+type Warning struct {
+	File    string
+	Line    int
+	Message string
+}
