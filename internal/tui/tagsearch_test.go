@@ -194,5 +194,6 @@ func TestTagSearchEmptyTagList(t *testing.T) {
 	if view == "" {
 		t.Error("view should not be empty even with no tags")
 	}
-	ts, _ = ts.Update(tea.KeyMsg{Type: tea.KeyTab})
+	// Tab on empty list should not panic.
+	_, _ = ts.Update(tea.KeyMsg{Type: tea.KeyTab})
 }
