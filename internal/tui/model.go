@@ -7,19 +7,8 @@ import (
 	"pike/internal/filter"
 	"pike/internal/model"
 
-	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 )
-
-// filterState encapsulates all filter-related state.
-type filterState struct {
-	Active   bool
-	Text     string
-	Mode     filterMode
-	Input    textinput.Model
-	QueryErr error // DSL parse error shown when Mode is filterQuery
-}
 
 // Model is the main Bubbletea model for the tasks TUI.
 type Model struct {
@@ -36,7 +25,7 @@ type Model struct {
 	focusedView        string       // "" = dashboard, otherwise title of focused section
 	viewLocked         bool         // when true, block mode-switching keys and prevent unfocusing (set via --view flag)
 	showSummary        bool
-	filter             filterState
+	filterBar          FilterBar
 	mode               viewMode
 	tagList            []string // unique tags for tag search mode
 	tagCursor          int      // cursor in tag list
@@ -56,18 +45,11 @@ type Model struct {
 
 // NewModel creates a new TUI model with the given configuration and initial tasks.
 func NewModel(cfg *config.Config, tasks []model.Task, scanFunc func() ([]model.Task, error), configFunc ...func() (*config.Config, error)) Model {
-	ti := textinput.New()
-	ti.Placeholder = "type to filter..."
-	ti.CharLimit = 256
-	ti.Prompt = "/ "
-	ti.PromptStyle = BoldStyle()
-	ti.PlaceholderStyle = FaintStyle().Foreground(lipgloss.Color("7"))
-
 	m := Model{
 		config:      cfg,
 		allTasks:    tasks,
 		focusedView: "",
-		filter:      filterState{Input: ti},
+		filterBar:   NewFilterBar(),
 		scanFunc:    scanFunc,
 		editorCmd:   cfg.Editor,
 		tagColors:   cfg.TagColors,
@@ -152,6 +134,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return scanResultMsg{Config: cfg}
 		}
 		return m, tea.Batch(nextTick, scanCmd)
+
+	case FilterSetErrorMsg:
+		m.filterBar, _ = m.filterBar.Update(msg)
+		return m, nil
 
 	case scanResultMsg:
 		if msg.Err != nil {

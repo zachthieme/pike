@@ -16,7 +16,7 @@ import (
 
 // rebuildSections recomputes sections from allTasks, applying filter text.
 func (m *Model) rebuildSections() {
-	m.filter.QueryErr = nil
+	m.filterBar, _ = m.filterBar.Update(FilterSetErrorMsg{Err: nil})
 	now := m.nowFunc()
 
 	switch m.mode {
@@ -80,16 +80,16 @@ func (m Model) weekStartDay() int {
 // applying the query filter and pin partitioning.
 func (m *Model) rebuildSingleSection(title, color string, tasks []model.Task, now time.Time) {
 	m.unfilteredSections = nil
-	if m.filter.Text != "" {
-		if m.filter.Mode == filterQuery {
-			filtered, err := applyDSLFilter(tasks, m.filter.Text, now)
+	if m.filterBar.Text() != "" {
+		if m.filterBar.Mode() == filterQuery {
+			filtered, err := applyDSLFilter(tasks, m.filterBar.Text(), now)
 			if err != nil {
-				m.filter.QueryErr = err
+				m.filterBar, _ = m.filterBar.Update(FilterSetErrorMsg{Err: err})
 				return
 			}
 			tasks = filtered
 		} else {
-			tasks = applySubstringFilter(tasks, m.filter.Text)
+			tasks = applySubstringFilter(tasks, m.filterBar.Text())
 		}
 	}
 	tasks = tasksort.StablePartitionPinned(tasks)
@@ -108,18 +108,18 @@ func (m *Model) rebuildDashboard(now time.Time) {
 	// Cache the unfiltered results so visibleSections() can reuse them.
 	m.unfilteredSections = results
 
-	if m.filter.Text != "" {
+	if m.filterBar.Text() != "" {
 		for i := range results {
 			var filtered []model.Task
-			if m.filter.Mode == filterQuery {
+			if m.filterBar.Mode() == filterQuery {
 				var qErr error
-				filtered, qErr = applyDSLFilter(results[i].Tasks, m.filter.Text, now)
+				filtered, qErr = applyDSLFilter(results[i].Tasks, m.filterBar.Text(), now)
 				if qErr != nil {
-					m.filter.QueryErr = qErr
+					m.filterBar, _ = m.filterBar.Update(FilterSetErrorMsg{Err: qErr})
 					return
 				}
 			} else {
-				filtered = applySubstringFilter(results[i].Tasks, m.filter.Text)
+				filtered = applySubstringFilter(results[i].Tasks, m.filterBar.Text())
 			}
 			if filtered == nil {
 				filtered = []model.Task{}
@@ -358,11 +358,11 @@ func (m *Model) buildTagList() {
 
 // filteredTags returns the tag list filtered by current filter text.
 func (m Model) filteredTags() []string {
-	if m.filter.Text == "" {
+	if m.filterBar.Text() == "" {
 		return m.tagList
 	}
 	// Strip leading @ so users can type "@due" or "due" interchangeably.
-	lower := strings.ToLower(strings.TrimPrefix(m.filter.Text, "@"))
+	lower := strings.ToLower(strings.TrimPrefix(m.filterBar.Text(), "@"))
 	var result []string
 	for _, tag := range m.tagList {
 		if strings.Contains(strings.ToLower(tag), lower) {
@@ -382,43 +382,24 @@ func (m Model) hiddenCountFor(title string) int {
 	return 0
 }
 
-// setFilterMode sets the filter mode, updates the prompt, and focuses the input.
-func (m *Model) setFilterMode(mode filterMode) tea.Cmd {
-	return m.setupFilter(mode, "", "type to filter...")
-}
-
 // setupFilter configures the filter with a mode, initial value, and placeholder, then focuses the input.
 func (m *Model) setupFilter(mode filterMode, value, placeholder string) tea.Cmd {
-	m.filter.Active = true
-	m.filter.Mode = mode
-	m.filter.Input.SetValue(value)
-	if value != "" {
-		m.filter.Input.CursorEnd()
-	}
-	m.filter.Text = value
-	m.filter.Input.Prompt = filterPrompt[mode]
-	m.filter.Input.Placeholder = placeholder
-	return m.filter.Input.Focus()
+	var cmd tea.Cmd
+	m.filterBar, cmd = m.filterBar.Update(FilterActivateMsg{
+		Mode:         mode,
+		InitialValue: value,
+		Placeholder:  placeholder,
+	})
+	return cmd
 }
 
 // exitToDashboard resets the mode, clears any active filter, and rebuilds.
 func (m *Model) exitToDashboard() {
 	m.mode = modeDashboard
-	m.clearFilter()
+	m.filterBar, _ = m.filterBar.Update(FilterDeactivateMsg{})
+	m.showAll = false
 	m.rebuildSections()
 	m.clampCursor()
-}
-
-// clearFilter resets filter state and blurs the input.
-func (m *Model) clearFilter() {
-	m.filter.Active = false
-	m.filter.Text = ""
-	m.filter.Mode = filterSubstring
-	m.showAll = false
-	m.filter.Input.SetValue("")
-	m.filter.Input.Prompt = filterPrompt[filterSubstring]
-	m.filter.Input.Placeholder = "type to filter..."
-	m.filter.Input.Blur()
 }
 
 // enterAllTasksMode switches to all-tasks mode with a focused filter input.

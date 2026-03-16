@@ -12,60 +12,21 @@ import (
 )
 
 func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	// Tag search mode: navigate/filter tag list.
+	// Tag search mode: delegate all keys (unchanged for now).
 	if m.mode == modeTagSearch {
 		return m.handleTagSearchKey(msg)
 	}
 
-	// If filtering, handle keys based on whether the query bar or results have focus.
-	if m.filter.Active {
+	// Recently-completed: intercept Escape before FilterBar.
+	if m.mode == modeRecentlyCompleted && m.filterBar.Active() && key.Matches(msg, m.keys.Escape) {
+		m.exitToDashboard()
+		return m, nil
+	}
+
+	// FilterBar active + input focused: navigation keys move cursor,
+	// all other keys go to FilterBar.
+	if m.filterBar.Active() && m.filterBar.InputFocused() {
 		switch {
-		case key.Matches(msg, m.keys.Escape):
-			// Recently completed is query-driven; escape always exits to dashboard.
-			if m.mode == modeRecentlyCompleted {
-				m.exitToDashboard()
-				return m, nil
-			}
-			// If query bar has content, clear it (regardless of focus).
-			if m.filter.Input.Value() != "" {
-				m.filter.Input.SetValue("")
-				m.filter.Text = ""
-				if !m.filter.Input.Focused() {
-					m.filter.Input.Focus()
-				}
-				// If we came from tag search, return there instead of showing empty results.
-				if m.showAll {
-					focusCmd := m.enterTagSearchMode()
-					return m, focusCmd
-				}
-				m.rebuildSections()
-				m.clampCursor()
-				return m, nil
-			}
-			// No query: exit filter mode and return to dashboard.
-			m.clearFilter()
-			if m.mode == modeAllTasks {
-				m.mode = modeDashboard
-			}
-			m.rebuildSections()
-			m.clampCursor()
-			return m, nil
-		case key.Matches(msg, m.keys.NextSection):
-			// Tab: toggle focus between query bar and results.
-			if m.filter.Input.Focused() {
-				m.filter.Input.Blur()
-			} else {
-				cmd := m.filter.Input.Focus()
-				return m, cmd
-			}
-			return m, nil
-		case key.Matches(msg, m.keys.Enter):
-			if m.filter.Input.Focused() {
-				// Submit query: move focus to results.
-				m.filter.Input.Blur()
-				return m, nil
-			}
-			return m.openEditor()
 		case key.Matches(msg, m.keys.Down):
 			m.cursorDown()
 			return m, nil
@@ -79,57 +40,58 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.pageScroll(-1)
 			return m, tea.ClearScreen
 		}
-
-		// When results are focused, handle navigation and action keys directly.
-		if !m.filter.Input.Focused() {
-			switch {
-			case key.Matches(msg, m.keys.Toggle):
-				return m.toggleTask()
-			case key.Matches(msg, m.keys.ToggleHiddenTag):
-				return m.toggleHiddenTag()
-			case key.Matches(msg, m.keys.ToggleHidden):
-				m.showHidden = !m.showHidden
-				m.rebuildSections()
-				m.clampCursor()
-				return m, nil
-			case key.Matches(msg, m.keys.Up):
-				m.cursorUp()
-				return m, nil
-			case key.Matches(msg, m.keys.Down):
-				m.cursorDown()
-				return m, nil
-			case key.Matches(msg, m.keys.Top):
-				m.cursor = 0
-				return m, nil
-			case key.Matches(msg, m.keys.Bottom):
-				m.cursor = max(0, m.countFlatTasks()-1)
-				return m, nil
-			case key.Matches(msg, m.keys.Filter):
-				return m, m.setFilterMode(filterSubstring)
-			case key.Matches(msg, m.keys.Query):
-				return m, m.setFilterMode(filterQuery)
-			case key.Matches(msg, m.keys.PrevSection):
-				m.jumpToPrevSection()
-				return m, nil
-			}
-			// Ignore other keys when results are focused (don't type into input).
-			return m, nil
-		}
-
-		// Query bar is focused — route to text input.
 		var cmd tea.Cmd
-		m.filter.Input, cmd = m.filter.Input.Update(msg)
-		m.filter.Text = m.filter.Input.Value()
-		// If we came from tag search and filter is now empty, return to tag search.
-		if m.showAll && m.filter.Text == "" && m.mode != modeRecentlyCompleted {
-			focusCmd := m.enterTagSearchMode()
-			return m, tea.Batch(cmd, focusCmd)
-		}
-		m.rebuildSections()
-		m.clampCursor()
-		return m, cmd
+		m.filterBar, cmd = m.filterBar.Update(msg)
+		return m.processFilterCmd(cmd)
 	}
 
+	// FilterBar active + results focused: only certain keys to FilterBar.
+	if m.filterBar.Active() {
+		switch {
+		case key.Matches(msg, m.keys.Escape), key.Matches(msg, m.keys.NextSection),
+			key.Matches(msg, m.keys.Filter), key.Matches(msg, m.keys.Query):
+			var cmd tea.Cmd
+			m.filterBar, cmd = m.filterBar.Update(msg)
+			return m.processFilterCmd(cmd)
+		case key.Matches(msg, m.keys.Quit):
+			return m, tea.Quit
+		case key.Matches(msg, m.keys.Toggle):
+			return m.toggleTask()
+		case key.Matches(msg, m.keys.ToggleHiddenTag):
+			return m.toggleHiddenTag()
+		case key.Matches(msg, m.keys.ToggleHidden):
+			m.showHidden = !m.showHidden
+			m.rebuildSections()
+			m.clampCursor()
+			return m, nil
+		case key.Matches(msg, m.keys.Down):
+			m.cursorDown()
+			return m, nil
+		case key.Matches(msg, m.keys.Up):
+			m.cursorUp()
+			return m, nil
+		case key.Matches(msg, m.keys.Top):
+			m.cursor = 0
+			return m, nil
+		case key.Matches(msg, m.keys.Bottom):
+			m.cursor = max(0, m.countFlatTasks()-1)
+			return m, nil
+		case key.Matches(msg, m.keys.PageDown):
+			m.pageScroll(1)
+			return m, tea.ClearScreen
+		case key.Matches(msg, m.keys.PageUp):
+			m.pageScroll(-1)
+			return m, tea.ClearScreen
+		case key.Matches(msg, m.keys.PrevSection):
+			m.jumpToPrevSection()
+			return m, nil
+		case key.Matches(msg, m.keys.Enter):
+			return m.openEditor()
+		}
+		return m, nil
+	}
+
+	// Dashboard/navigation keys.
 	switch {
 	case key.Matches(msg, m.keys.Quit):
 		return m, tea.Quit
@@ -184,10 +146,12 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case key.Matches(msg, m.keys.Filter):
-		return m, m.setFilterMode(filterSubstring)
+		cmd := m.setupFilter(filterSubstring, "", "type to filter...")
+		return m, cmd
 
 	case key.Matches(msg, m.keys.Query):
-		return m, m.setFilterMode(filterQuery)
+		cmd := m.setupFilter(filterQuery, "", "type to filter...")
+		return m, cmd
 
 	case key.Matches(msg, m.keys.AllTasks):
 		focusCmd := m.enterAllTasksMode(false, "")
@@ -239,6 +203,84 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 
 	return m, nil
+}
+
+// processFilterCmd executes the cmd returned by FilterBar.Update and handles
+// filter output messages inline. Non-filter cmds are preserved for the runtime.
+func (m Model) processFilterCmd(cmd tea.Cmd) (tea.Model, tea.Cmd) {
+	if cmd == nil {
+		return m, nil
+	}
+	msg := cmd()
+	if msg == nil {
+		return m, nil
+	}
+
+	// Handle tea.BatchMsg: extract filter messages, keep the rest.
+	if batch, ok := msg.(tea.BatchMsg); ok {
+		var remaining []tea.Cmd
+		for _, c := range batch {
+			if c == nil {
+				continue
+			}
+			batchMsg := c()
+			if !m.handleFilterOutputMsg(batchMsg) {
+				capturedMsg := batchMsg
+				remaining = append(remaining, func() tea.Msg { return capturedMsg })
+			}
+		}
+		switch len(remaining) {
+		case 0:
+			return m, nil
+		case 1:
+			return m, remaining[0]
+		default:
+			return m, tea.Batch(remaining...)
+		}
+	}
+
+	// Single message.
+	if m.handleFilterOutputMsg(msg) {
+		return m, nil
+	}
+	capturedMsg := msg
+	return m, func() tea.Msg { return capturedMsg }
+}
+
+// handleFilterOutputMsg processes a filter output message inline. Returns true if handled.
+func (m *Model) handleFilterOutputMsg(msg tea.Msg) bool {
+	switch fmsg := msg.(type) {
+	case FilterChangedMsg:
+		if m.showAll && fmsg.Text == "" && m.mode != modeRecentlyCompleted {
+			m.filterBar, _ = m.filterBar.Update(FilterDeactivateMsg{})
+			m.enterTagSearchMode()
+			return true
+		}
+		m.rebuildSections()
+		m.clampCursor()
+		return true
+	case FilterSubmittedMsg:
+		return true
+	case FilterClearedMsg:
+		if m.showAll {
+			m.filterBar, _ = m.filterBar.Update(FilterDeactivateMsg{})
+			m.enterTagSearchMode()
+			return true
+		}
+		m.filterBar, _ = m.filterBar.Update(FilterDeactivateMsg{})
+		m.showAll = false
+		if m.mode == modeAllTasks {
+			m.mode = modeDashboard
+		}
+		m.rebuildSections()
+		m.clampCursor()
+		return true
+	case FilterModeChangedMsg:
+		m.rebuildSections()
+		m.clampCursor()
+		return true
+	}
+	return false
 }
 
 // openEditor launches the editor for the task at the current cursor position.
@@ -350,8 +392,7 @@ func (m Model) handleTagSearchKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	default:
 		var cmd tea.Cmd
-		m.filter.Input, cmd = m.filter.Input.Update(msg)
-		m.filter.Text = m.filter.Input.Value()
+		m.filterBar, cmd = m.filterBar.Update(msg)
 		m.tagCursor = 0
 		return m, cmd
 	}

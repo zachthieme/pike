@@ -53,8 +53,8 @@ func (m Model) viewDashboard() string {
 	label := fmt.Sprintf(" ○ %d/%d  ● %d wk", displayedOpen, m.openCount, m.completedThisWeek)
 	footer := m.renderFooterBar(label)
 
-	if m.filter.QueryErr != nil {
-		footer += "\n" + FooterStyle().Render("  "+m.filter.QueryErr.Error())
+	if m.filterBar.QueryErr() != nil {
+		footer += "\n" + FooterStyle().Render("  "+m.filterBar.QueryErr().Error())
 	}
 
 	full := body + "\n" + footer
@@ -71,8 +71,8 @@ func (m Model) viewFocused() string {
 	body, count := m.renderSections()
 
 	footer := m.renderFooterBar(fmt.Sprintf(" %d results", count))
-	if m.filter.QueryErr != nil {
-		footer += "\n" + FooterStyle().Render("  "+m.filter.QueryErr.Error())
+	if m.filterBar.QueryErr() != nil {
+		footer += "\n" + FooterStyle().Render("  "+m.filterBar.QueryErr().Error())
 	}
 
 	if count == 0 {
@@ -120,10 +120,10 @@ func (m Model) viewAllTasks() string {
 	var parts []string
 
 	// Always show the search bar in all-tasks mode.
-	parts = append(parts, m.filter.Input.View())
+	parts = append(parts, m.filterBar.View())
 
-	if m.filter.QueryErr != nil {
-		parts = append(parts, FooterStyle().Render("  "+m.filter.QueryErr.Error()))
+	if m.filterBar.QueryErr() != nil {
+		parts = append(parts, FooterStyle().Render("  "+m.filterBar.QueryErr().Error()))
 	}
 
 	sections := m.displaySections()
@@ -179,7 +179,7 @@ func (m Model) viewAllTasks() string {
 func (m Model) viewTagSearch() string {
 	var parts []string
 
-	parts = append(parts, m.filter.Input.View())
+	parts = append(parts, m.filterBar.View())
 
 	filtered := m.filteredTags()
 	if len(m.tagList) == 0 {
@@ -227,7 +227,7 @@ func (m Model) viewTagSearch() string {
 		parts = append(parts, "  "+strings.Join(tagParts, delim))
 	}
 
-	if len(filtered) == 0 && m.filter.Text != "" {
+	if len(filtered) == 0 && m.filterBar.Text() != "" {
 		parts = append(parts, "")
 		parts = append(parts, "  No results")
 	}
@@ -291,8 +291,8 @@ func flowWrap(parts []string, delim string, maxWidth int) string {
 func (m Model) renderSections() (string, int) {
 	var parts []string
 
-	if m.filter.Active {
-		parts = append(parts, m.filter.Input.View())
+	if m.filterBar.Active() {
+		parts = append(parts, m.filterBar.View())
 		parts = append(parts, "")
 	}
 

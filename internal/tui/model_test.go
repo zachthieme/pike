@@ -208,16 +208,16 @@ func TestSummaryToggle(t *testing.T) {
 func TestFilterActivation(t *testing.T) {
 	m := testModel(testTasks(), testViews())
 
-	if m.filter.Active {
+	if m.filterBar.Active() {
 		t.Fatal("expected filtering to start false")
 	}
 
 	updated, _ := sendKey(m, "/")
 	m2 := updated.(Model)
-	if !m2.filter.Active {
+	if !m2.filterBar.Active() {
 		t.Error("expected filtering to be true after pressing '/'")
 	}
-	if m2.filter.Mode != filterSubstring {
+	if m2.filterBar.Mode() != filterSubstring {
 		t.Error("expected filterSubstring mode after pressing '/'")
 	}
 }
@@ -227,10 +227,10 @@ func TestQueryModeActivation(t *testing.T) {
 
 	updated, _ := sendKey(m, "?")
 	m2 := updated.(Model)
-	if !m2.filter.Active {
+	if !m2.filterBar.Active() {
 		t.Error("expected filtering to be true after pressing '?'")
 	}
-	if m2.filter.Mode != filterQuery {
+	if m2.filterBar.Mode() != filterQuery {
 		t.Error("expected filterQuery mode after pressing '?'")
 	}
 }
@@ -240,7 +240,7 @@ func TestRecentlyCompletedUsesQueryMode(t *testing.T) {
 
 	updated, _ := sendKey(m, "c")
 	m2 := updated.(Model)
-	if m2.filter.Mode != filterQuery {
+	if m2.filterBar.Mode() != filterQuery {
 		t.Error("expected filterQuery mode for recently completed")
 	}
 }
@@ -348,17 +348,17 @@ func TestEscapeDismissesFilter(t *testing.T) {
 	// First Escape clears query text but stays in filter mode.
 	updated, _ = sendSpecialKey(m, tea.KeyEscape)
 	m = updated.(Model)
-	if !m.filter.Active {
+	if !m.filterBar.Active() {
 		t.Error("expected filtering to still be true after first Esc")
 	}
-	if m.filter.Text != "" {
-		t.Errorf("expected filterText to be empty, got %q", m.filter.Text)
+	if m.filterBar.Text() != "" {
+		t.Errorf("expected filterText to be empty, got %q", m.filterBar.Text())
 	}
 
 	// Second Escape exits filter mode entirely.
 	updated, _ = sendSpecialKey(m, tea.KeyEscape)
 	m2 := updated.(Model)
-	if m2.filter.Active {
+	if m2.filterBar.Active() {
 		t.Error("expected filtering to be false after second Esc")
 	}
 }
@@ -695,7 +695,7 @@ func TestBackspaceToEmptyReturnsToTagSearch(t *testing.T) {
 	}
 
 	// Delete all characters in the filter.
-	for m.filter.Text != "" {
+	for m.filterBar.Text() != "" {
 		updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyBackspace})
 		m = updated.(Model)
 	}
@@ -857,11 +857,11 @@ func TestRecentlyCompletedMode(t *testing.T) {
 	if m.mode != modeRecentlyCompleted {
 		t.Errorf("expected modeRecentlyCompleted, got %d", m.mode)
 	}
-	if !m.filter.Active {
+	if !m.filterBar.Active() {
 		t.Error("expected filtering to be true")
 	}
-	if !strings.Contains(m.filter.Text, "completed and @completed") {
-		t.Errorf("expected pre-filled query, got %q", m.filter.Text)
+	if !strings.Contains(m.filterBar.Text(), "completed and @completed") {
+		t.Errorf("expected pre-filled query, got %q", m.filterBar.Text())
 	}
 }
 
