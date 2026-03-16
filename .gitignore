@@ -1,3 +1,4 @@
 /pike
 /result
 *.pike-tmp
+coverage.out
