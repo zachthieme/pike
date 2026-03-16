@@ -4,11 +4,13 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/lipgloss"
+	"pike/internal/config"
 )
 
 // RenderSummary renders a full-screen summary with version, description, and keybindings.
-func RenderSummary(version string, width int) string {
+func RenderSummary(version string, width int, keys KeyMap, custom []config.CustomBinding) string {
 	fs := FaintStyle()
 	bs := BoldStyle()
 	hs := HeaderStyle()
@@ -30,73 +32,101 @@ func RenderSummary(version string, width int) string {
 	lines = append(lines, "")
 
 	// Keybinding sections
+	type entry struct{ key, desc string }
 	type section struct {
-		title string
-		keys  []struct{ key, desc string }
+		title   string
+		entries []entry
+	}
+
+	bindingEntry := func(b key.Binding) (entry, bool) {
+		if !b.Enabled() {
+			return entry{}, false
+		}
+		h := b.Help()
+		return entry{key: h.Key, desc: h.Desc}, true
+	}
+
+	// Navigation
+	var navEntries []entry
+	for _, b := range []key.Binding{keys.Down, keys.Up, keys.Top, keys.Bottom, keys.PageDown, keys.PageUp, keys.NextSection, keys.PrevSection} {
+		if e, ok := bindingEntry(b); ok {
+			navEntries = append(navEntries, e)
+		}
+	}
+	// FocusSection: show as "1-9 / focus section" only if at least the first is enabled.
+	if keys.FocusSection[0].Enabled() {
+		navEntries = append(navEntries, entry{key: "1-9", desc: "focus section"})
+	}
+
+	// Actions
+	var actionEntries []entry
+	for _, b := range []key.Binding{keys.Enter, keys.Toggle, keys.ToggleHiddenTag, keys.Refresh, keys.Quit} {
+		if e, ok := bindingEntry(b); ok {
+			actionEntries = append(actionEntries, e)
+		}
+	}
+
+	// Views
+	var viewEntries []entry
+	for _, b := range []key.Binding{keys.AllTasks, keys.TagSearch, keys.RecentlyCompleted, keys.Summary, keys.ToggleHidden} {
+		if e, ok := bindingEntry(b); ok {
+			viewEntries = append(viewEntries, e)
+		}
+	}
+
+	// Search
+	var searchEntries []entry
+	for _, b := range []key.Binding{keys.Filter, keys.Query, keys.Escape} {
+		if e, ok := bindingEntry(b); ok {
+			searchEntries = append(searchEntries, e)
+		}
 	}
 
 	sections := []section{
-		{
-			title: "Navigation",
-			keys: []struct{ key, desc string }{
-				{"j / k", "move down / up"},
-				{"g / G", "jump to top / bottom"},
-				{"Tab", "next section / toggle focus"},
-				{"Shift+Tab", "previous section"},
-				{"Ctrl+D / U", "page down / up"},
-				{"1-9", "focus section by number"},
-			},
-		},
-		{
-			title: "Actions",
-			keys: []struct{ key, desc string }{
-				{"Enter", "open task in editor"},
-				{"x", "toggle task complete"},
-				{"H", "toggle @hidden tag on task"},
-				{"h", "show / hide @hidden tasks"},
-			},
-		},
-		{
-			title: "Search & Filter",
-			keys: []struct{ key, desc string }{
-				{"/", "substring search"},
-				{"?", "query DSL search"},
-				{"a", "all open tasks"},
-				{"t", "tag search"},
-				{"c", "recently completed"},
-				{"Esc", "clear filter / exit"},
-			},
-		},
-		{
-			title: "Other",
-			keys: []struct{ key, desc string }{
-				{"s", "toggle this summary"},
-				{"r", "refresh tasks"},
-				{"q", "quit"},
-			},
-		},
+		{title: "Navigation", entries: navEntries},
+		{title: "Actions", entries: actionEntries},
+		{title: "Views", entries: viewEntries},
+		{title: "Search", entries: searchEntries},
+	}
+
+	// Custom shortcuts section
+	if len(custom) > 0 {
+		var shortcutEntries []entry
+		for _, cb := range custom {
+			desc := ""
+			if cb.View != "" {
+				desc = "focus " + cb.View
+			} else if cb.Query != "" {
+				desc = cb.Query
+			}
+			shortcutEntries = append(shortcutEntries, entry{key: cb.Key, desc: desc})
+		}
+		sections = append(sections, section{title: "Shortcuts", entries: shortcutEntries})
 	}
 
 	// Find the widest key across all sections for uniform alignment.
 	maxKeyLen := 0
 	for _, sec := range sections {
-		for _, k := range sec.keys {
-			if len(k.key) > maxKeyLen {
-				maxKeyLen = len(k.key)
+		for _, e := range sec.entries {
+			if len(e.key) > maxKeyLen {
+				maxKeyLen = len(e.key)
 			}
 		}
 	}
 	colWidth := maxKeyLen + 4
 
 	for i, sec := range sections {
+		if len(sec.entries) == 0 {
+			continue
+		}
 		if i > 0 {
 			lines = append(lines, "")
 		}
 		lines = append(lines, bs.Render(sec.title))
 		lines = append(lines, "")
-		for _, k := range sec.keys {
-			paddedKey := fmt.Sprintf("  %-*s", colWidth, k.key)
-			lines = append(lines, paddedKey+fs.Render(k.desc))
+		for _, e := range sec.entries {
+			paddedKey := fmt.Sprintf("  %-*s", colWidth, e.key)
+			lines = append(lines, paddedKey+fs.Render(e.desc))
 		}
 	}
 

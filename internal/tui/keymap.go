@@ -48,15 +48,15 @@ func DefaultKeyMap() KeyMap {
 		),
 		NextSection: key.NewBinding(
 			key.WithKeys("tab"),
-			key.WithHelp("tab", "next section"),
+			key.WithHelp("Tab", "next section"),
 		),
 		PrevSection: key.NewBinding(
 			key.WithKeys("shift+tab"),
-			key.WithHelp("shift+tab", "prev section"),
+			key.WithHelp("Shift+Tab", "prev section"),
 		),
 		Enter: key.NewBinding(
 			key.WithKeys("enter"),
-			key.WithHelp("enter", "open in editor"),
+			key.WithHelp("Enter", "open in editor"),
 		),
 		Quit: key.NewBinding(
 			key.WithKeys("q"),

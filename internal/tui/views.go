@@ -87,7 +87,7 @@ func (m Model) viewFocused() string {
 }
 
 func (m Model) viewSummary() string {
-	return RenderSummary(m.version, m.width)
+	return RenderSummary(m.version, m.width, m.keys, m.customBindings)
 }
 
 // displaySections returns the sections to display based on focus mode.
