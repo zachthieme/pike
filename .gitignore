@@ -2,3 +2,5 @@
 /result
 *.pike-tmp
 coverage.out
+docs/marketing.md
+docs/superpowers/

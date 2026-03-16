@@ -1,5 +1,22 @@
 # Changelog
 
+### v1.4.0 — March 16, 2026: Code Quality & Tooling
+
+**Lenient date parsing:**
+- `@due(2026/3/16)`, `@due(2026.03.16)`, `@due(2026-3-6)` now normalize to `YYYY-MM-DD` instead of being silently dropped
+- Parse warnings for genuinely invalid dates (e.g., `@due(march-16)`) surfaced via stderr in CLI modes and a warning count in the TUI footer
+
+**Developer tooling:**
+- `Makefile` with targets: build, test, lint, bench, fuzz, cover, golden-update, install
+- `golangci-lint` config (errcheck, govet, staticcheck, gocritic, unused, ineffassign) — all existing violations fixed
+- CI pipeline: test (with `-race`), lint, and fuzz jobs run on every push to main and PR
+- Scanner benchmarks for Scan/Refresh at 100/500/1000 files
+
+**Testing:**
+- Fuzz targets for query DSL parser/evaluator and markdown line parser
+- 24 new TUI tests covering state transitions, key handling edge cases, and sub-model gaps
+- TUI test coverage: 65.7% → 70.7%
+
 ### v1.3.0 — March 16, 2026: TUI Sub-Model Decomposition
 
 **Architecture:**
