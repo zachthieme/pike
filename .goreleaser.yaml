@@ -22,6 +22,15 @@ checksum:
   name_template: "pike_checksums.txt"
   algorithm: sha256
 
+changelog:
+  use: github
+  filters:
+    exclude:
+      - "^docs:"
+      - "^chore:"
+      - "^ci:"
+      - "^release:"
+
 release:
   github:
     owner: zachthieme
