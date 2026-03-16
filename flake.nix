@@ -11,13 +11,13 @@
       let
         pkgs = nixpkgs.legacyPackages.${system};
 
-        pikeVersion = "1.4.0";
+        pikeVersion = "1.5.0";
 
         hashes = {
-          x86_64-linux = "sha256-j3LyDFFcGf6CJOOB8b06Gqqe6rQgUPKnHO6pHRobuPE=";
-          aarch64-linux = "sha256-bnM4GPo7MxcwBq7h2oMOvtRqKPxZGjLsLsalMuJa5GU=";
-          x86_64-darwin = "sha256-uTMdLo6RrKxsSy1mLr5iA5OMzE1lVtu8oAgT1Dii5Co=";
-          aarch64-darwin = "sha256-d8oPDUp8XL0k7gectuJzsEnhufTOfoNBfCOzMoJuhZ4=";
+          x86_64-linux = "sha256-pt2h4zdcoV5VxQR9mXKMUG23aWL9F4Xpd67TC1RgqsU=";
+          aarch64-linux = "sha256-Z6ZHeUVrI94ZvEYF0jwE35lvsli2FKp39lyP8kVtAWw=";
+          x86_64-darwin = "sha256-9Pj0weyFkwlGdWT+5slCOfZ8XcKRD+HIrSuRdqrA1ew=";
+          aarch64-darwin = "sha256-PtLkOr/esI+vnKJ6Xj5NMeyh0xKJDxgbYt23utAiCwU=";
         };
 
         archMap = {
