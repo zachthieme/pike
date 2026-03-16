@@ -1,5 +1,23 @@
 # Changelog
 
+### v1.5.0 — March 16, 2026: Custom Keybindings
+
+**Configurable keybindings:**
+- Remap any built-in TUI action via `keybindings:` section in `config.yaml`
+- Replacement model: listed keys are the complete set (e.g., `toggle: ["space", "x"]`)
+- Empty keys list disables an action (except `escape`, which cannot be disabled)
+
+**Custom shortcuts:**
+- Bind any key to focus a dashboard view by title (e.g., `o` → focus "Overdue")
+- Bind any key to run a query in all-tasks mode (e.g., `d` → `open and @due < today+3d`)
+- Custom shortcuts replace the default 1-9 positional focus keys when defined
+- Custom shortcuts take priority over built-in keys on conflict
+
+**Summary overlay:**
+- The `s` help overlay now renders from actual configured keybindings instead of hardcoded defaults
+- Custom shortcuts shown in a dedicated "Shortcuts" section
+- Disabled bindings are omitted
+
 ### v1.4.0 — March 16, 2026: Code Quality & Tooling
 
 **Lenient date parsing:**
