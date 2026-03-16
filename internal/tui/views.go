@@ -51,6 +51,9 @@ func (m Model) viewDashboard() string {
 	}
 
 	label := fmt.Sprintf(" ○ %d/%d  ● %d wk", displayedOpen, m.openCount, m.completedThisWeek)
+	if len(m.warnings) > 0 {
+		label += fmt.Sprintf("  ⚠ %d", len(m.warnings))
+	}
 	footer := m.renderFooterBar(label)
 
 	if m.filterBar.QueryErr() != nil {

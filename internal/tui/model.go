@@ -40,6 +40,8 @@ type Model struct {
 	keys               KeyMap
 	version            string
 	now                func() time.Time // injectable for testing
+	warnings           []model.Warning          // parse warnings from last scan
+	warningsFunc       func() []model.Warning   // returns latest parse warnings
 }
 
 // NewModel creates a new TUI model with the given configuration and initial tasks.
@@ -69,6 +71,16 @@ func NewModel(cfg *config.Config, tasks []model.Task, scanFunc func() ([]model.T
 // SetVersion sets the version string for display in the summary overlay.
 func (m *Model) SetVersion(v string) {
 	m.version = v
+}
+
+// SetWarnings sets the current parse warnings slice.
+func (m *Model) SetWarnings(w []model.Warning) {
+	m.warnings = w
+}
+
+// SetWarningsFunc sets a function that returns the latest parse warnings.
+func (m *Model) SetWarningsFunc(f func() []model.Warning) {
+	m.warningsFunc = f
 }
 
 // SetFocusedView sets the focused view by section title, locks the view so
@@ -160,6 +172,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.Tasks != nil || msg.Config != nil {
 			m.rebuildSections()
 			m.clampCursor()
+		}
+		if m.warningsFunc != nil {
+			m.warnings = m.warningsFunc()
 		}
 		return m, nil
 

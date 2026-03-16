@@ -141,6 +141,9 @@ func run(args []string, stdout, stderr io.Writer) error {
 	if err != nil {
 		return fmt.Errorf("scanning: %w", err)
 	}
+	for _, w := range sc.Warnings {
+		fmt.Fprintf(stderr, "warning: %s:%d: %s\n", w.File, w.Line, w.Message)
+	}
 
 	now := time.Now()
 
@@ -291,8 +294,13 @@ func runTUI(_ io.Writer, cfg *config.Config, tasks []model.Task, sc *scanner.Sca
 	scanRefresh := func() ([]model.Task, error) {
 		return sc.Refresh(ctx)
 	}
+	warningsGetter := func() []model.Warning {
+		return sc.Warnings
+	}
 	m := tui.NewModel(cfg, tasks, scanRefresh, configReload)
 	m.SetVersion(version)
+	m.SetWarnings(sc.Warnings)
+	m.SetWarningsFunc(warningsGetter)
 
 	// If --view flag is set, find and focus that section.
 	if viewFlag != "" {

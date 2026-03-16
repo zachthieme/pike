@@ -280,6 +280,25 @@ func TestEmptyDirectory(t *testing.T) {
 	}
 }
 
+func TestScanCollectsWarnings(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, dir, "test.md", "- [ ] task @due(bad-date)\n- [ ] ok @due(2026-03-16)\n")
+	sc, err := New(dir, []string{"**/*.md"}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = sc.Scan(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(sc.Warnings) != 1 {
+		t.Errorf("got %d warnings, want 1", len(sc.Warnings))
+	}
+	if len(sc.Warnings) > 0 && sc.Warnings[0].Line != 1 {
+		t.Errorf("warning line = %d, want 1", sc.Warnings[0].Line)
+	}
+}
+
 // --- helpers ---
 
 func newScanner(t *testing.T, root string, include, exclude []string) *Scanner {

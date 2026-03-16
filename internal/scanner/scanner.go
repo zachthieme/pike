@@ -24,11 +24,12 @@ const maxLineSize = 1 << 20
 // Scanner walks a directory tree, finds files matching include/exclude globs,
 // and parses them for task lines.
 type Scanner struct {
-	root    string
-	include []string               // glob patterns like "**/*.md"
-	exclude []string               // glob patterns like "archive/**"
-	mtimes  map[string]time.Time   // relPath -> last mtime
-	tasks   map[string][]model.Task // relPath -> tasks from that file
+	root     string
+	include  []string               // glob patterns like "**/*.md"
+	exclude  []string               // glob patterns like "archive/**"
+	mtimes   map[string]time.Time   // relPath -> last mtime
+	tasks    map[string][]model.Task // relPath -> tasks from that file
+	Warnings []model.Warning        // populated during Scan/Refresh
 }
 
 // matchedFile holds info about a file discovered during a directory walk.
@@ -63,6 +64,7 @@ func New(root string, include, exclude []string) (*Scanner, error) {
 
 // Scan performs a full scan of all matching files. Returns all tasks found.
 func (s *Scanner) Scan(ctx context.Context) ([]model.Task, error) {
+	s.Warnings = nil
 	mtimes := make(map[string]time.Time)
 	tasks := make(map[string][]model.Task)
 
@@ -82,6 +84,7 @@ func (s *Scanner) Scan(ctx context.Context) ([]model.Task, error) {
 // Refresh does an incremental scan. Only re-parses files whose mtime has
 // changed since the last scan. Removes tasks from deleted files.
 func (s *Scanner) Refresh(ctx context.Context) ([]model.Task, error) {
+	s.Warnings = nil
 	// Collect the set of files currently on disk that match our patterns
 	onDisk := make(map[string]bool)
 
@@ -170,10 +173,11 @@ func (s *Scanner) parseFileInto(absPath, relPath string, modTime time.Time, mtim
 	for sc.Scan() {
 		lineNum++
 		line := sc.Text()
-		task, _ := parser.ParseLine(line, relPath, lineNum)
+		task, warnings := parser.ParseLine(line, relPath, lineNum)
 		if task != nil {
 			fileTasks = append(fileTasks, *task)
 		}
+		s.Warnings = append(s.Warnings, warnings...)
 	}
 	if err := sc.Err(); err != nil {
 		return err
