@@ -170,7 +170,7 @@ func (s *Scanner) parseFileInto(absPath, relPath string, modTime time.Time, mtim
 	for sc.Scan() {
 		lineNum++
 		line := sc.Text()
-		task := parser.ParseLine(line, relPath, lineNum)
+		task, _ := parser.ParseLine(line, relPath, lineNum)
 		if task != nil {
 			fileTasks = append(fileTasks, *task)
 		}

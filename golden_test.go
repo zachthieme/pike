@@ -99,7 +99,7 @@ func parseNoteFile(t *testing.T, fpath, relPath string) []model.Task {
 	var tasks []model.Task
 	for scanner.Scan() {
 		lineNum++
-		task := parser.ParseLine(scanner.Text(), relPath, lineNum)
+		task, _ := parser.ParseLine(scanner.Text(), relPath, lineNum)
 		if task != nil {
 			tasks = append(tasks, *task)
 		}

@@ -45,6 +45,42 @@ func date(y int, m time.Month, d int) *time.Time {
 	return &t
 }
 
+func TestParseLineWarnings(t *testing.T) {
+	tests := []struct {
+		name         string
+		line         string
+		wantTask     bool
+		wantDue      string
+		wantWarnings int
+	}{
+		{"valid date no warning", "- [ ] task @due(2026-03-16)", true, "2026-03-16", 0},
+		{"normalizable date no warning", "- [ ] task @due(2026/3/16)", true, "2026-03-16", 0},
+		{"unparseable date emits warning", "- [ ] task @due(march-16)", true, "", 1},
+		{"no tags no task", "just text", false, "", 0},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			task, warnings := ParseLine(tt.line, "test.md", 1)
+			if (task != nil) != tt.wantTask {
+				t.Errorf("task presence = %v, want %v", task != nil, tt.wantTask)
+			}
+			if len(warnings) != tt.wantWarnings {
+				t.Errorf("warnings count = %d, want %d", len(warnings), tt.wantWarnings)
+			}
+			if task != nil && tt.wantDue != "" {
+				if task.Due == nil {
+					t.Errorf("Due is nil, want %s", tt.wantDue)
+				} else if task.Due.Format("2006-01-02") != tt.wantDue {
+					t.Errorf("Due = %s, want %s", task.Due.Format("2006-01-02"), tt.wantDue)
+				}
+			}
+			if task != nil && tt.wantDue == "" && task.Due != nil {
+				t.Errorf("Due = %s, want nil", task.Due.Format("2006-01-02"))
+			}
+		})
+	}
+}
+
 func TestParseLine(t *testing.T) {
 	tests := []struct {
 		name          string
@@ -229,7 +265,7 @@ func TestParseLine(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			task := ParseLine(tt.line, "test.md", 1)
+			task, _ := ParseLine(tt.line, "test.md", 1)
 
 			if tt.wantNil {
 				if task != nil {

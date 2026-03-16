@@ -1,6 +1,7 @@
 package parser
 
 import (
+	"fmt"
 	"pike/internal/model"
 	"regexp"
 	"strings"
@@ -38,72 +39,58 @@ func normalizeDate(s string) (string, bool) {
 // matches the task format, or nil if it does not.
 // Matches checkbox lines (- [ ] / - [x]) and plain bullet lines (- text)
 // that contain at least one @tag.
-func ParseLine(line string, file string, lineNum int) *model.Task {
+// Also returns any non-fatal warnings encountered during parsing.
+func ParseLine(line string, file string, lineNum int) (*model.Task, []model.Warning) {
 	m := taskLineRe.FindStringSubmatch(line)
-
 	var checkbox string
 	var text string
-
 	hasCheckbox := m != nil
-
 	if hasCheckbox {
 		checkbox = m[1]
 		text = strings.TrimRight(m[2], " ")
 	} else {
-		// Try plain bullet line — only match if it contains a @tag.
 		pm := plainLineRe.FindStringSubmatch(line)
 		if pm == nil {
-			return nil
+			return nil, nil
 		}
 		candidate := strings.TrimRight(pm[1], " ")
 		if !tagRe.MatchString(candidate) {
-			return nil
+			return nil, nil
 		}
-		checkbox = " " // treat plain bullets as open
+		checkbox = " "
 		text = candidate
 	}
-
 	task := &model.Task{
-		Text:        text,
-		File:        file,
-		Line:        lineNum,
-		HasCheckbox: hasCheckbox,
+		Text: text, File: file, Line: lineNum, HasCheckbox: hasCheckbox,
 	}
-
-	// Determine state
 	if checkbox == " " {
 		task.State = model.Open
 	} else {
 		task.State = model.Completed
 	}
-
-	// Extract tags
+	var warnings []model.Warning
 	task.TagSet = make(map[string]bool)
 	tagMatches := tagRe.FindAllStringSubmatch(text, -1)
 	for _, tm := range tagMatches {
 		tagName := tm[1]
 		tagValue := tm[2]
-
-		tag := model.Tag{
-			Name:  tagName,
-			Value: tagValue,
-		}
-
-		// For date tags (due, completed), try to parse the value; if invalid, clear it.
-		// For other tags, preserve the value as-is.
+		tag := model.Tag{Name: tagName, Value: tagValue}
 		if tagValue != "" && (tagName == "due" || tagName == "completed") {
-			_, err := time.Parse("2006-01-02", tagValue)
-			if err != nil {
+			normalized, ok := normalizeDate(tagValue)
+			if ok {
+				tag.Value = normalized
+			} else {
+				warnings = append(warnings, model.Warning{
+					File: file, Line: lineNum,
+					Message: fmt.Sprintf("@%s value %q is not a valid date (expected YYYY-MM-DD)", tagName, tagValue),
+				})
 				tag.Value = ""
 			}
 		}
-
 		task.Tags = append(task.Tags, tag)
 		task.TagSet[tagName] = true
-
-		// Set Due and Completed fields from well-known tags
 		if tagName == "due" && tag.Value != "" {
-			t, _ := time.Parse("2006-01-02", tag.Value)
+			t, _ := time.Parse("2006-01-02", tag.Value) //nolint:errcheck // validated by normalizeDate
 			task.Due = &t
 		}
 		if tagName == "completed" {
@@ -111,11 +98,10 @@ func ParseLine(line string, file string, lineNum int) *model.Task {
 				task.State = model.Completed
 			}
 			if tag.Value != "" {
-				t, _ := time.Parse("2006-01-02", tag.Value)
+				t, _ := time.Parse("2006-01-02", tag.Value) //nolint:errcheck // validated by normalizeDate
 				task.Completed = &t
 			}
 		}
 	}
-
-	return task
+	return task, warnings
 }
