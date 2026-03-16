@@ -391,6 +391,27 @@ func (m *Model) enterAllTasksMode(showAll bool, initialFilter string) tea.Cmd {
 	return cmd
 }
 
+// enterQueryMode switches to all-tasks mode with a pre-filled DSL query.
+// sortOrder is accepted for future use but not yet applied (uses default file sort).
+func (m *Model) enterQueryMode(query string, sortOrder string) tea.Cmd {
+	m.mode = modeAllTasks
+	m.showAll = true
+	m.cursor = 0
+	if sortOrder == "" {
+		sortOrder = "file"
+	}
+	_ = sortOrder // TODO: wire sort override into rebuildSingleSection
+	var cmd tea.Cmd
+	m.filterBar, cmd = m.filterBar.Update(FilterActivateMsg{
+		Mode:         filterQuery,
+		InitialValue: query,
+		Placeholder:  "query...",
+	})
+	m.rebuildSections()
+	m.clampCursor()
+	return cmd
+}
+
 // enterTagSearchMode switches to tag search mode with a focused filter input.
 func (m *Model) enterTagSearchMode() tea.Cmd {
 	m.mode = modeTagSearch

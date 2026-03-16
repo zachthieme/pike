@@ -7,6 +7,7 @@ import (
 	"pike/internal/filter"
 	"pike/internal/model"
 
+	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
@@ -38,6 +39,8 @@ type Model struct {
 	editorCmd          string
 	tagColors          map[string]string
 	keys               KeyMap
+	customBindings     []config.CustomBinding
+	customKeys         []key.Binding
 	version            string
 	now                func() time.Time // injectable for testing
 	warnings           []model.Warning          // parse warnings from last scan
@@ -52,11 +55,12 @@ func NewModel(cfg *config.Config, tasks []model.Task, scanFunc func() ([]model.T
 		focusedView: "",
 		filterBar:   NewFilterBar(),
 		tagSearch:   NewTagSearch(),
-		scanFunc:    scanFunc,
-		editorCmd:   cfg.Editor,
-		tagColors:   cfg.TagColors,
-		keys:        DefaultKeyMap(),
-		now:         time.Now,
+		scanFunc:       scanFunc,
+		editorCmd:      cfg.Editor,
+		tagColors:      cfg.TagColors,
+		keys:           BuildKeyMap(cfg.Keybindings, cfg.CustomBindings),
+		customBindings: cfg.CustomBindings,
+		now:            time.Now,
 	}
 	if len(configFunc) > 0 {
 		m.configFunc = configFunc[0]
@@ -64,6 +68,11 @@ func NewModel(cfg *config.Config, tasks []model.Task, scanFunc func() ([]model.T
 
 	m.rebuildSections()
 	m.clampCursor()
+
+	m.customKeys = make([]key.Binding, len(cfg.CustomBindings))
+	for i, cb := range cfg.CustomBindings {
+		m.customKeys[i] = key.NewBinding(key.WithKeys(cb.Key))
+	}
 
 	return m
 }
@@ -160,6 +169,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.config = msg.Config
 			m.tagColors = msg.Config.TagColors
 			m.editorCmd = msg.Config.Editor
+			m.keys = BuildKeyMap(msg.Config.Keybindings, msg.Config.CustomBindings)
+			m.customBindings = msg.Config.CustomBindings
+			m.customKeys = make([]key.Binding, len(msg.Config.CustomBindings))
+			for i, cb := range msg.Config.CustomBindings {
+				m.customKeys[i] = key.NewBinding(key.WithKeys(cb.Key))
+			}
 		}
 		if msg.Tasks != nil {
 			m.allTasks = msg.Tasks

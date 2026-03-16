@@ -96,6 +96,31 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
+	// Custom bindings — checked before built-in keys so custom wins on conflict.
+	// Suppressed when viewLocked (--view flag) to match the behavior of 1-9 focus keys.
+	if !m.viewLocked {
+		for i, cb := range m.customBindings {
+			if key.Matches(msg, m.customKeys[i]) {
+				if cb.View != "" {
+					for _, sec := range m.visibleSections() {
+						if sec.Title == cb.View {
+							m.focusedView = cb.View
+							m.rebuildSections()
+							m.cursor = 0
+							break
+						}
+					}
+					return m, nil
+				}
+				if cb.Query != "" {
+					cmd := m.enterQueryMode(cb.Query, cb.Sort)
+					return m, cmd
+				}
+				return m, nil
+			}
+		}
+	}
+
 	// Dashboard/navigation keys.
 	switch {
 	case key.Matches(msg, m.keys.Quit):
@@ -204,7 +229,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 
 	// Check focus section keys 1-9.
-	if !m.viewLocked {
+	if !m.viewLocked && len(m.customBindings) == 0 {
 		for i := range 9 {
 			if key.Matches(msg, m.keys.FocusSection[i]) {
 				sections := m.visibleSections()
