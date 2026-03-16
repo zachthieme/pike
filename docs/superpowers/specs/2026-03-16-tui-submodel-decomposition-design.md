@@ -196,7 +196,8 @@ Sub-model messages:
                             else: rebuild sections with new filter text/mode
   FilterSubmittedMsg     -> no-op
   FilterClearedMsg       -> if showAll: transition to tag search
-                            else: exit filter mode, rebuild sections
+                            elif mode == modeAllTasks: deactivate filter, set mode = modeDashboard, rebuild
+                            else: deactivate filter, stay in current mode, rebuild sections
   FilterModeChangedMsg   -> rebuild sections
   TagSelectedMsg         -> transition to filter bar with @tag
   TagSearchExitMsg       -> exitToDashboard()
@@ -253,8 +254,8 @@ Existing tests in `model_test.go` that exercise filter and tag search behavior b
 Incremental, one sub-model at a time, tests green at each step:
 
 1. **Extract message types and shared definitions** into `messages.go` — move `filterMode`, `filterPrompt`, all `Msg` types. Pure move, no behavior change.
-2. **Extract FilterBar** — create `filterbar.go`, move filter state and input-focused key handling, wire up message passing in main Model, update `sections.go` rendering reference, migrate filter-specific tests to `filterbar_test.go`.
-3. **Extract TagSearch** — create `tagsearch.go`, move tag state, key handling, and `viewTagSearch()`, wire up messages and cross-model transitions, migrate tag search tests to `tagsearch_test.go`.
+2. **Extract FilterBar** — create `filterbar.go`, move filter state and input-focused key handling, wire up message passing in main Model, update `sections.go` rendering reference, migrate filter-specific tests to `filterbar_test.go`. **Migration note:** Tag search currently piggybacks on `m.filter.Input` via `setupFilter()`. During this step, tag search temporarily accesses the FilterBar's input via `m.filterBar` until step 3 gives it its own `textinput.Model`. Alternatively, steps 2 and 3 can be done as a single atomic commit if the shim feels too awkward.
+3. **Extract TagSearch** — create `tagsearch.go`, move tag state, key handling, and `viewTagSearch()`, wire up messages and cross-model transitions, give TagSearch its own `textinput.Model` (replacing temporary FilterBar access from step 2), migrate tag search tests to `tagsearch_test.go`.
 4. **Clean up** — remove dead code from `tasks.go`, `keys.go`, `views.go`, `model.go`. Verify no unused imports or functions.
 
 Each step is a separate commit with all tests passing.
