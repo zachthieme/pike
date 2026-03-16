@@ -562,7 +562,7 @@ func TestTagSearchWithAtPrefix(t *testing.T) {
 		m = updated.(Model)
 	}
 
-	tags := m.filteredTags()
+	tags := m.tagSearch.filteredTags()
 	if len(tags) == 0 {
 		t.Fatal("expected @du in tag search to match 'due', got 0 results")
 	}
@@ -590,7 +590,7 @@ func TestTagSearchWithoutAtPrefix(t *testing.T) {
 		m = updated.(Model)
 	}
 
-	tags := m.filteredTags()
+	tags := m.tagSearch.filteredTags()
 	found := false
 	for _, tag := range tags {
 		if tag == "today" {
@@ -610,7 +610,7 @@ func TestTagSelectShowsCompletedTasks(t *testing.T) {
 	m = updated.(Model)
 
 	// Find the "completed" tag and move cursor to it.
-	tags := m.filteredTags()
+	tags := m.tagSearch.filteredTags()
 	idx := -1
 	for i, tag := range tags {
 		if tag == "completed" {
@@ -627,9 +627,13 @@ func TestTagSelectShowsCompletedTasks(t *testing.T) {
 		m = updated.(Model)
 	}
 
-	// Press Enter to select.
-	updated, _ = sendSpecialKey(m, tea.KeyEnter)
+	// Press Enter to select — TagSearch emits TagSelectedMsg via command.
+	updated, cmd := sendSpecialKey(m, tea.KeyEnter)
 	m = updated.(Model)
+	if cmd != nil {
+		updated, _ = m.Update(cmd())
+		m = updated.(Model)
+	}
 
 	if m.mode != modeAllTasks {
 		t.Fatalf("expected modeAllTasks, got %d", m.mode)
@@ -655,23 +659,32 @@ func TestTagSelectShowsCompletedTasks(t *testing.T) {
 func TestTagSelectEscapeClearsShowAll(t *testing.T) {
 	m := testModel(testTasks(), testViews())
 
-	// Enter tag search, select first tag.
+	// Enter tag search, select first tag — TagSearch emits TagSelectedMsg via command.
 	updated, _ := sendKey(m, "t")
 	m = updated.(Model)
-	updated, _ = sendSpecialKey(m, tea.KeyEnter)
+	updated, cmd := sendSpecialKey(m, tea.KeyEnter)
 	m = updated.(Model)
+	if cmd != nil {
+		updated, _ = m.Update(cmd())
+		m = updated.(Model)
+	}
 
 	if !m.showAll {
 		t.Fatal("expected showAll after tag selection")
 	}
 
 	// First Escape clears query text (filter had @tag content).
+	// With showAll=true and empty text, FilterChangedMsg triggers enterTagSearchMode().
 	updated, _ = sendSpecialKey(m, tea.KeyEscape)
 	m = updated.(Model)
 
-	// Second Escape exits filter mode and returns to dashboard.
-	updated, _ = sendSpecialKey(m, tea.KeyEscape)
+	// Second Escape in tag search mode — TagSearch emits TagSearchExitMsg via command.
+	updated, cmd = sendSpecialKey(m, tea.KeyEscape)
 	m = updated.(Model)
+	if cmd != nil {
+		updated, _ = m.Update(cmd())
+		m = updated.(Model)
+	}
 
 	if m.showAll {
 		t.Error("expected showAll to be false after escape")
@@ -684,11 +697,15 @@ func TestTagSelectEscapeClearsShowAll(t *testing.T) {
 func TestBackspaceToEmptyReturnsToTagSearch(t *testing.T) {
 	m := testModel(testTasks(), testViews())
 
-	// Enter tag search, select first tag.
+	// Enter tag search, select first tag — TagSearch emits TagSelectedMsg via command.
 	updated, _ := sendKey(m, "t")
 	m = updated.(Model)
-	updated, _ = sendSpecialKey(m, tea.KeyEnter)
+	updated, cmd := sendSpecialKey(m, tea.KeyEnter)
 	m = updated.(Model)
+	if cmd != nil {
+		updated, _ = m.Update(cmd())
+		m = updated.(Model)
+	}
 
 	if m.mode != modeAllTasks {
 		t.Fatalf("expected modeAllTasks after tag selection, got %d", m.mode)

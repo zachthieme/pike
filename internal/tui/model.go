@@ -26,9 +26,8 @@ type Model struct {
 	viewLocked         bool         // when true, block mode-switching keys and prevent unfocusing (set via --view flag)
 	showSummary        bool
 	filterBar          FilterBar
+	tagSearch          TagSearch
 	mode               viewMode
-	tagList            []string // unique tags for tag search mode
-	tagCursor          int      // cursor in tag list
 	showHidden         bool     // whether to show @hidden tasks
 	showAll            bool     // when true, all-tasks includes completed (e.g. from tag search)
 	width              int
@@ -50,6 +49,7 @@ func NewModel(cfg *config.Config, tasks []model.Task, scanFunc func() ([]model.T
 		allTasks:    tasks,
 		focusedView: "",
 		filterBar:   NewFilterBar(),
+		tagSearch:   NewTagSearch(),
 		scanFunc:    scanFunc,
 		editorCmd:   cfg.Editor,
 		tagColors:   cfg.TagColors,
@@ -152,12 +152,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.Tasks != nil {
 			m.allTasks = msg.Tasks
 			if m.mode == modeTagSearch {
-				m.buildTagList()
-				if tags := m.filteredTags(); len(tags) > 0 {
-					m.tagCursor = min(m.tagCursor, len(tags)-1)
-				} else {
-					m.tagCursor = 0
-				}
+				tags := extractTagNames(m.allTasks)
+				m.tagSearch, _ = m.tagSearch.Update(TagSearchActivateMsg{Tags: tags})
 			}
 		}
 		// Rebuild sections if tasks or config changed (config affects views, tag colors).
@@ -179,6 +175,19 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.err = msg.Err
 		}
 		return m, func() tea.Msg { return RefreshMsg{} }
+
+	case TagSelectedMsg:
+		m.mode = modeAllTasks
+		m.showAll = true
+		if msg.Name == "hidden" {
+			m.showHidden = true
+		}
+		cmd := m.enterAllTasksMode(true, "@"+msg.Name)
+		return m, cmd
+
+	case TagSearchExitMsg:
+		m.exitToDashboard()
+		return m, nil
 
 	case tea.KeyMsg:
 		m.err = nil // clear error on any key press

@@ -25,7 +25,7 @@ func (m Model) View() string {
 	case modeAllTasks:
 		return errLine + m.viewAllTasks()
 	case modeTagSearch:
-		return errLine + m.viewTagSearch()
+		return errLine + m.tagSearch.View(m.tagColors, m.width)
 	case modeRecentlyCompleted:
 		return errLine + m.viewAllTasks()
 	}
@@ -171,67 +171,6 @@ func (m Model) viewAllTasks() string {
 	if len(tasks) > 1 {
 		parts = append(parts, FooterStyle().Render(fmt.Sprintf("  %d–%d of %d results", start+1, end, len(tasks))))
 	}
-	return strings.Join(parts, "\n")
-}
-
-// viewTagSearch renders the tag picker with filter bar.
-// Tags are displayed in a flow-wrapped line with matched tags highlighted.
-func (m Model) viewTagSearch() string {
-	var parts []string
-
-	parts = append(parts, m.filterBar.View())
-
-	filtered := m.filteredTags()
-	if len(m.tagList) == 0 {
-		parts = append(parts, "  No tags found")
-		return strings.Join(parts, "\n")
-	}
-
-	// Build a set of matched tag names for quick lookup.
-	matchedSet := make(map[string]bool, len(filtered))
-	for _, tag := range filtered {
-		matchedSet[tag] = true
-	}
-
-	// Determine which filtered tag is currently selected.
-	selectedTag := ""
-	if len(filtered) > 0 && m.tagCursor < len(filtered) {
-		selectedTag = filtered[m.tagCursor]
-	}
-
-	// Render all tags in a flow-wrapped line.
-	// Matched tags are highlighted with their configured color.
-	// The selected tag (via Tab) gets reverse video.
-	// Non-matching tags are rendered faint.
-	fs := FaintStyle()
-	delim := fs.Render("\u2009·\u2009")
-	var tagParts []string
-	for _, tag := range m.tagList {
-		if tag == selectedTag {
-			tagParts = append(tagParts, TaskStyle(true).Render(tag))
-		} else if matchedSet[tag] {
-			if color := m.resolveTagColor(tag); color != "" {
-				tagParts = append(tagParts, TagStyle(color).Render(tag))
-			} else {
-				tagParts = append(tagParts, tag)
-			}
-		} else {
-			tagParts = append(tagParts, fs.Render(tag))
-		}
-	}
-
-	// Flow-wrap the tags to fit the terminal width.
-	if m.width > 0 {
-		parts = append(parts, flowWrap(tagParts, delim, m.width-2))
-	} else {
-		parts = append(parts, "  "+strings.Join(tagParts, delim))
-	}
-
-	if len(filtered) == 0 && m.filterBar.Text() != "" {
-		parts = append(parts, "")
-		parts = append(parts, "  No results")
-	}
-
 	return strings.Join(parts, "\n")
 }
 

@@ -2,7 +2,6 @@ package tui
 
 import (
 	"fmt"
-	"slices"
 	"strings"
 	"time"
 
@@ -341,35 +340,19 @@ func (m Model) visibleSections() []filter.ViewResult {
 	return visible
 }
 
-// buildTagList extracts unique tag names from all tasks, sorted alphabetically.
-func (m *Model) buildTagList() {
+// extractTagNames returns the unique tag names from the given tasks.
+func extractTagNames(tasks []model.Task) []string {
 	seen := make(map[string]bool)
-	for _, t := range m.allTasks {
+	for _, t := range tasks {
 		for _, tag := range t.Tags {
 			seen[tag.Name] = true
 		}
 	}
-	m.tagList = make([]string, 0, len(seen))
+	names := make([]string, 0, len(seen))
 	for name := range seen {
-		m.tagList = append(m.tagList, name)
+		names = append(names, name)
 	}
-	slices.Sort(m.tagList)
-}
-
-// filteredTags returns the tag list filtered by current filter text.
-func (m Model) filteredTags() []string {
-	if m.filterBar.Text() == "" {
-		return m.tagList
-	}
-	// Strip leading @ so users can type "@due" or "due" interchangeably.
-	lower := strings.ToLower(strings.TrimPrefix(m.filterBar.Text(), "@"))
-	var result []string
-	for _, tag := range m.tagList {
-		if strings.Contains(strings.ToLower(tag), lower) {
-			result = append(result, tag)
-		}
-	}
-	return result
+	return names
 }
 
 // hiddenCountFor returns the number of hidden tasks for the section with the given title.
@@ -380,17 +363,6 @@ func (m Model) hiddenCountFor(title string) int {
 		}
 	}
 	return 0
-}
-
-// setupFilter configures the filter with a mode, initial value, and placeholder, then focuses the input.
-func (m *Model) setupFilter(mode filterMode, value, placeholder string) tea.Cmd {
-	var cmd tea.Cmd
-	m.filterBar, cmd = m.filterBar.Update(FilterActivateMsg{
-		Mode:         mode,
-		InitialValue: value,
-		Placeholder:  placeholder,
-	})
-	return cmd
 }
 
 // exitToDashboard resets the mode, clears any active filter, and rebuilds.
@@ -408,7 +380,12 @@ func (m *Model) enterAllTasksMode(showAll bool, initialFilter string) tea.Cmd {
 	m.mode = modeAllTasks
 	m.showAll = showAll
 	m.cursor = 0
-	cmd := m.setupFilter(filterSubstring, initialFilter, "search tasks...")
+	var cmd tea.Cmd
+	m.filterBar, cmd = m.filterBar.Update(FilterActivateMsg{
+		Mode:         filterSubstring,
+		InitialValue: initialFilter,
+		Placeholder:  "search tasks...",
+	})
 	m.rebuildSections()
 	m.clampCursor()
 	return cmd
@@ -418,9 +395,10 @@ func (m *Model) enterAllTasksMode(showAll bool, initialFilter string) tea.Cmd {
 func (m *Model) enterTagSearchMode() tea.Cmd {
 	m.mode = modeTagSearch
 	m.showAll = false
-	m.buildTagList()
-	m.tagCursor = 0
-	return m.setupFilter(filterSubstring, "", "search tags...")
+	tags := extractTagNames(m.allTasks)
+	var cmd tea.Cmd
+	m.tagSearch, cmd = m.tagSearch.Update(TagSearchActivateMsg{Tags: tags})
+	return cmd
 }
 
 // enterRecentlyCompletedMode switches to recently-completed view with a pre-filled query.
@@ -428,22 +406,15 @@ func (m *Model) enterRecentlyCompletedMode() tea.Cmd {
 	queryStr := fmt.Sprintf("completed and @completed >= today-%dd", m.config.RecentlyCompletedDays)
 	m.mode = modeRecentlyCompleted
 	m.cursor = 0
-	cmd := m.setupFilter(filterQuery, queryStr, "type to filter...")
+	var cmd tea.Cmd
+	m.filterBar, cmd = m.filterBar.Update(FilterActivateMsg{
+		Mode:         filterQuery,
+		InitialValue: queryStr,
+		Placeholder:  "type to filter...",
+	})
 	m.rebuildSections()
 	m.clampCursor()
 	return cmd
-}
-
-// resolveTagColor returns the configured color for a tag name, falling back to
-// "_default". Returns empty string if no color is configured.
-func (m Model) resolveTagColor(tagName string) string {
-	if color, ok := m.tagColors[tagName]; ok {
-		return color
-	}
-	if color, ok := m.tagColors["_default"]; ok {
-		return color
-	}
-	return ""
 }
 
 func (m Model) nowFunc() time.Time {

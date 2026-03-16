@@ -12,9 +12,11 @@ import (
 )
 
 func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	// Tag search mode: delegate all keys (unchanged for now).
+	// Tag search mode: delegate all keys to TagSearch sub-model.
 	if m.mode == modeTagSearch {
-		return m.handleTagSearchKey(msg)
+		var cmd tea.Cmd
+		m.tagSearch, cmd = m.tagSearch.Update(msg)
+		return m, cmd
 	}
 
 	// Recently-completed: intercept Escape before FilterBar.
@@ -146,11 +148,21 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case key.Matches(msg, m.keys.Filter):
-		cmd := m.setupFilter(filterSubstring, "", "type to filter...")
+		var cmd tea.Cmd
+		m.filterBar, cmd = m.filterBar.Update(FilterActivateMsg{
+			Mode:         filterSubstring,
+			InitialValue: "",
+			Placeholder:  "type to filter...",
+		})
 		return m, cmd
 
 	case key.Matches(msg, m.keys.Query):
-		cmd := m.setupFilter(filterQuery, "", "type to filter...")
+		var cmd tea.Cmd
+		m.filterBar, cmd = m.filterBar.Update(FilterActivateMsg{
+			Mode:         filterQuery,
+			InitialValue: "",
+			Placeholder:  "type to filter...",
+		})
 		return m, cmd
 
 	case key.Matches(msg, m.keys.AllTasks):
@@ -351,49 +363,3 @@ func (m Model) toggleHiddenTag() (tea.Model, tea.Cmd) {
 	}
 }
 
-// handleTagSearchKey handles key events in tag search mode.
-func (m Model) handleTagSearchKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	switch {
-	case key.Matches(msg, m.keys.Escape):
-		m.exitToDashboard()
-		return m, nil
-
-	case key.Matches(msg, m.keys.Quit):
-		return m, tea.Quit
-
-	case key.Matches(msg, m.keys.NextSection) || key.Matches(msg, m.keys.Down):
-		// Tab / Down / Ctrl-N: cycle forward through matched tags.
-		tags := m.filteredTags()
-		if len(tags) > 0 {
-			m.tagCursor = (m.tagCursor + 1) % len(tags)
-		}
-		return m, nil
-
-	case key.Matches(msg, m.keys.PrevSection) || key.Matches(msg, m.keys.Up):
-		// Shift-Tab / Up / Ctrl-P: cycle backward through matched tags.
-		tags := m.filteredTags()
-		if len(tags) > 0 {
-			m.tagCursor = (m.tagCursor - 1 + len(tags)) % len(tags)
-		}
-		return m, nil
-
-	case key.Matches(msg, m.keys.Enter):
-		// Select tag → switch to all-tasks mode filtered to @tag (including completed).
-		tags := m.filteredTags()
-		if m.tagCursor < len(tags) {
-			selectedTag := tags[m.tagCursor]
-			if selectedTag == "hidden" {
-				m.showHidden = true
-			}
-			cmd := m.enterAllTasksMode(true, "@"+selectedTag)
-			return m, cmd
-		}
-		return m, nil
-
-	default:
-		var cmd tea.Cmd
-		m.filterBar, cmd = m.filterBar.Update(msg)
-		m.tagCursor = 0
-		return m, cmd
-	}
-}
