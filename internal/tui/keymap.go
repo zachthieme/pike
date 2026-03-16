@@ -1,6 +1,11 @@
 package tui
 
-import "github.com/charmbracelet/bubbles/key"
+import (
+	"strings"
+
+	"github.com/charmbracelet/bubbles/key"
+	"pike/internal/config"
+)
 
 // KeyMap defines the key bindings for the TUI.
 type KeyMap struct {
@@ -108,6 +113,49 @@ func DefaultKeyMap() KeyMap {
 			key.WithKeys(string(rune('1' + i))),
 			key.WithHelp(string(rune('1'+i)), "focus section"),
 		)
+	}
+
+	return km
+}
+
+// BuildKeyMap creates a KeyMap starting from defaults, applying user overrides,
+// and disabling FocusSection keys when custom bindings are present.
+func BuildKeyMap(overrides map[string][]string, custom []config.CustomBinding) KeyMap {
+	km := DefaultKeyMap()
+
+	bindings := map[string]*key.Binding{
+		"up": &km.Up, "down": &km.Down, "top": &km.Top, "bottom": &km.Bottom,
+		"page_down": &km.PageDown, "page_up": &km.PageUp,
+		"next_section": &km.NextSection, "prev_section": &km.PrevSection,
+		"enter": &km.Enter, "quit": &km.Quit, "summary": &km.Summary,
+		"filter": &km.Filter, "query": &km.Query, "escape": &km.Escape,
+		"refresh": &km.Refresh, "all_tasks": &km.AllTasks,
+		"tag_search": &km.TagSearch, "toggle_hidden": &km.ToggleHidden,
+		"toggle": &km.Toggle, "toggle_hidden_tag": &km.ToggleHiddenTag,
+		"recently_completed": &km.RecentlyCompleted,
+	}
+
+	for name, keys := range overrides {
+		b, ok := bindings[name]
+		if !ok {
+			continue
+		}
+		if len(keys) == 0 {
+			b.SetEnabled(false)
+			continue
+		}
+		helpKey := strings.Join(keys, "/")
+		helpDesc := b.Help().Desc
+		*b = key.NewBinding(
+			key.WithKeys(keys...),
+			key.WithHelp(helpKey, helpDesc),
+		)
+	}
+
+	if len(custom) > 0 {
+		for i := range km.FocusSection {
+			km.FocusSection[i].SetEnabled(false)
+		}
 	}
 
 	return km
