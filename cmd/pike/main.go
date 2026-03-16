@@ -281,11 +281,15 @@ func runQuery(w io.Writer, tasks []model.Task, queryStr string, opts queryOpts) 
 }
 
 func runTUI(_ io.Writer, cfg *config.Config, tasks []model.Task, sc *scanner.Scanner, viewFlag string, configPath string) error {
+	// Create a cancellable context so in-flight scan goroutines stop when the TUI exits.
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	configReload := func() (*config.Config, error) {
 		return config.Load(configPath)
 	}
 	scanRefresh := func() ([]model.Task, error) {
-		return sc.Refresh(context.Background())
+		return sc.Refresh(ctx)
 	}
 	m := tui.NewModel(cfg, tasks, scanRefresh, configReload)
 	m.SetVersion(version)
