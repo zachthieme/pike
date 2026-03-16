@@ -12,46 +12,6 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-// RefreshMsg triggers a re-scan of task files.
-type RefreshMsg struct{}
-
-// EditorFinishedMsg is sent after the editor process exits.
-type EditorFinishedMsg struct{ Err error }
-
-// toggleResultMsg is sent after a toggle operation completes.
-type toggleResultMsg struct{ Err error }
-
-// scanResultMsg is sent after a background scan completes.
-type scanResultMsg struct {
-	Tasks  []model.Task
-	Config *config.Config
-	Err    error
-}
-
-// viewMode tracks the current display mode.
-type viewMode int
-
-const (
-	modeDashboard viewMode = iota
-	modeAllTasks
-	modeTagSearch
-	modeRecentlyCompleted
-)
-
-// filterMode tracks whether the filter bar uses substring or DSL matching.
-type filterMode int
-
-const (
-	filterSubstring filterMode = iota
-	filterQuery
-)
-
-// filterPrompt maps each filter mode to its prompt string.
-var filterPrompt = map[filterMode]string{
-	filterSubstring: "/ ",
-	filterQuery:     "? ",
-}
-
 // filterState encapsulates all filter-related state.
 type filterState struct {
 	Active   bool
