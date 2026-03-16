@@ -150,7 +150,7 @@ func writeLines(path string, lines []string) error {
 		return err
 	}
 	if err := os.Rename(tmp, path); err != nil {
-		os.Remove(tmp)
+		_ = os.Remove(tmp) // best-effort cleanup; rename error takes precedence
 		return err
 	}
 	return nil

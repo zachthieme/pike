@@ -10,6 +10,9 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
+// minSectionWidth is the minimum inner width of a section border box.
+const minSectionWidth = 10
+
 // lipglossStyleFunc applies foreground color via lipgloss using cached styles.
 func lipglossStyleFunc(text string, color string) string {
 	return TagStyle(color).Render(text)
@@ -34,9 +37,9 @@ func (m Model) renderSection(title string, tasks []model.Task, color string, sec
 		BorderForeground(borderColor)
 
 	if m.width > 0 {
-		innerWidth := m.width - 4
-		if innerWidth < 10 {
-			innerWidth = 10
+		innerWidth := m.width - 4 // 4 = left/right border + padding
+		if innerWidth < minSectionWidth {
+			innerWidth = minSectionWidth
 		}
 		borderStyle = borderStyle.Width(innerWidth)
 	}

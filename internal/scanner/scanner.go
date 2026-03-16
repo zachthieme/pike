@@ -16,6 +16,11 @@ import (
 	"pike/internal/parser"
 )
 
+// maxLineSize is the maximum length of a single markdown line the scanner will
+// read. Lines longer than this are split by bufio.Scanner, which may cause
+// missed tasks — but 1MB is well beyond any reasonable markdown line.
+const maxLineSize = 1 << 20
+
 // Scanner walks a directory tree, finds files matching include/exclude globs,
 // and parses them for task lines.
 type Scanner struct {
@@ -160,7 +165,7 @@ func (s *Scanner) parseFileInto(absPath, relPath string, modTime time.Time, mtim
 
 	var fileTasks []model.Task
 	sc := bufio.NewScanner(f)
-	sc.Buffer(make([]byte, 0, bufio.MaxScanTokenSize), 1024*1024) // allow lines up to 1MB
+	sc.Buffer(make([]byte, 0, bufio.MaxScanTokenSize), maxLineSize)
 	lineNum := 0
 	for sc.Scan() {
 		lineNum++

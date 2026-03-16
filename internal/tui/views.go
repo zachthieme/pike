@@ -107,6 +107,13 @@ func (m Model) displaySections() []filter.ViewResult {
 	return m.sections
 }
 
+// Layout constants for viewAllTasks windowing calculations.
+const (
+	allTasksChrome  = 3  // search bar + footer + bubbletea chrome
+	sectionChrome   = 4  // section header + newline + top/bottom borders
+	minAvailableHeight = 5
+)
+
 // viewAllTasks renders all open tasks in a single section with filter bar.
 // Tasks are windowed to fit the terminal height, keeping the cursor visible.
 func (m Model) viewAllTasks() string {
@@ -129,15 +136,12 @@ func (m Model) viewAllTasks() string {
 	tasks := sec.Tasks
 	hiddenCount := m.hiddenCountFor(sec.Title)
 
-	// Available terminal lines for the section + footer.
-	// Subtract: search bar (1) + footer (1) + bubbletea (1) = 3
-	available := m.height - 3
-	if available < 5 {
-		available = 5
+	available := m.height - allTasksChrome
+	if available < minAvailableHeight {
+		available = minAvailableHeight
 	}
 
-	// Start with all tasks or a reasonable estimate, then shrink until it fits.
-	maxTasks := min(len(tasks), available-4) // 4 = section header + newline + borders
+	maxTasks := min(len(tasks), available-sectionChrome)
 	if maxTasks < 1 {
 		maxTasks = 1
 	}
@@ -233,9 +237,11 @@ func (m Model) viewTagSearch() string {
 
 // flowWrap joins styled parts with a delimiter, wrapping to new lines
 // when the visible width exceeds maxWidth.
+const defaultFlowWidth = 80
+
 func flowWrap(parts []string, delim string, maxWidth int) string {
 	if maxWidth <= 0 {
-		maxWidth = 80
+		maxWidth = defaultFlowWidth
 	}
 
 	// Use lipgloss width measurement which handles ANSI correctly.

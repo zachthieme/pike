@@ -65,14 +65,14 @@ func FormatJSON(w io.Writer, tasks []model.Task) error {
 
 // FormatSummary formats the task summary counts for non-interactive output.
 func FormatSummary(open, overdue, dueThisWeek, completedThisWeek int, noColor bool) string {
-	const width = 30
+	const summaryLabelWidth = 30
 	const ansiReset = "\033[0m"
 
 	header := "\u2550\u2550\u2550 Task Summary \u2550\u2550\u2550"
 
 	formatLine := func(label string, count int) string {
 		countStr := fmt.Sprintf("%d", count)
-		padding := width - len(label) - len(countStr)
+		padding := summaryLabelWidth - len(label) - len(countStr)
 		if padding < 1 {
 			padding = 1
 		}

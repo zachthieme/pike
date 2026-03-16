@@ -170,11 +170,17 @@ func PrettifyLinks(s string, renderLink func(string) string) string {
 	return s
 }
 
+// URL display-length limits for ShortenURL output.
+const (
+	maxShortenedURLLen = 40
+	fallbackURLLen     = 25
+)
+
 // ShortenURL extracts a readable name from a URL.
 func ShortenURL(raw string) string {
 	u, err := url.Parse(raw)
 	if err != nil {
-		return truncate(raw, 25)
+		return truncate(raw, fallbackURLLen)
 	}
 	p := strings.TrimRight(u.Path, "/")
 	if p == "" {
@@ -190,8 +196,8 @@ func ShortenURL(raw string) string {
 	for _, ext := range []string{".html", ".htm", ".md", ".pdf"} {
 		name = strings.TrimSuffix(name, ext)
 	}
-	if len(name) > 40 {
-		name = name[:37] + "..."
+	if len(name) > maxShortenedURLLen {
+		name = name[:maxShortenedURLLen-3] + "..."
 	}
 	return name
 }

@@ -323,5 +323,5 @@ func writeDefaultConfig() {
 	if err := os.MkdirAll(configDir, 0o755); err != nil {
 		return
 	}
-	os.WriteFile(configPath, []byte(defaultConfigYAML), 0o644)
+	_ = os.WriteFile(configPath, []byte(defaultConfigYAML), 0o644) // best-effort; errors are intentionally ignored
 }
