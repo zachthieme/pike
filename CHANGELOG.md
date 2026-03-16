@@ -31,6 +31,29 @@ The biggest day. Started with a major refactor — extracted a shared `style` pa
 - **Simplification pass** — extracted `cursorUp`/`cursorDown`/`cursorSection`/`countFlatTasks` helpers, centralized filter mode activation via `setFilterMode` and `filterPrompt` map
 - **Summary overlay** — full-screen layout with version, README description, and keybindings organized into sections (Navigation, Actions, Search & Filter, Other)
 
+### v1.3.0 — March 16: TUI Sub-Model Decomposition
+
+**Architecture:**
+- Extracted `FilterBar` and `TagSearch` into Bubble Tea sub-models with message-passing architecture
+- Filter bar owns text input widget, mode switching, and activation/deactivation lifecycle
+- Tag search owns tag list, cursor, filtering, and flow-wrapped rendering with its own text input
+- Main Model delegates via `processFilterOutput` for inline state settlement (no async round-trips)
+- New `messages.go` consolidates all message types and shared type definitions
+
+**Quality & hardening:**
+- Magic numbers extracted to named constants across scanner, style, TUI, and render packages
+- Benchmarks added for parser, query eval, style colorization, and TUI hot paths
+- Error handling: explicitly discarded intentionally-ignored errors in config and toggle
+- TOCTOU hardening in toggle: re-reads file and verifies line unchanged before writing
+- Cancellable context for scan goroutines — in-flight scans stop when TUI exits
+- `DefaultKeyMap()` cached in sub-models instead of allocating per-keystroke
+- Redundant `text` field removed from FilterBar (derived from `input.Value()`)
+
+**Behavior changes:**
+- `q` returns to dashboard from non-dashboard views (tag search, all tasks, recently completed) instead of quitting the program. `q` on the dashboard still quits.
+- `j`/`k` type into the filter input when it's focused (previously they moved the cursor). Arrow keys still navigate.
+- Background scan in tag search mode preserves cursor position and filter text (was resetting both on every refresh)
+
 ### v1.1.1 — March 15: CLI, DSL & Bubbletea Best Practices
 
 **New features:**
