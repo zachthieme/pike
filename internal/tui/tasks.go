@@ -76,7 +76,7 @@ func (m Model) weekStartDay() int {
 }
 
 // rebuildSingleSection builds a single-section view from the given tasks,
-// applying the query filter and pin partitioning.
+// applying the active filter (substring or DSL) and pin partitioning.
 func (m *Model) rebuildSingleSection(title, color string, tasks []model.Task, now time.Time) {
 	m.unfilteredSections = nil
 	if m.filterBar.Text() != "" {

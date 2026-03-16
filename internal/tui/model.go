@@ -177,8 +177,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, func() tea.Msg { return RefreshMsg{} }
 
 	case TagSelectedMsg:
-		m.mode = modeAllTasks
-		m.showAll = true
 		if msg.Name == "hidden" {
 			m.showHidden = true
 		}

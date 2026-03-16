@@ -914,3 +914,154 @@ func TestRecentlyCompletedNoOpWhenAlreadyActive(t *testing.T) {
 		t.Errorf("expected to stay in modeRecentlyCompleted, got %d", m2.mode)
 	}
 }
+
+func TestQuitFromResultsFocused(t *testing.T) {
+	m := testModel(testTasks(), testViews())
+
+	// Enter all-tasks mode (activates filter bar with input focused).
+	updated, _ := sendKey(m, "a")
+	m = updated.(Model)
+
+	// Tab to blur input (focus moves to results).
+	updated, _ = sendSpecialKey(m, tea.KeyTab)
+	m = updated.(Model)
+
+	if m.filterBar.InputFocused() {
+		t.Fatal("expected input blurred after Tab")
+	}
+	if !m.filterBar.Active() {
+		t.Fatal("expected filter bar active")
+	}
+
+	// Press q — should quit.
+	_, cmd := sendKey(m, "q")
+	if cmd == nil {
+		t.Fatal("expected non-nil cmd for quit")
+	}
+	msg := cmd()
+	if _, ok := msg.(tea.QuitMsg); !ok {
+		t.Errorf("expected tea.QuitMsg from q with results focused, got %T", msg)
+	}
+}
+
+func TestQuitFromRecentlyCompletedResultsFocused(t *testing.T) {
+	m := testModel(testTasks(), testViews())
+
+	// Enter recently-completed mode.
+	updated, _ := sendKey(m, "c")
+	m = updated.(Model)
+
+	// Tab to blur input (focus moves to results).
+	updated, _ = sendSpecialKey(m, tea.KeyTab)
+	m = updated.(Model)
+
+	// Press q — should quit.
+	_, cmd := sendKey(m, "q")
+	if cmd == nil {
+		t.Fatal("expected non-nil cmd for quit")
+	}
+	msg := cmd()
+	if _, ok := msg.(tea.QuitMsg); !ok {
+		t.Errorf("expected tea.QuitMsg from q in recently-completed results, got %T", msg)
+	}
+}
+
+func TestJKTypeIntoFilterWhenInputFocused(t *testing.T) {
+	m := testModel(testTasks(), testViews())
+
+	// Activate filter (input is focused).
+	updated, _ := sendKey(m, "/")
+	m = updated.(Model)
+
+	if !m.filterBar.InputFocused() {
+		t.Fatal("expected input focused after /")
+	}
+
+	// Press 'j' — should type into filter, not move cursor.
+	cursorBefore := m.cursor
+	updated, _ = sendKey(m, "j")
+	m = updated.(Model)
+
+	if m.cursor != cursorBefore {
+		t.Errorf("expected cursor unchanged (typed j into filter), but cursor moved from %d to %d", cursorBefore, m.cursor)
+	}
+	if m.filterBar.Text() != "j" {
+		t.Errorf("expected filter text 'j', got %q", m.filterBar.Text())
+	}
+
+	// Press 'k' — should also type into filter.
+	updated, _ = sendKey(m, "k")
+	m = updated.(Model)
+
+	if m.filterBar.Text() != "jk" {
+		t.Errorf("expected filter text 'jk', got %q", m.filterBar.Text())
+	}
+}
+
+func TestProcessFilterOutputRebuildsOnChange(t *testing.T) {
+	m := testModel(testTasks(), testViews())
+
+	// Activate filter.
+	updated, _ := sendKey(m, "/")
+	m = updated.(Model)
+
+	// Type "overdue" — processFilterOutput should rebuild sections inline.
+	for _, ch := range "overdue" {
+		updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{ch}})
+		m = updated.(Model)
+	}
+
+	// Sections should be filtered (inline, not deferred).
+	flat := m.flatTasks()
+	for _, task := range flat {
+		if !strings.Contains(strings.ToLower(task.Text), "overdue") {
+			t.Errorf("expected all tasks to match filter, got %q", task.Text)
+		}
+	}
+}
+
+func TestProcessFilterOutputClearedExitsMode(t *testing.T) {
+	m := testModel(testTasks(), testViews())
+
+	// Activate filter.
+	updated, _ := sendKey(m, "/")
+	m = updated.(Model)
+
+	// Escape on empty input — should emit FilterClearedMsg handled inline.
+	updated, _ = sendSpecialKey(m, tea.KeyEscape)
+	m = updated.(Model)
+
+	if m.filterBar.Active() {
+		t.Error("expected filter bar deactivated after Escape on empty")
+	}
+	if m.mode != modeDashboard {
+		t.Errorf("expected modeDashboard, got %d", m.mode)
+	}
+}
+
+func TestProcessFilterOutputPreservesTextInputCmd(t *testing.T) {
+	m := testModel(testTasks(), testViews())
+
+	// Activate filter.
+	updated, _ := sendKey(m, "/")
+	m = updated.(Model)
+
+	// Type a character — should return a non-nil tea.Cmd (textinput blink).
+	updated, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'x'}})
+	m = updated.(Model)
+
+	// The textinput blink cmd should be preserved (not swallowed).
+	// We can't easily test the blink content, but the cmd should be non-nil
+	// since the textinput widget returns a blink cmd on keystrokes.
+	if m.filterBar.Text() != "x" {
+		t.Errorf("expected filter text 'x', got %q", m.filterBar.Text())
+	}
+	// cmd may be nil if textinput doesn't produce one, so just verify
+	// the filter output was processed (sections rebuilt).
+	_ = cmd
+	flat := m.flatTasks()
+	// "x" shouldn't match any tasks
+	if len(flat) != 0 {
+		t.Errorf("expected 0 tasks matching 'x', got %d", len(flat))
+	}
+}

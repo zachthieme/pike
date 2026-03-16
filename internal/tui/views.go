@@ -114,7 +114,8 @@ const (
 	minAvailableHeight = 5
 )
 
-// viewAllTasks renders all open tasks in a single section with filter bar.
+// viewAllTasks renders a single-section task list with filter bar.
+// Used for both all-tasks and recently-completed modes.
 // Tasks are windowed to fit the terminal height, keeping the cursor visible.
 func (m Model) viewAllTasks() string {
 	var parts []string

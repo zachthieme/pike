@@ -25,22 +25,24 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	// FilterBar active + input focused: navigation keys move cursor,
-	// all other keys go to FilterBar.
+	// FilterBar active + input focused: rune keys (j, k, q, etc.) go to
+	// FilterBar for typing. Only arrow keys and ctrl shortcuts navigate.
 	if m.filterBar.Active() && m.filterBar.InputFocused() {
-		switch {
-		case key.Matches(msg, m.keys.Down):
-			m.cursorDown()
-			return m, nil
-		case key.Matches(msg, m.keys.Up):
-			m.cursorUp()
-			return m, nil
-		case key.Matches(msg, m.keys.PageDown):
-			m.pageScroll(1)
-			return m, tea.ClearScreen
-		case key.Matches(msg, m.keys.PageUp):
-			m.pageScroll(-1)
-			return m, tea.ClearScreen
+		if msg.Type != tea.KeyRunes {
+			switch {
+			case key.Matches(msg, m.keys.Down):
+				m.cursorDown()
+				return m, nil
+			case key.Matches(msg, m.keys.Up):
+				m.cursorUp()
+				return m, nil
+			case key.Matches(msg, m.keys.PageDown):
+				m.pageScroll(1)
+				return m, tea.ClearScreen
+			case key.Matches(msg, m.keys.PageUp):
+				m.pageScroll(-1)
+				return m, tea.ClearScreen
+			}
 		}
 		var cmd tea.Cmd
 		m.filterBar, cmd = m.filterBar.Update(msg)
