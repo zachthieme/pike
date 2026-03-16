@@ -1,37 +1,6 @@
-# Pike Changelog & Development History
+# Changelog
 
-## Timeline
-
-Pike was built over 3 days — March 13-15, 2026 — across 90+ commits.
-
-### Day 1 — March 13: Foundation
-
-The entire core was built in a single day: markdown parser, task model, query DSL (lexer, parser, evaluator), configurable views, tag coloring, link prettification, and the Bubbletea TUI with dashboard, all-tasks, and tag-search modes. By end of day the app was functional with `@hidden` support, scroll windowing, config hot-reload, and a design spec for the next round of work.
-
-### Day 2 — March 14: Polish & Power Features
-
-The biggest day. Started with a major refactor — extracted a shared `style` package, split the monolithic `model.go` into focused files, and added a golden file test suite. Then rapid-fire feature work:
-
-- **Tag search redesign** — flow-wrapped inline display with colored/highlighted tags
-- **Task toggling** (`x`) — complete/uncomplete tasks directly in source files
-- **`@pin` tag** — float important tasks to section tops
-- **Query DSL upgrade** — full boolean expressions with partial tag matching (`@du` matches `@due`), text literals, regex
-- **Recently completed** (`c`) — pre-filled DSL query for last N days
-- **Tab focus model** — toggle between query bar and results
-- **`H` key** — toggle `@hidden` tag on any task
-- **Ctrl-D/U** — half-page scrolling
-- Dozens of layout/spacing fixes for the all-tasks and tag-search views
-
-### Day 3 — March 15: UX Refinement
-
-- **Nix flake** for cross-platform installation
-- **Query box focus behavior** — Enter submits query (doesn't open file), no cursor highlight while typing, two-step Escape (clear text, then exit)
-- **Filter mode split** — `/` for substring search, `?` for DSL queries, prompt character shows active mode
-- **Code review fixes** — captured dropped focus commands, added `?` handler when results focused, restored `queryErr` display in all views
-- **Simplification pass** — extracted `cursorUp`/`cursorDown`/`cursorSection`/`countFlatTasks` helpers, centralized filter mode activation via `setFilterMode` and `filterPrompt` map
-- **Summary overlay** — full-screen layout with version, README description, and keybindings organized into sections (Navigation, Actions, Search & Filter, Other)
-
-### v1.3.0 — March 16: TUI Sub-Model Decomposition
+### v1.3.0 — March 16, 2026: TUI Sub-Model Decomposition
 
 **Architecture:**
 - Extracted `FilterBar` and `TagSearch` into Bubble Tea sub-models with message-passing architecture
@@ -54,7 +23,12 @@ The biggest day. Started with a major refactor — extracted a shared `style` pa
 - `j`/`k` type into the filter input when it's focused (previously they moved the cursor). Arrow keys still navigate.
 - Background scan in tag search mode preserves cursor position and filter text (was resetting both on every refresh)
 
-### v1.1.1 — March 15: CLI, DSL & Bubbletea Best Practices
+### v1.2.0 — March 15, 2026: Catppuccin Mocha & First-Run Config
+
+- Catppuccin Mocha color scheme as default
+- Auto-create config file with sensible defaults on first run
+
+### v1.1.1 — March 15, 2026: CLI, DSL & Bubbletea Best Practices
 
 **New features:**
 - `tomorrow` and `yesterday` DSL date keywords (`@due < tomorrow`)
@@ -77,9 +51,9 @@ The biggest day. Started with a major refactor — extracted a shared `style` pa
 - Config-only scan result now triggers section rebuild (prevents stale display)
 - Hidden icon changed to `○`/`◉` toggle pair for better visibility (default color 245)
 
-### v1.1.0 — March 15: Architecture & Release Automation
+### v1.1.0 — March 15, 2026: Architecture & Release Automation
 
-**Architecture improvements (12 changes):**
+**Architecture improvements:**
 - Atomic file writes in toggle (write-to-temp + rename) for crash safety
 - Per-file mutex locking to prevent concurrent mutation races
 - Typed sentinel errors (`ErrStaleData`, `ErrLineOutOfRange`) for programmatic handling
@@ -106,11 +80,28 @@ The biggest day. Started with a major refactor — extracted a shared `style` pa
 - Nix flake restructured: `pike-bin` (prebuilt, default) and `pike-src` (source build)
 - Workflow auto-updates flake.nix with version and binary hashes
 
-### v1.0.1 — March 15: Bug Fixes
+### v1.0.1 — March 15, 2026: Bug Fixes
 
-- **`--view` lock** — Starting pike with `-v <view>` now locks the TUI to that view. Mode-switching keys (`a`/`t`/`s`/`c`/`1`-`9`) are disabled and Escape cannot unfocus the view.
+- **`--view` lock** — Starting pike with `-w <view>` now locks the TUI to that view. Mode-switching keys (`a`/`t`/`s`/`c`/`1`-`9`) are disabled and Escape cannot unfocus the view.
 - **Recently completed escape fix** — Pressing Escape in recently completed mode now returns directly to the dashboard instead of leaving a stale unfiltered view showing all tasks.
 - **Escape cleanup** — Escape from any non-dashboard mode now fully resets filter state (previously only cleared `showAll`).
+
+### v1.0.0 — March 13-14, 2026: Initial Release
+
+The entire core built over two days: markdown parser, task model, query DSL (lexer, recursive-descent parser, evaluator), configurable dashboard views, tag coloring, link prettification, and the Bubble Tea TUI.
+
+**Features at launch:**
+- Checkbox (`- [ ]`/`- [x]`) and tagged bullet (`- text @tag`) extraction from markdown files
+- Query DSL with boolean operators, date comparisons, regex, text matching, partial tag matching
+- Configurable dashboard sections via YAML (`views:` with `query`, `sort`, `color`)
+- Tag search mode with flow-wrapped tag picker
+- All-tasks and recently-completed views
+- Task toggling (`x`) — complete/uncomplete directly in source files
+- `@pin` tag for floating tasks to section tops
+- `@hidden` tag with `h`/`H` toggle visibility
+- Editor integration with line-number support (hx, nvim, vim, code)
+- File scanning with mtime-based incremental refresh
+- Golden file test suite
 
 ---
 
