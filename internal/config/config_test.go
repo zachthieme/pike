@@ -510,3 +510,152 @@ recently_completed_days: 14
 		t.Errorf("RecentlyCompletedDays = %d, want 14", cfg.RecentlyCompletedDays)
 	}
 }
+
+func TestLoadBytes_KeybindingsOverride(t *testing.T) {
+	input := `
+keybindings:
+  toggle: ["space", "x"]
+  quit: ["q", "ctrl+c"]
+views:
+  - title: "Open"
+    query: "open"
+    sort: file
+    order: 1
+`
+	cfg, err := LoadBytes([]byte(input))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(cfg.Keybindings) == 0 {
+		t.Fatal("Keybindings should not be empty")
+	}
+	toggle := cfg.Keybindings["toggle"]
+	if len(toggle) != 2 || toggle[0] != "space" || toggle[1] != "x" {
+		t.Errorf("toggle = %v, want [space x]", toggle)
+	}
+	quit := cfg.Keybindings["quit"]
+	if len(quit) != 2 || quit[0] != "q" || quit[1] != "ctrl+c" {
+		t.Errorf("quit = %v, want [q ctrl+c]", quit)
+	}
+}
+
+func TestLoadBytes_CustomBindings(t *testing.T) {
+	input := `
+keybindings:
+  custom:
+    - key: "o"
+      view: "Overdue"
+    - key: "d"
+      query: "open and @due < today+3d"
+      sort: "due_asc"
+views:
+  - title: "Overdue"
+    query: "open and @due < today"
+    sort: due_asc
+    order: 1
+`
+	cfg, err := LoadBytes([]byte(input))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(cfg.CustomBindings) != 2 {
+		t.Fatalf("CustomBindings len = %d, want 2", len(cfg.CustomBindings))
+	}
+	if cfg.CustomBindings[0].Key != "o" || cfg.CustomBindings[0].View != "Overdue" {
+		t.Errorf("binding 0 = %+v, want key=o view=Overdue", cfg.CustomBindings[0])
+	}
+	if cfg.CustomBindings[1].Key != "d" || cfg.CustomBindings[1].Query != "open and @due < today+3d" {
+		t.Errorf("binding 1 = %+v, want key=d query=...", cfg.CustomBindings[1])
+	}
+	if cfg.CustomBindings[1].Sort != "due_asc" {
+		t.Errorf("binding 1 sort = %q, want due_asc", cfg.CustomBindings[1].Sort)
+	}
+}
+
+func TestLoadBytes_KeybindingsUnknownAction(t *testing.T) {
+	input := `
+keybindings:
+  bogus: ["x"]
+views:
+  - title: "Open"
+    query: "open"
+    sort: file
+    order: 1
+`
+	_, err := LoadBytes([]byte(input))
+	if err == nil {
+		t.Fatal("expected error for unknown action")
+	}
+}
+
+func TestLoadBytes_CustomBindingBothViewAndQuery(t *testing.T) {
+	input := `
+keybindings:
+  custom:
+    - key: "o"
+      view: "Overdue"
+      query: "open"
+views:
+  - title: "Open"
+    query: "open"
+    sort: file
+    order: 1
+`
+	_, err := LoadBytes([]byte(input))
+	if err == nil {
+		t.Fatal("expected error for binding with both view and query")
+	}
+}
+
+func TestLoadBytes_CustomBindingNeitherViewNorQuery(t *testing.T) {
+	input := `
+keybindings:
+  custom:
+    - key: "o"
+views:
+  - title: "Open"
+    query: "open"
+    sort: file
+    order: 1
+`
+	_, err := LoadBytes([]byte(input))
+	if err == nil {
+		t.Fatal("expected error for binding with neither view nor query")
+	}
+}
+
+func TestLoadBytes_EscapeCannotBeDisabled(t *testing.T) {
+	input := `
+keybindings:
+  escape: []
+views:
+  - title: "Open"
+    query: "open"
+    sort: file
+    order: 1
+`
+	_, err := LoadBytes([]byte(input))
+	if err == nil {
+		t.Fatal("expected error for disabled escape")
+	}
+}
+
+func TestLoadBytes_NoKeybindingsBackwardCompatible(t *testing.T) {
+	input := `
+views:
+  - title: "Open"
+    query: "open"
+    sort: file
+    order: 1
+`
+	cfg, err := LoadBytes([]byte(input))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.Keybindings != nil {
+		t.Errorf("Keybindings should be nil when not specified, got %v", cfg.Keybindings)
+	}
+	if cfg.CustomBindings != nil {
+		t.Errorf("CustomBindings should be nil when not specified, got %v", cfg.CustomBindings)
+	}
+}

@@ -27,6 +27,8 @@ type Config struct {
 	WeekStartDay           int               `yaml:"-"` // 0=Sunday, 1=Monday, ..., 6=Saturday
 	RecentlyCompletedDays  int               `yaml:"-"`
 	Views                  []ViewConfig      `yaml:"-"`
+	Keybindings            map[string][]string `yaml:"-"`
+	CustomBindings         []CustomBinding     `yaml:"-"`
 }
 
 // ViewConfig defines a single dashboard section.
@@ -36,6 +38,26 @@ type ViewConfig struct {
 	Sort  string `yaml:"sort"`
 	Color string `yaml:"color"`
 	Order int    `yaml:"order"`
+}
+
+// CustomBinding defines a user-configured key shortcut.
+type CustomBinding struct {
+	Key   string
+	View  string // non-empty = focus this view by title
+	Query string // non-empty = run this query in all-tasks mode
+	Sort  string // sort order for query mode (default "file", not yet applied)
+}
+
+type rawKeybindings struct {
+	Actions map[string]interface{} `yaml:",inline"`
+	Custom  []rawCustomBinding     `yaml:"custom"`
+}
+
+type rawCustomBinding struct {
+	Key   string `yaml:"key"`
+	View  string `yaml:"view"`
+	Query string `yaml:"query"`
+	Sort  string `yaml:"sort"`
 }
 
 // rawConfig mirrors the YAML structure for unmarshalling.
@@ -52,6 +74,7 @@ type rawConfig struct {
 	WeekStartDay           *int              `yaml:"week_start_day"`
 	RecentlyCompletedDays  *int              `yaml:"recently_completed_days"`
 	Views                  []ViewConfig      `yaml:"views"`
+	Keybindings            *rawKeybindings   `yaml:"keybindings"`
 }
 
 // Load reads configuration from the given path. If path is empty, it checks
@@ -118,6 +141,68 @@ func resolveConfigPath(path string) (string, bool) {
 func fileExists(path string) bool {
 	_, err := os.Stat(path)
 	return err == nil
+}
+
+var knownActions = map[string]bool{
+	"up": true, "down": true, "top": true, "bottom": true,
+	"page_down": true, "page_up": true, "next_section": true, "prev_section": true,
+	"enter": true, "quit": true, "summary": true, "filter": true,
+	"query": true, "escape": true, "refresh": true, "all_tasks": true,
+	"tag_search": true, "toggle_hidden": true, "toggle": true,
+	"toggle_hidden_tag": true, "recently_completed": true,
+}
+
+func parseKeybindings(raw *rawKeybindings) (map[string][]string, []CustomBinding, error) {
+	if raw == nil {
+		return nil, nil, nil
+	}
+	actions := make(map[string][]string)
+	for name, val := range raw.Actions {
+		if name == "custom" {
+			continue
+		}
+		if !knownActions[name] {
+			return nil, nil, fmt.Errorf("unknown keybinding action: %q", name)
+		}
+		slice, ok := val.([]interface{})
+		if !ok {
+			return nil, nil, fmt.Errorf("keybinding %q: expected list of strings", name)
+		}
+		keys := make([]string, 0, len(slice))
+		for _, elem := range slice {
+			s, ok := elem.(string)
+			if !ok {
+				return nil, nil, fmt.Errorf("keybinding %q: expected string, got %T", name, elem)
+			}
+			keys = append(keys, s)
+		}
+		if name == "escape" && len(keys) == 0 {
+			return nil, nil, fmt.Errorf("escape keybinding cannot be disabled")
+		}
+		actions[name] = keys
+	}
+	var custom []CustomBinding
+	for _, rc := range raw.Custom {
+		if rc.View == "" && rc.Query == "" {
+			return nil, nil, fmt.Errorf("custom binding for key %q must specify view or query", rc.Key)
+		}
+		if rc.View != "" && rc.Query != "" {
+			return nil, nil, fmt.Errorf("custom binding for key %q cannot specify both view and query", rc.Key)
+		}
+		sort := rc.Sort
+		if sort == "" {
+			sort = "file"
+		}
+		validSorts := map[string]bool{
+			"file": true, "alpha": true, "due_asc": true, "due_desc": true,
+			"completed_asc": true, "completed_desc": true,
+		}
+		if !validSorts[sort] {
+			return nil, nil, fmt.Errorf("custom binding for key %q: unknown sort order %q", rc.Key, sort)
+		}
+		custom = append(custom, CustomBinding{Key: rc.Key, View: rc.View, Query: rc.Query, Sort: sort})
+	}
+	return actions, custom, nil
 }
 
 func applyDefaults(raw *rawConfig) (*Config, error) {
@@ -219,6 +304,13 @@ func applyDefaults(raw *rawConfig) (*Config, error) {
 			},
 		}
 	}
+
+	keybindings, customBindings, err := parseKeybindings(raw.Keybindings)
+	if err != nil {
+		return nil, err
+	}
+	cfg.Keybindings = keybindings
+	cfg.CustomBindings = customBindings
 
 	return cfg, nil
 }
