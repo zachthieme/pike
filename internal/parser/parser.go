@@ -1,9 +1,9 @@
 package parser
 
 import (
+	"pike/internal/model"
 	"regexp"
 	"strings"
-	"pike/internal/model"
 	"time"
 )
 
@@ -12,6 +12,27 @@ var (
 	plainLineRe = regexp.MustCompile(`^\s*- (.+)$`)
 	tagRe       = regexp.MustCompile(`@(\w+)(?:\(([^)]*)\))?`)
 )
+
+func normalizeDate(s string) (string, bool) {
+	s = strings.ReplaceAll(s, "/", "-")
+	s = strings.ReplaceAll(s, ".", "-")
+	parts := strings.Split(s, "-")
+	if len(parts) != 3 {
+		return "", false
+	}
+	if len(parts[1]) == 1 {
+		parts[1] = "0" + parts[1]
+	}
+	if len(parts[2]) == 1 {
+		parts[2] = "0" + parts[2]
+	}
+	normalized := parts[0] + "-" + parts[1] + "-" + parts[2]
+	_, err := time.Parse("2006-01-02", normalized)
+	if err != nil {
+		return "", false
+	}
+	return normalized, true
+}
 
 // ParseLine parses a single line of text and returns a Task if the line
 // matches the task format, or nil if it does not.

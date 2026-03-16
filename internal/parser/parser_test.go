@@ -6,6 +6,40 @@ import (
 	"time"
 )
 
+func TestNormalizeDate(t *testing.T) {
+	tests := []struct {
+		input string
+		want  string
+		ok    bool
+	}{
+		{"2026-03-16", "2026-03-16", true},
+		{"2026-3-16", "2026-03-16", true},
+		{"2026-03-6", "2026-03-06", true},
+		{"2026-3-6", "2026-03-06", true},
+		{"2026/03/16", "2026-03-16", true},
+		{"2026/3/16", "2026-03-16", true},
+		{"2026.03.16", "2026-03-16", true},
+		{"2026.3.6", "2026-03-06", true},
+		{"march-16", "", false},
+		{"2026", "", false},
+		{"not-a-date", "", false},
+		{"", "", false},
+		{"2026-13-01", "", false},
+		{"2026-03-32", "", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			got, ok := normalizeDate(tt.input)
+			if ok != tt.ok {
+				t.Errorf("normalizeDate(%q) ok = %v, want %v", tt.input, ok, tt.ok)
+			}
+			if got != tt.want {
+				t.Errorf("normalizeDate(%q) = %q, want %q", tt.input, got, tt.want)
+			}
+		})
+	}
+}
+
 func date(y int, m time.Month, d int) *time.Time {
 	t := time.Date(y, m, d, 0, 0, 0, 0, time.UTC)
 	return &t
