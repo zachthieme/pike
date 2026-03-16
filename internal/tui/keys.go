@@ -44,7 +44,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		var cmd tea.Cmd
 		m.filterBar, cmd = m.filterBar.Update(msg)
-		return m.processFilterCmd(cmd)
+		return m.processFilterOutput(cmd)
 	}
 
 	// FilterBar active + results focused: only certain keys to FilterBar.
@@ -54,7 +54,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			key.Matches(msg, m.keys.Filter), key.Matches(msg, m.keys.Query):
 			var cmd tea.Cmd
 			m.filterBar, cmd = m.filterBar.Update(msg)
-			return m.processFilterCmd(cmd)
+			return m.processFilterOutput(cmd)
 		case key.Matches(msg, m.keys.Quit):
 			return m, tea.Quit
 		case key.Matches(msg, m.keys.Toggle):
@@ -217,82 +217,58 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// processFilterCmd executes the cmd returned by FilterBar.Update and handles
-// filter output messages inline. Non-filter cmds are preserved for the runtime.
-func (m Model) processFilterCmd(cmd tea.Cmd) (tea.Model, tea.Cmd) {
-	if cmd == nil {
-		return m, nil
-	}
-	msg := cmd()
-	if msg == nil {
-		return m, nil
-	}
-
-	// Handle tea.BatchMsg: extract filter messages, keep the rest.
-	if batch, ok := msg.(tea.BatchMsg); ok {
-		var remaining []tea.Cmd
-		for _, c := range batch {
-			if c == nil {
-				continue
-			}
-			batchMsg := c()
-			if !m.handleFilterOutputMsg(batchMsg) {
-				capturedMsg := batchMsg
-				remaining = append(remaining, func() tea.Msg { return capturedMsg })
-			}
-		}
-		switch len(remaining) {
-		case 0:
-			return m, nil
-		case 1:
-			return m, remaining[0]
-		default:
-			return m, tea.Batch(remaining...)
-		}
+// processFilterOutput checks FilterBar.Output() for a pending action message
+// and handles it inline. The tea.Cmd from FilterBar.Update is passed through
+// to the Bubble Tea runtime without being eagerly executed. Returns any
+// additional cmds from cross-model transitions (e.g., tag search focus).
+func (m Model) processFilterOutput(filterCmd tea.Cmd) (tea.Model, tea.Cmd) {
+	output := m.filterBar.Output()
+	if output == nil {
+		return m, filterCmd
 	}
 
-	// Single message.
-	if m.handleFilterOutputMsg(msg) {
-		return m, nil
-	}
-	capturedMsg := msg
-	return m, func() tea.Msg { return capturedMsg }
-}
-
-// handleFilterOutputMsg processes a filter output message inline. Returns true if handled.
-func (m *Model) handleFilterOutputMsg(msg tea.Msg) bool {
-	switch fmsg := msg.(type) {
+	var extraCmd tea.Cmd
+	switch fmsg := output.(type) {
 	case FilterChangedMsg:
 		if m.showAll && fmsg.Text == "" && m.mode != modeRecentlyCompleted {
 			m.filterBar, _ = m.filterBar.Update(FilterDeactivateMsg{})
-			m.enterTagSearchMode()
-			return true
+			extraCmd = m.enterTagSearchMode()
+		} else {
+			m.rebuildSections()
+			m.clampCursor()
 		}
-		m.rebuildSections()
-		m.clampCursor()
-		return true
 	case FilterSubmittedMsg:
-		return true
+		// No-op — focus transition handled inside FilterBar.
 	case FilterClearedMsg:
 		if m.showAll {
 			m.filterBar, _ = m.filterBar.Update(FilterDeactivateMsg{})
-			m.enterTagSearchMode()
-			return true
+			extraCmd = m.enterTagSearchMode()
+		} else {
+			m.filterBar, _ = m.filterBar.Update(FilterDeactivateMsg{})
+			m.showAll = false
+			if m.mode == modeAllTasks {
+				m.mode = modeDashboard
+			}
+			m.rebuildSections()
+			m.clampCursor()
 		}
-		m.filterBar, _ = m.filterBar.Update(FilterDeactivateMsg{})
-		m.showAll = false
-		if m.mode == modeAllTasks {
-			m.mode = modeDashboard
-		}
-		m.rebuildSections()
-		m.clampCursor()
-		return true
 	case FilterModeChangedMsg:
 		m.rebuildSections()
 		m.clampCursor()
-		return true
 	}
-	return false
+
+	// Combine the FilterBar's tea.Cmd (textinput blink/focus) with any
+	// extra cmd from cross-model transitions (tag search focus).
+	switch {
+	case filterCmd == nil && extraCmd == nil:
+		return m, nil
+	case filterCmd == nil:
+		return m, extraCmd
+	case extraCmd == nil:
+		return m, filterCmd
+	default:
+		return m, tea.Batch(filterCmd, extraCmd)
+	}
 }
 
 // openEditor launches the editor for the task at the current cursor position.

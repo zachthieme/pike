@@ -8,12 +8,24 @@ import (
 )
 
 // FilterBar is a Bubble Tea sub-model managing the filter text input.
+// After each Update call, check Output() for a filter action message
+// that the parent should process inline (e.g., FilterChangedMsg).
 type FilterBar struct {
 	input    textinput.Model
 	active   bool
 	mode     filterMode
 	text     string
 	queryErr error
+	output   tea.Msg // pending output message for parent; nil if none
+}
+
+// Output returns the pending output message from the last Update call,
+// then clears it. The parent should call this after Update to handle
+// filter actions (FilterChangedMsg, FilterClearedMsg, etc.) inline.
+func (f *FilterBar) Output() tea.Msg {
+	msg := f.output
+	f.output = nil
+	return msg
 }
 
 // NewFilterBar creates a new FilterBar with default settings.
@@ -88,17 +100,18 @@ func (f FilterBar) handleKey(msg tea.KeyMsg) (FilterBar, tea.Cmd) {
 	switch {
 	case key.Matches(msg, km.Escape):
 		if f.input.Value() != "" {
-			// Clear content, re-focus if blurred, emit FilterChangedMsg.
+			// Clear content, re-focus if blurred, store output for parent.
 			f.input.SetValue("")
 			f.text = ""
 			if !f.input.Focused() {
 				f.input.Focus()
 			}
-			mode := f.mode
-			return f, func() tea.Msg { return FilterChangedMsg{Text: "", Mode: mode} }
+			f.output = FilterChangedMsg{Text: "", Mode: f.mode}
+			return f, nil
 		}
-		// Input is empty → emit FilterClearedMsg.
-		return f, func() tea.Msg { return FilterClearedMsg{} }
+		// Input is empty → signal parent to exit filter mode.
+		f.output = FilterClearedMsg{}
+		return f, nil
 
 	case key.Matches(msg, km.NextSection): // Tab
 		if f.input.Focused() {
@@ -110,32 +123,25 @@ func (f FilterBar) handleKey(msg tea.KeyMsg) (FilterBar, tea.Cmd) {
 
 	case key.Matches(msg, km.Filter): // /
 		if f.mode != filterSubstring {
-			// Switch to substring mode.
 			f.mode = filterSubstring
 			f.input.Prompt = filterPrompt[filterSubstring]
-			cmd := f.input.Focus()
-			return f, tea.Batch(cmd, func() tea.Msg { return FilterModeChangedMsg{Mode: filterSubstring} })
+			f.output = FilterModeChangedMsg{Mode: filterSubstring}
 		}
-		// Already substring — just re-focus.
-		cmd := f.input.Focus()
-		return f, cmd
+		return f, f.input.Focus()
 
 	case key.Matches(msg, km.Query): // ?
 		if f.mode != filterQuery {
-			// Switch to query mode.
 			f.mode = filterQuery
 			f.input.Prompt = filterPrompt[filterQuery]
-			cmd := f.input.Focus()
-			return f, tea.Batch(cmd, func() tea.Msg { return FilterModeChangedMsg{Mode: filterQuery} })
+			f.output = FilterModeChangedMsg{Mode: filterQuery}
 		}
-		// Already query — just re-focus.
-		cmd := f.input.Focus()
-		return f, cmd
+		return f, f.input.Focus()
 
 	case key.Matches(msg, km.Enter):
 		if f.input.Focused() {
 			f.input.Blur()
-			return f, func() tea.Msg { return FilterSubmittedMsg{} }
+			f.output = FilterSubmittedMsg{}
+			return f, nil
 		}
 		// Not focused — return nil so parent can handle.
 		return f, nil
@@ -145,9 +151,8 @@ func (f FilterBar) handleKey(msg tea.KeyMsg) (FilterBar, tea.Cmd) {
 			var cmd tea.Cmd
 			f.input, cmd = f.input.Update(msg)
 			f.text = f.input.Value()
-			mode := f.mode
-			text := f.text
-			return f, tea.Batch(cmd, func() tea.Msg { return FilterChangedMsg{Text: text, Mode: mode} })
+			f.output = FilterChangedMsg{Text: f.text, Mode: f.mode}
+			return f, cmd
 		}
 		return f, nil
 	}

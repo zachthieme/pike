@@ -50,6 +50,20 @@ func (t TagSearch) Update(msg tea.Msg) (TagSearch, tea.Cmd) {
 		cmd := t.filter.Focus()
 		return t, cmd
 
+	case TagSearchRefreshMsg:
+		t.tagList = make([]string, len(m.Tags))
+		copy(t.tagList, m.Tags)
+		slices.Sort(t.tagList)
+		// Clamp cursor to valid range without resetting position or filter text.
+		if tags := t.filteredTags(); len(tags) > 0 {
+			if t.tagCursor >= len(tags) {
+				t.tagCursor = len(tags) - 1
+			}
+		} else {
+			t.tagCursor = 0
+		}
+		return t, nil
+
 	case tea.KeyMsg:
 		return t.handleKey(m)
 	}
@@ -101,7 +115,7 @@ func (t TagSearch) handleKey(msg tea.KeyMsg) (TagSearch, tea.Cmd) {
 
 // filteredTags returns the subset of tagList matching the current filter text.
 // If filterText is empty, all tags are returned. Otherwise tags are matched by
-// prefix after stripping a leading "@" from the filter and lowercasing both.
+// substring after stripping a leading "@" from the filter and lowercasing both.
 func (t TagSearch) filteredTags() []string {
 	if t.filterText == "" {
 		return t.tagList

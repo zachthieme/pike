@@ -153,7 +153,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.allTasks = msg.Tasks
 			if m.mode == modeTagSearch {
 				tags := extractTagNames(m.allTasks)
-				m.tagSearch, _ = m.tagSearch.Update(TagSearchActivateMsg{Tags: tags})
+				m.tagSearch, _ = m.tagSearch.Update(TagSearchRefreshMsg{Tags: tags})
 			}
 		}
 		// Rebuild sections if tasks or config changed (config affects views, tag colors).

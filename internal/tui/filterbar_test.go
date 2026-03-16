@@ -15,36 +15,6 @@ func execCmd(cmd tea.Cmd) tea.Msg {
 	return cmd()
 }
 
-// execBatchCmds executes a tea.Cmd which may be a tea.BatchMsg,
-// returning all resulting messages.
-func execBatchCmds(cmd tea.Cmd) []tea.Msg {
-	if cmd == nil {
-		return nil
-	}
-	msg := cmd()
-	if batchMsg, ok := msg.(tea.BatchMsg); ok {
-		var msgs []tea.Msg
-		for _, c := range batchMsg {
-			if c != nil {
-				msgs = append(msgs, c())
-			}
-		}
-		return msgs
-	}
-	return []tea.Msg{msg}
-}
-
-// findMsg searches a slice of tea.Msg for the first value of type T.
-func findMsg[T any](msgs []tea.Msg) (T, bool) {
-	var zero T
-	for _, m := range msgs {
-		if typed, ok := m.(T); ok {
-			return typed, true
-		}
-	}
-	return zero, false
-}
-
 func TestFilterBarActivate(t *testing.T) {
 	fb := NewFilterBar()
 	fb, _ = fb.Update(FilterActivateMsg{
@@ -89,18 +59,18 @@ func TestFilterBarKeystrokeEmitsChanged(t *testing.T) {
 	fb := NewFilterBar()
 	fb, _ = fb.Update(FilterActivateMsg{Mode: filterSubstring})
 
-	fb, cmd := fb.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'a'}})
+	fb, _ = fb.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'a'}})
 
-	msgs := execBatchCmds(cmd)
-	changed, ok := findMsg[FilterChangedMsg](msgs)
+	output := fb.Output()
+	changed, ok := output.(FilterChangedMsg)
 	if !ok {
-		t.Fatal("expected FilterChangedMsg to be emitted")
+		t.Fatalf("expected FilterChangedMsg output, got %T", output)
 	}
 	if changed.Text != "a" {
-		t.Errorf("expected FilterChangedMsg.Text == \"a\", got %q", changed.Text)
+		t.Errorf("expected Text == \"a\", got %q", changed.Text)
 	}
 	if changed.Mode != filterSubstring {
-		t.Errorf("expected FilterChangedMsg.Mode == filterSubstring, got %v", changed.Mode)
+		t.Errorf("expected Mode == filterSubstring, got %v", changed.Mode)
 	}
 	if fb.Text() != "a" {
 		t.Errorf("expected fb.Text() == \"a\", got %q", fb.Text())
@@ -111,17 +81,15 @@ func TestFilterBarEnterEmitsSubmitted(t *testing.T) {
 	fb := NewFilterBar()
 	fb, _ = fb.Update(FilterActivateMsg{Mode: filterSubstring})
 
-	// Input should be focused after activate.
 	if !fb.InputFocused() {
 		t.Fatal("expected input to be focused after activate")
 	}
 
-	fb, cmd := fb.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	fb, _ = fb.Update(tea.KeyMsg{Type: tea.KeyEnter})
 
-	msgs := execBatchCmds(cmd)
-	_, ok := findMsg[FilterSubmittedMsg](msgs)
-	if !ok {
-		t.Fatal("expected FilterSubmittedMsg to be emitted on Enter")
+	output := fb.Output()
+	if _, ok := output.(FilterSubmittedMsg); !ok {
+		t.Fatalf("expected FilterSubmittedMsg output, got %T", output)
 	}
 	if fb.InputFocused() {
 		t.Error("expected InputFocused() == false after Enter")
@@ -135,23 +103,20 @@ func TestFilterBarEscapeWithContentClears(t *testing.T) {
 		InitialValue: "test",
 	})
 
-	fb, cmd := fb.Update(tea.KeyMsg{Type: tea.KeyEscape})
+	fb, _ = fb.Update(tea.KeyMsg{Type: tea.KeyEscape})
 
 	if fb.Text() != "" {
 		t.Errorf("expected Text() == \"\" after Escape with content, got %q", fb.Text())
 	}
 
-	msgs := execBatchCmds(cmd)
-
+	output := fb.Output()
 	// Should emit FilterChangedMsg, NOT FilterClearedMsg.
-	_, clearedOk := findMsg[FilterClearedMsg](msgs)
-	if clearedOk {
+	if _, ok := output.(FilterClearedMsg); ok {
 		t.Error("expected no FilterClearedMsg when escaping with content")
 	}
-
-	changed, changedOk := findMsg[FilterChangedMsg](msgs)
-	if !changedOk {
-		t.Fatal("expected FilterChangedMsg to be emitted on Escape with content")
+	changed, ok := output.(FilterChangedMsg)
+	if !ok {
+		t.Fatalf("expected FilterChangedMsg output, got %T", output)
 	}
 	if changed.Text != "" {
 		t.Errorf("expected FilterChangedMsg.Text == \"\", got %q", changed.Text)
@@ -162,13 +127,11 @@ func TestFilterBarEscapeEmptyEmitsCleared(t *testing.T) {
 	fb := NewFilterBar()
 	fb, _ = fb.Update(FilterActivateMsg{Mode: filterSubstring})
 
-	// No initial value, so input is empty.
-	fb, cmd := fb.Update(tea.KeyMsg{Type: tea.KeyEscape})
+	fb, _ = fb.Update(tea.KeyMsg{Type: tea.KeyEscape})
 
-	msgs := execBatchCmds(cmd)
-	_, ok := findMsg[FilterClearedMsg](msgs)
-	if !ok {
-		t.Fatal("expected FilterClearedMsg when Escape on empty input")
+	output := fb.Output()
+	if _, ok := output.(FilterClearedMsg); !ok {
+		t.Fatalf("expected FilterClearedMsg output, got %T", output)
 	}
 }
 
@@ -176,7 +139,6 @@ func TestFilterBarTabTogglesFocus(t *testing.T) {
 	fb := NewFilterBar()
 	fb, _ = fb.Update(FilterActivateMsg{Mode: filterSubstring})
 
-	// Should be focused after activate.
 	if !fb.InputFocused() {
 		t.Fatal("expected input focused after activate")
 	}
@@ -199,19 +161,19 @@ func TestFilterBarModeSwitch(t *testing.T) {
 	fb, _ = fb.Update(FilterActivateMsg{Mode: filterSubstring})
 
 	// Send '?' to switch to query mode.
-	fb, cmd := fb.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'?'}})
+	fb, _ = fb.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'?'}})
 
 	if fb.Mode() != filterQuery {
 		t.Errorf("expected Mode() == filterQuery after '?', got %v", fb.Mode())
 	}
 
-	msgs := execBatchCmds(cmd)
-	modeMsg, ok := findMsg[FilterModeChangedMsg](msgs)
+	output := fb.Output()
+	modeMsg, ok := output.(FilterModeChangedMsg)
 	if !ok {
-		t.Fatal("expected FilterModeChangedMsg to be emitted")
+		t.Fatalf("expected FilterModeChangedMsg output, got %T", output)
 	}
 	if modeMsg.Mode != filterQuery {
-		t.Errorf("expected FilterModeChangedMsg.Mode == filterQuery, got %v", modeMsg.Mode)
+		t.Errorf("expected Mode == filterQuery, got %v", modeMsg.Mode)
 	}
 }
 
@@ -227,5 +189,24 @@ func TestFilterBarSetError(t *testing.T) {
 	}
 	if fb.QueryErr().Error() != "bad query" {
 		t.Errorf("expected error message \"bad query\", got %q", fb.QueryErr().Error())
+	}
+}
+
+func TestFilterBarOutputClearsAfterRead(t *testing.T) {
+	fb := NewFilterBar()
+	fb, _ = fb.Update(FilterActivateMsg{Mode: filterSubstring})
+
+	fb, _ = fb.Update(tea.KeyMsg{Type: tea.KeyEscape})
+
+	// First call returns the message.
+	output := fb.Output()
+	if output == nil {
+		t.Fatal("expected non-nil output")
+	}
+
+	// Second call returns nil (cleared).
+	output2 := fb.Output()
+	if output2 != nil {
+		t.Errorf("expected nil after second Output() call, got %T", output2)
 	}
 }

@@ -72,7 +72,15 @@ type FilterModeChangedMsg struct {
 
 // --- TagSearch messages ---
 
+// TagSearchActivateMsg tells TagSearch to activate with the given tag list.
+// Resets cursor and filter text (used when entering tag search mode).
 type TagSearchActivateMsg struct {
+	Tags []string
+}
+
+// TagSearchRefreshMsg updates the tag list without resetting cursor or filter.
+// Used during background scans to avoid disrupting the user's position.
+type TagSearchRefreshMsg struct {
 	Tags []string
 }
 
