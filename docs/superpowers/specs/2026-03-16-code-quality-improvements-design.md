@@ -16,9 +16,9 @@ Eight self-contained targets, no dependency chains between them:
 | `test` | `go test -race -count=1 ./...` |
 | `lint` | `golangci-lint run` |
 | `bench` | `go test -bench=. -benchmem ./...` |
-| `fuzz` | `go test -fuzz=. -fuzztime=30s` for each package with fuzz targets |
+| `fuzz` | Runs `go test -fuzz=. -fuzztime=30s` sequentially for `./internal/parser` and `./internal/query` (Go does not support `-fuzz` across multiple packages in one invocation) |
 | `cover` | `go test -coverprofile=coverage.out ./... && go tool cover -html=coverage.out` |
-| `golden-update` | `go test -run=TestGolden -update ./...` |
+| `golden-update` | `go test -run=TestGolden -update .` (root package only — only the root package defines the `-update` flag) |
 | `install` | `go install ./cmd/pike` |
 
 Add `coverage.out` to `.gitignore`.
@@ -49,7 +49,7 @@ New workflow, separate from `release.yml`. Triggers on push to `main` and all PR
 
 1. **test** — `go test -race -count=1 ./...` on ubuntu-latest with Go 1.25.x
 2. **lint** — `golangci-lint` via the official GitHub Action
-3. **fuzz** — runs fuzz targets for 30 seconds each (crash detection, not soak testing)
+3. **fuzz** — separate steps per package (`./internal/parser` and `./internal/query`), each running `go test -fuzz=. -fuzztime=30s` (Go does not support `-fuzz` across multiple packages)
 
 No coverage upload, no badges.
 
@@ -65,6 +65,8 @@ Add a `normalizeDate` function that attempts to fix common date format issues be
 - `2026.03.16` → `2026-03-16` (dot to dash)
 
 If normalization succeeds, use the corrected date silently. If it fails, the date is genuinely unparseable.
+
+**Behavioral change note:** This is a deliberate semantic change. Tasks with dates like `@due(2026/03/16)` that were previously treated as having no due date (value silently cleared) will now resolve to valid due dates. Users with existing files containing slash or dot-separated dates may see tasks appear in due-date views/queries that didn't before. This is the intended improvement.
 
 **Warning collection:**
 
@@ -88,11 +90,12 @@ A malformed date that can't be normalized emits a warning like: `@due value "mar
 
 **Surfacing warnings:**
 
-- `Scanner` collects warnings from all parsed files, returns them alongside tasks (new field or updated return signature)
-- CLI query/summary modes: print warnings to stderr before output
-- TUI: show warning count in status bar (e.g., "2 parse warnings"), viewable via a key binding (`W`)
+Warnings are stored on the `Scanner` struct as a field (`s.Warnings []model.Warning`), populated during `Scan()` and `Refresh()`. This avoids changing the `([]model.Task, error)` return signature, which would cascade through the `scanFunc` closure type in `cmd/pike/main.go` and the TUI `Model.scanFunc` field. Callers access warnings via `s.Warnings` after calling `Scan()`/`Refresh()`.
 
-**Files touched:** `internal/model/task.go`, `internal/parser/parser.go`, `internal/scanner/scanner.go`, `cmd/pike/main.go`, `internal/tui/model.go`, `internal/tui/views.go`
+- CLI query/summary modes: after scanning, check `s.Warnings` and print to stderr before output
+- TUI: `main.go` wraps `scanFunc` to also read `s.Warnings` and pass them via a new `scanResultMsg.Warnings` field. TUI shows warning count in status bar (e.g., "2 parse warnings"), viewable via a key binding (`W`)
+
+**Files touched:** `internal/model/task.go` (Warning type), `internal/parser/parser.go` (normalizeDate, ParseLine signature), `internal/scanner/scanner.go` (Warnings field, collection), `cmd/pike/main.go` (stderr output, scanFunc wrapper), `internal/tui/model.go` (scanResultMsg, warning state), `internal/tui/views.go` (status bar), `golden_test.go` (updated ParseLine call sites)
 
 ### 5. Scanner Benchmark
 
@@ -109,7 +112,7 @@ Measurement only. No optimization work.
 
 ### 6. TUI Test Coverage (65.7% → 85%+)
 
-**State transition coverage (model.go / update.go):**
+**State transition coverage (`internal/tui/model.go` — the `Update` method and `handleKey` live here):**
 - Window resize handling (width/height propagation)
 - Error display and clearing on next keypress
 - `scanResultMsg` with config changes (tag color reload, editor cmd update)
@@ -138,7 +141,7 @@ Measurement only. No optimization work.
 - `FuzzParse` — random strings into `query.Parse()`. Must never panic. Valid parses get run through `query.Eval()` against a fixed task set to verify the evaluator also doesn't panic.
 
 **`internal/parser/fuzz_test.go`:**
-- `FuzzParseLine` — random strings into `parser.ParseLine()`. Must never panic. Must never return a task with invalid state (e.g., non-nil `Due` with unparseable date).
+- `FuzzParseLine` — random strings into `parser.ParseLine()`. Must never panic. Must never return a task with invalid state (e.g., non-nil `Due` with unparseable date). Returned warnings (from the updated `ParseLine` signature) must have non-empty `File` and `Message` fields and positive `Line` numbers.
 
 **Seed corpus:** Representative inputs in `testdata/fuzz/` — valid queries, edge cases from existing unit tests, tricky patterns (empty strings, unicode, deeply nested parens, unclosed quotes).
 
