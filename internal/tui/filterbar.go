@@ -14,9 +14,9 @@ type FilterBar struct {
 	input    textinput.Model
 	active   bool
 	mode     filterMode
-	text     string
 	queryErr error
 	output   tea.Msg // pending output message for parent; nil if none
+	keys     KeyMap
 }
 
 // Output returns the pending output message from the last Update call,
@@ -38,6 +38,7 @@ func NewFilterBar() FilterBar {
 	ti.Placeholder = "type to filter..."
 	return FilterBar{
 		input: ti,
+		keys:  DefaultKeyMap(),
 	}
 }
 
@@ -52,29 +53,20 @@ func (f FilterBar) Update(msg tea.Msg) (FilterBar, tea.Cmd) {
 	case FilterActivateMsg:
 		f.active = true
 		f.mode = m.Mode
-		f.text = m.InitialValue
 		f.queryErr = nil
-
-		// Set prompt based on mode.
 		if prompt, ok := filterPrompt[m.Mode]; ok {
 			f.input.Prompt = prompt
 		}
-		// Set placeholder if provided.
 		if m.Placeholder != "" {
 			f.input.Placeholder = m.Placeholder
 		}
-		// Set initial value.
 		f.input.SetValue(m.InitialValue)
-		// Position cursor at end.
 		f.input.CursorEnd()
-		// Focus the input.
-		cmd := f.input.Focus()
-		return f, cmd
+		return f, f.input.Focus()
 
 	case FilterDeactivateMsg:
 		f.active = false
 		f.mode = filterSubstring
-		f.text = ""
 		f.queryErr = nil
 		f.input.SetValue("")
 		f.input.Prompt = "/ "
@@ -95,25 +87,20 @@ func (f FilterBar) Update(msg tea.Msg) (FilterBar, tea.Cmd) {
 
 // handleKey processes key messages.
 func (f FilterBar) handleKey(msg tea.KeyMsg) (FilterBar, tea.Cmd) {
-	km := DefaultKeyMap()
-
 	switch {
-	case key.Matches(msg, km.Escape):
+	case key.Matches(msg, f.keys.Escape):
 		if f.input.Value() != "" {
-			// Clear content, re-focus if blurred, store output for parent.
 			f.input.SetValue("")
-			f.text = ""
 			if !f.input.Focused() {
 				f.input.Focus()
 			}
 			f.output = FilterChangedMsg{Text: "", Mode: f.mode}
 			return f, nil
 		}
-		// Input is empty → signal parent to exit filter mode.
 		f.output = FilterClearedMsg{}
 		return f, nil
 
-	case key.Matches(msg, km.NextSection): // Tab
+	case key.Matches(msg, f.keys.NextSection): // Tab
 		if f.input.Focused() {
 			f.input.Blur()
 		} else {
@@ -121,7 +108,7 @@ func (f FilterBar) handleKey(msg tea.KeyMsg) (FilterBar, tea.Cmd) {
 		}
 		return f, nil
 
-	case key.Matches(msg, km.Filter): // /
+	case key.Matches(msg, f.keys.Filter): // /
 		if f.mode != filterSubstring {
 			f.mode = filterSubstring
 			f.input.Prompt = filterPrompt[filterSubstring]
@@ -129,7 +116,7 @@ func (f FilterBar) handleKey(msg tea.KeyMsg) (FilterBar, tea.Cmd) {
 		}
 		return f, f.input.Focus()
 
-	case key.Matches(msg, km.Query): // ?
+	case key.Matches(msg, f.keys.Query): // ?
 		if f.mode != filterQuery {
 			f.mode = filterQuery
 			f.input.Prompt = filterPrompt[filterQuery]
@@ -137,21 +124,19 @@ func (f FilterBar) handleKey(msg tea.KeyMsg) (FilterBar, tea.Cmd) {
 		}
 		return f, f.input.Focus()
 
-	case key.Matches(msg, km.Enter):
+	case key.Matches(msg, f.keys.Enter):
 		if f.input.Focused() {
 			f.input.Blur()
 			f.output = FilterSubmittedMsg{}
 			return f, nil
 		}
-		// Not focused — return nil so parent can handle.
 		return f, nil
 
 	default:
 		if f.input.Focused() {
 			var cmd tea.Cmd
 			f.input, cmd = f.input.Update(msg)
-			f.text = f.input.Value()
-			f.output = FilterChangedMsg{Text: f.text, Mode: f.mode}
+			f.output = FilterChangedMsg{Text: f.input.Value(), Mode: f.mode}
 			return f, cmd
 		}
 		return f, nil
@@ -164,8 +149,8 @@ func (f FilterBar) Active() bool { return f.active }
 // InputFocused returns whether the text input currently has focus.
 func (f FilterBar) InputFocused() bool { return f.input.Focused() }
 
-// Text returns the current filter text.
-func (f FilterBar) Text() string { return f.text }
+// Text returns the current filter text (derived from the textinput widget).
+func (f FilterBar) Text() string { return f.input.Value() }
 
 // Mode returns the current filter mode.
 func (f FilterBar) Mode() filterMode { return f.mode }

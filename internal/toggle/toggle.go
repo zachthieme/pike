@@ -1,7 +1,6 @@
 package toggle
 
 import (
-	"crypto/sha256"
 	"errors"
 	"fmt"
 	"os"
@@ -51,12 +50,12 @@ func Complete(filePath string, line int, date time.Time) error {
 		return fmt.Errorf("%w: line %d does not contain '- [ ]'", ErrStaleData, line)
 	}
 
-	originalHash := lineHash(l)
+	originalLine := l
 	l = strings.Replace(l, "- [ ]", "- [x]", 1)
 	l += fmt.Sprintf(" @completed(%s)", date.Format("2006-01-02"))
 	lines[idx] = l
 
-	if err := verifyUnmodified(filePath, line, originalHash); err != nil {
+	if err := verifyUnmodified(filePath, line, originalLine); err != nil {
 		return err
 	}
 	return writeLines(filePath, lines)
@@ -83,7 +82,7 @@ func Uncomplete(filePath string, line int) error {
 		return fmt.Errorf("%w: line %d does not contain '- [x]'", ErrStaleData, line)
 	}
 
-	originalHash := lineHash(l)
+	originalLine := l
 	l = strings.Replace(l, "- [x]", "- [ ]", 1)
 
 	// Remove @completed(...) tag. The regex may match mid-line or at end.
@@ -99,7 +98,7 @@ func Uncomplete(filePath string, line int) error {
 
 	lines[idx] = l
 
-	if err := verifyUnmodified(filePath, line, originalHash); err != nil {
+	if err := verifyUnmodified(filePath, line, originalLine); err != nil {
 		return err
 	}
 	return writeLines(filePath, lines)
@@ -120,7 +119,7 @@ func ToggleHidden(filePath string, line int) error {
 
 	idx := line - 1
 	l := lines[idx]
-	originalHash := lineHash(l)
+	originalLine := l
 
 	if strings.Contains(l, "@hidden") {
 		// Remove @hidden tag
@@ -137,21 +136,16 @@ func ToggleHidden(filePath string, line int) error {
 	}
 
 	lines[idx] = l
-	if err := verifyUnmodified(filePath, line, originalHash); err != nil {
+	if err := verifyUnmodified(filePath, line, originalLine); err != nil {
 		return err
 	}
 	return writeLines(filePath, lines)
 }
 
-// lineHash returns a SHA-256 hash of a line's content for TOCTOU detection.
-func lineHash(line string) [sha256.Size]byte {
-	return sha256.Sum256([]byte(line))
-}
-
 // verifyUnmodified re-reads the file and checks that the target line hasn't
 // been modified by an external process since we first read it. This narrows
 // the TOCTOU window to just the time between our two reads.
-func verifyUnmodified(path string, lineNum int, originalHash [sha256.Size]byte) error {
+func verifyUnmodified(path string, lineNum int, originalLine string) error {
 	lines, err := readLines(path)
 	if err != nil {
 		return fmt.Errorf("re-read for verification: %w", err)
@@ -159,7 +153,7 @@ func verifyUnmodified(path string, lineNum int, originalHash [sha256.Size]byte) 
 	if lineNum < 1 || lineNum > len(lines) {
 		return fmt.Errorf("%w: file changed externally (line count changed)", ErrStaleData)
 	}
-	if lineHash(lines[lineNum-1]) != originalHash {
+	if lines[lineNum-1] != originalLine {
 		return fmt.Errorf("%w: line %d modified externally between read and write", ErrStaleData, lineNum)
 	}
 	return nil

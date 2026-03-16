@@ -17,6 +17,7 @@ type TagSearch struct {
 	tagCursor  int
 	filter     textinput.Model
 	filterText string
+	keys       KeyMap
 }
 
 // NewTagSearch creates a new TagSearch with default settings.
@@ -29,6 +30,7 @@ func NewTagSearch() TagSearch {
 	ti.PlaceholderStyle = FaintStyle().Foreground(lipgloss.Color("7"))
 	return TagSearch{
 		filter: ti,
+		keys:   DefaultKeyMap(),
 	}
 }
 
@@ -73,30 +75,28 @@ func (t TagSearch) Update(msg tea.Msg) (TagSearch, tea.Cmd) {
 
 // handleKey processes key messages for tag search navigation.
 func (t TagSearch) handleKey(msg tea.KeyMsg) (TagSearch, tea.Cmd) {
-	km := DefaultKeyMap()
-
 	switch {
-	case key.Matches(msg, km.Escape):
+	case key.Matches(msg, t.keys.Escape):
 		return t, func() tea.Msg { return TagSearchExitMsg{} }
 
-	case key.Matches(msg, km.Quit):
+	case key.Matches(msg, t.keys.Quit):
 		return t, func() tea.Msg { return TagSearchExitMsg{} }
 
-	case key.Matches(msg, km.NextSection) || key.Matches(msg, km.Down):
+	case key.Matches(msg, t.keys.NextSection) || key.Matches(msg, t.keys.Down):
 		tags := t.filteredTags()
 		if len(tags) > 0 {
 			t.tagCursor = (t.tagCursor + 1) % len(tags)
 		}
 		return t, nil
 
-	case key.Matches(msg, km.PrevSection) || key.Matches(msg, km.Up):
+	case key.Matches(msg, t.keys.PrevSection) || key.Matches(msg, t.keys.Up):
 		tags := t.filteredTags()
 		if len(tags) > 0 {
 			t.tagCursor = (t.tagCursor - 1 + len(tags)) % len(tags)
 		}
 		return t, nil
 
-	case key.Matches(msg, km.Enter):
+	case key.Matches(msg, t.keys.Enter):
 		tags := t.filteredTags()
 		if t.tagCursor < len(tags) {
 			name := tags[t.tagCursor]
