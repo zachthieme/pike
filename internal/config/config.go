@@ -372,6 +372,23 @@ tag_colors:
   talk: "#cba6f7"
   _default: "#94e2d5"
 
+# Keybindings — remap actions or add custom shortcuts
+# Action names: up, down, top, bottom, page_down, page_up, next_section,
+#   prev_section, enter, quit, summary, filter, query, escape, refresh,
+#   all_tasks, tag_search, toggle_hidden, toggle, toggle_hidden_tag,
+#   recently_completed
+# keybindings:
+#   toggle: ["space", "x"]       # override: list ALL keys you want
+#   quit: ["q", "ctrl+c"]
+#
+#   # Custom shortcuts (replaces 1-9 focus keys when defined)
+#   # Note: custom sort is not yet applied (uses default file sort)
+#   custom:
+#     - key: "o"
+#       view: "Overdue"          # focus a dashboard view by title
+#     - key: "d"
+#       query: "open and @due < today+3d"  # run a query
+
 # Dashboard sections — each view is a filtered, sorted slice of your tasks
 views:
   - title: "Today"
