@@ -2,6 +2,7 @@ package tui
 
 import (
 	"errors"
+	"fmt"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -208,5 +209,52 @@ func TestFilterBarOutputClearsAfterRead(t *testing.T) {
 	output2 := fb.Output()
 	if output2 != nil {
 		t.Errorf("expected nil after second Output() call, got %T", output2)
+	}
+}
+
+// Task 13: Sub-model gap tests
+
+func TestFilterBarModeSwitchPreservesText(t *testing.T) {
+	fb := NewFilterBar()
+	fb, _ = fb.Update(FilterActivateMsg{Mode: filterSubstring, InitialValue: "hello"})
+	if fb.Text() != "hello" {
+		t.Errorf("text = %q, want 'hello'", fb.Text())
+	}
+	fb, _ = fb.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'?'}})
+	output := fb.Output()
+	if modeMsg, ok := output.(FilterModeChangedMsg); ok {
+		if modeMsg.Mode != filterQuery {
+			t.Errorf("mode = %v, want filterQuery", modeMsg.Mode)
+		}
+	}
+	if fb.Text() != "hello" {
+		t.Errorf("text = %q after mode switch, want 'hello'", fb.Text())
+	}
+}
+
+func TestFilterBarInvalidDSLSetsError(t *testing.T) {
+	fb := NewFilterBar()
+	fb, _ = fb.Update(FilterActivateMsg{Mode: filterQuery, InitialValue: ""})
+	fb, _ = fb.Update(FilterSetErrorMsg{Err: fmt.Errorf("parse error")})
+	if fb.QueryErr() == nil {
+		t.Error("QueryErr should be set")
+	}
+	if fb.QueryErr().Error() != "parse error" {
+		t.Errorf("QueryErr = %v, want 'parse error'", fb.QueryErr())
+	}
+}
+
+func TestFilterBarEscapeClearsAndExits(t *testing.T) {
+	fb := NewFilterBar()
+	fb, _ = fb.Update(FilterActivateMsg{Mode: filterSubstring, InitialValue: "text"})
+	fb, _ = fb.Update(tea.KeyMsg{Type: tea.KeyEscape})
+	output := fb.Output()
+	if _, ok := output.(FilterChangedMsg); !ok {
+		t.Errorf("first escape should emit FilterChangedMsg, got %T", output)
+	}
+	fb, _ = fb.Update(tea.KeyMsg{Type: tea.KeyEscape})
+	output = fb.Output()
+	if _, ok := output.(FilterClearedMsg); !ok {
+		t.Errorf("second escape should emit FilterClearedMsg, got %T", output)
 	}
 }

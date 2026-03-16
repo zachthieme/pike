@@ -166,3 +166,33 @@ func TestTagSearchViewRendersWithoutPanic(t *testing.T) {
 		t.Error("expected non-empty output from View")
 	}
 }
+
+// Task 13: Sub-model gap tests
+
+func TestTagSearchRefreshWhileActive(t *testing.T) {
+	ts := NewTagSearch()
+	ts, _ = ts.Update(TagSearchActivateMsg{Tags: []string{"due", "today"}})
+	ts, _ = ts.Update(tea.KeyMsg{Type: tea.KeyTab})
+	ts, _ = ts.Update(TagSearchRefreshMsg{Tags: []string{"due", "risk", "today"}})
+	_ = ts.View(nil, 80)
+}
+
+func TestTagSearchSelectionWrapping(t *testing.T) {
+	ts := NewTagSearch()
+	ts, _ = ts.Update(TagSearchActivateMsg{Tags: []string{"a", "b", "c"}})
+	for range 3 {
+		ts, _ = ts.Update(tea.KeyMsg{Type: tea.KeyTab})
+	}
+	ts, _ = ts.Update(tea.KeyMsg{Type: tea.KeyTab})
+	_ = ts.View(nil, 80)
+}
+
+func TestTagSearchEmptyTagList(t *testing.T) {
+	ts := NewTagSearch()
+	ts, _ = ts.Update(TagSearchActivateMsg{Tags: []string{}})
+	view := ts.View(nil, 80)
+	if view == "" {
+		t.Error("view should not be empty even with no tags")
+	}
+	ts, _ = ts.Update(tea.KeyMsg{Type: tea.KeyTab})
+}

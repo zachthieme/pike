@@ -1062,3 +1062,244 @@ func TestProcessFilterOutputPreservesTextInputCmd(t *testing.T) {
 		t.Errorf("expected 0 tasks matching 'x', got %d", len(flat))
 	}
 }
+
+// Task 11: State transition tests
+
+func TestErrorClearsOnKeyPress(t *testing.T) {
+	m := testModel(testTasks(), testViews())
+	m.err = fmt.Errorf("test error")
+	updated, _ := sendKey(m, "j")
+	m2 := updated.(Model)
+	if m2.err != nil {
+		t.Errorf("err = %v, want nil after keypress", m2.err)
+	}
+}
+
+func TestScanResultMsgUpdatesConfig(t *testing.T) {
+	m := testModel(testTasks(), testViews())
+	newCfg := &config.Config{
+		Editor:    "nvim",
+		TagColors: map[string]string{"new": "#ff0000"},
+		Views:     testViews(),
+	}
+	updated, _ := m.Update(scanResultMsg{Config: newCfg})
+	m2 := updated.(Model)
+	if m2.editorCmd != "nvim" {
+		t.Errorf("editorCmd = %q, want %q", m2.editorCmd, "nvim")
+	}
+	if m2.tagColors["new"] != "#ff0000" {
+		t.Errorf("tagColors[new] = %q, want #ff0000", m2.tagColors["new"])
+	}
+}
+
+func TestScanResultMsgError(t *testing.T) {
+	m := testModel(testTasks(), testViews())
+	updated, _ := m.Update(scanResultMsg{Err: fmt.Errorf("scan failed")})
+	m2 := updated.(Model)
+	if m2.err == nil || m2.err.Error() != "scan failed" {
+		t.Errorf("err = %v, want 'scan failed'", m2.err)
+	}
+}
+
+func TestScanResultMsgInTagSearchMode(t *testing.T) {
+	m := testModel(testTasks(), testViews())
+	m.mode = modeTagSearch
+	newTasks := append(testTasks(), taskWithTagSet(model.Task{
+		Text: "new @newtag", State: model.Open, File: "new.md", Line: 1,
+		Tags: []model.Tag{{Name: "newtag"}},
+	}))
+	updated, _ := m.Update(scanResultMsg{Tasks: newTasks})
+	m2 := updated.(Model)
+	if m2.mode != modeTagSearch {
+		t.Errorf("mode = %v, want modeTagSearch", m2.mode)
+	}
+	if len(m2.allTasks) != len(newTasks) {
+		t.Errorf("allTasks len = %d, want %d", len(m2.allTasks), len(newTasks))
+	}
+}
+
+func TestEditorFinishedMsgWithError(t *testing.T) {
+	m := testModel(testTasks(), testViews())
+	updated, cmd := m.Update(EditorFinishedMsg{Err: fmt.Errorf("editor crashed")})
+	m2 := updated.(Model)
+	if m2.err == nil || m2.err.Error() != "editor crashed" {
+		t.Errorf("err = %v, want 'editor crashed'", m2.err)
+	}
+	if cmd == nil {
+		t.Error("cmd is nil, want refresh command")
+	}
+}
+
+func TestEditorFinishedMsgNoError(t *testing.T) {
+	m := testModel(testTasks(), testViews())
+	_, cmd := m.Update(EditorFinishedMsg{})
+	if cmd == nil {
+		t.Error("cmd is nil, want refresh command")
+	}
+}
+
+func TestToggleResultMsgError(t *testing.T) {
+	m := testModel(testTasks(), testViews())
+	updated, cmd := m.Update(toggleResultMsg{Err: fmt.Errorf("toggle failed")})
+	m2 := updated.(Model)
+	if m2.err == nil {
+		t.Error("err is nil, want error")
+	}
+	if cmd != nil {
+		t.Error("cmd should be nil on toggle error")
+	}
+}
+
+func TestToggleResultMsgSuccess(t *testing.T) {
+	m := testModel(testTasks(), testViews())
+	_, cmd := m.Update(toggleResultMsg{})
+	if cmd == nil {
+		t.Error("cmd is nil, want refresh command")
+	}
+}
+
+func TestSetFocusedViewLocksKeys(t *testing.T) {
+	m := testModel(testTasks(), testViews())
+	m.SetFocusedView("Open")
+	if !m.viewLocked {
+		t.Error("viewLocked should be true")
+	}
+	if m.keys.Summary.Enabled() {
+		t.Error("Summary key should be disabled")
+	}
+	if m.keys.AllTasks.Enabled() {
+		t.Error("AllTasks key should be disabled")
+	}
+	if m.keys.TagSearch.Enabled() {
+		t.Error("TagSearch key should be disabled")
+	}
+	updated, _ := sendSpecialKey(m, tea.KeyEscape)
+	m2 := updated.(Model)
+	if m2.focusedView != "Open" {
+		t.Errorf("focusedView = %q, want 'Open' (locked)", m2.focusedView)
+	}
+}
+
+// Task 12: Key handling edge case tests
+
+func TestCursorAtBoundaries(t *testing.T) {
+	m := testModel(testTasks(), testViews())
+	updated, _ := sendKey(m, "k")
+	m2 := updated.(Model)
+	if m2.cursor != 0 {
+		t.Errorf("cursor = %d, want 0 (at top)", m2.cursor)
+	}
+	total := m.countFlatTasks()
+	m.cursor = total - 1
+	updated, _ = sendKey(m, "j")
+	m2 = updated.(Model)
+	if m2.cursor != total-1 {
+		t.Errorf("cursor = %d, want %d (at bottom)", m2.cursor, total-1)
+	}
+}
+
+func TestPageScrollAcrossSections(t *testing.T) {
+	m := testModel(testTasks(), testViews())
+	m.height = 20
+	m.cursor = 0
+	// PageDown is bound to ctrl+d.
+	updated, _ := sendSpecialKey(m, tea.KeyCtrlD)
+	m2 := updated.(Model)
+	if m2.cursor == 0 {
+		t.Error("cursor should have moved on page down")
+	}
+	if m2.cursor >= m.countFlatTasks() {
+		t.Errorf("cursor %d out of bounds (total %d)", m2.cursor, m.countFlatTasks())
+	}
+}
+
+func TestEmptySectionsSkipped(t *testing.T) {
+	views := []config.ViewConfig{
+		{Title: "Empty", Query: "completed and @nonexistent", Sort: "file", Color: "red"},
+		{Title: "Open", Query: "open", Sort: "file", Color: "green"},
+	}
+	m := testModel(testTasks(), views)
+	sections := m.displaySections()
+	for _, sec := range sections {
+		if sec.Title == "Empty" && len(sec.Tasks) > 0 {
+			t.Error("Empty section should have no tasks")
+		}
+	}
+}
+
+func TestKeyPressesInAllTasksMode(t *testing.T) {
+	// Use tasks with HasCheckbox=true so they appear in modeAllTasks.
+	tasks := []model.Task{
+		taskWithTagSet(model.Task{Text: "Task A", State: model.Open, File: "t.md", Line: 1, HasCheckbox: true}),
+		taskWithTagSet(model.Task{Text: "Task B", State: model.Open, File: "t.md", Line: 2, HasCheckbox: true}),
+	}
+	m := testModel(tasks, testViews())
+	updated, _ := sendKey(m, "a")
+	m2 := updated.(Model)
+	if m2.mode != modeAllTasks {
+		t.Errorf("mode = %v, want modeAllTasks", m2.mode)
+	}
+	updated, _ = sendSpecialKey(m2, tea.KeyDown)
+	m3 := updated.(Model)
+	if m3.cursor != 1 {
+		t.Errorf("cursor = %d, want 1", m3.cursor)
+	}
+}
+
+func TestToggleNoCheckboxNoop(t *testing.T) {
+	tasks := []model.Task{
+		taskWithTagSet(model.Task{
+			Text: "plain bullet @today", State: model.Open,
+			File: "test.md", Line: 1, HasCheckbox: false,
+			Tags: []model.Tag{{Name: "today"}},
+		}),
+	}
+	views := []config.ViewConfig{
+		{Title: "Open", Query: "open", Sort: "file", Color: "green"},
+	}
+	m := testModel(tasks, views)
+	_, cmd := sendKey(m, "x")
+	if cmd != nil {
+		t.Error("toggle on non-checkbox task should return nil cmd")
+	}
+}
+
+func TestRecentlyCompletedModeIdempotent(t *testing.T) {
+	m := testModel(testTasks(), testViews())
+	updated, _ := sendKey(m, "c")
+	m2 := updated.(Model)
+	if m2.mode != modeRecentlyCompleted {
+		t.Errorf("mode = %v, want modeRecentlyCompleted", m2.mode)
+	}
+	updated, _ = sendKey(m2, "c")
+	m3 := updated.(Model)
+	if m3.mode != modeRecentlyCompleted {
+		t.Errorf("mode = %v, want modeRecentlyCompleted", m3.mode)
+	}
+}
+
+func TestEscapePriorityChain(t *testing.T) {
+	m := testModel(testTasks(), testViews())
+	m.showSummary = true
+	updated, _ := sendSpecialKey(m, tea.KeyEscape)
+	m2 := updated.(Model)
+	if m2.showSummary {
+		t.Error("showSummary should be false after escape")
+	}
+	if m2.mode != modeDashboard {
+		t.Error("mode should still be dashboard")
+	}
+	m2.mode = modeAllTasks
+	updated, _ = sendSpecialKey(m2, tea.KeyEscape)
+	m3 := updated.(Model)
+	if m3.mode != modeDashboard {
+		t.Errorf("mode = %v, want modeDashboard after escape", m3.mode)
+	}
+	m3.focusedView = "Open"
+	m3.viewLocked = false
+	updated, _ = sendSpecialKey(m3, tea.KeyEscape)
+	m4 := updated.(Model)
+	if m4.focusedView != "" {
+		t.Errorf("focusedView = %q, want empty after escape", m4.focusedView)
+	}
+}
