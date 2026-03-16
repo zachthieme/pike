@@ -160,15 +160,16 @@ func (t TagSearch) View(tagColors map[string]string, width int) string {
 	delim := fs.Render("\u2009·\u2009")
 	var tagParts []string
 	for _, tag := range t.tagList {
-		if tag == selectedTag {
+		switch {
+		case tag == selectedTag:
 			tagParts = append(tagParts, TaskStyle(true).Render(tag))
-		} else if matchedSet[tag] {
+		case matchedSet[tag]:
 			if color := resolveTagColor(tagColors, tag); color != "" {
 				tagParts = append(tagParts, TagStyle(color).Render(tag))
 			} else {
 				tagParts = append(tagParts, tag)
 			}
-		} else {
+		default:
 			tagParts = append(tagParts, fs.Render(tag))
 		}
 	}

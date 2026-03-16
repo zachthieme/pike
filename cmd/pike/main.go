@@ -91,28 +91,28 @@ func run(args []string, stdout, stderr io.Writer) error {
 
 	// Handle --help and --version first (no config/scan needed).
 	if helpFlag {
-		fmt.Fprint(stdout, usageText)
+		_, _ = fmt.Fprint(stdout, usageText)
 		return nil
 	}
 	if versionFlag {
-		fmt.Fprintln(stdout, "pike "+version)
+		_, _ = fmt.Fprintln(stdout, "pike "+version)
 		return nil
 	}
 
 	// Warn if both --color and --no-color are specified.
 	if colorFlag && noColorFlag {
-		fmt.Fprintf(stderr, "warning: both --color and --no-color specified; using --no-color\n")
+		_, _ = fmt.Fprintf(stderr, "warning: both --color and --no-color specified; using --no-color\n")
 	}
 
 	// Warn if query-only flags are provided without --query.
 	if sortFlag != "file" && queryFlag == "" {
-		fmt.Fprintf(stderr, "warning: --sort is only used with --query\n")
+		_, _ = fmt.Fprintf(stderr, "warning: --sort is only used with --query\n")
 	}
 	if countFlag && queryFlag == "" {
-		fmt.Fprintf(stderr, "warning: --count is only used with --query\n")
+		_, _ = fmt.Fprintf(stderr, "warning: --count is only used with --query\n")
 	}
 	if jsonFlag && queryFlag == "" {
-		fmt.Fprintf(stderr, "warning: --json is only used with --query\n")
+		_, _ = fmt.Fprintf(stderr, "warning: --json is only used with --query\n")
 	}
 
 	// Determine color mode.
@@ -142,7 +142,7 @@ func run(args []string, stdout, stderr io.Writer) error {
 		return fmt.Errorf("scanning: %w", err)
 	}
 	for _, w := range sc.Warnings {
-		fmt.Fprintf(stderr, "warning: %s:%d: %s\n", w.File, w.Line, w.Message)
+		_, _ = fmt.Fprintf(stderr, "warning: %s:%d: %s\n", w.File, w.Line, w.Message)
 	}
 
 	now := time.Now()
@@ -244,8 +244,8 @@ func runSummary(w io.Writer, tasks []model.Task, now time.Time, noColor bool) er
 		len(completedThisWeekTasks),
 		noColor,
 	)
-	fmt.Fprintln(w, out)
-	return nil
+	_, err = fmt.Fprintln(w, out)
+	return err
 }
 
 // queryOpts groups output-mode options for runQuery.
@@ -265,8 +265,8 @@ func runQuery(w io.Writer, tasks []model.Task, queryStr string, opts queryOpts) 
 	}
 
 	if opts.count {
-		fmt.Fprintln(w, len(results))
-		return nil
+		_, err = fmt.Fprintln(w, len(results))
+		return err
 	}
 
 	if opts.jsonOutput {
@@ -278,7 +278,8 @@ func runQuery(w io.Writer, tasks []model.Task, queryStr string, opts queryOpts) 
 		lines = append(lines, render.FormatTask(task, opts.tagColors, opts.noColor))
 	}
 	if len(lines) > 0 {
-		fmt.Fprintln(w, strings.Join(lines, "\n"))
+		_, err = fmt.Fprintln(w, strings.Join(lines, "\n"))
+		return err
 	}
 	return nil
 }

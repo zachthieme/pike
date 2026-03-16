@@ -92,7 +92,7 @@ func parseNoteFile(t *testing.T, fpath, relPath string) []model.Task {
 	if err != nil {
 		t.Fatalf("open %s: %v", fpath, err)
 	}
-	defer f.Close()
+	defer f.Close() //nolint:errcheck // read-only file; close error not actionable
 
 	scanner := bufio.NewScanner(f)
 	lineNum := 0
@@ -128,7 +128,9 @@ func goldenCompare(t *testing.T, goldenPath string, actual []byte) {
 	t.Helper()
 	if *update {
 		dir := filepath.Dir(goldenPath)
-		os.MkdirAll(dir, 0755)
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			t.Fatalf("mkdir %s: %v", dir, err)
+		}
 		if err := os.WriteFile(goldenPath, actual, 0644); err != nil {
 			t.Fatalf("update golden %s: %v", goldenPath, err)
 		}

@@ -6,7 +6,6 @@ import (
 	"time"
 )
 
-func timePtr(t time.Time) *time.Time { return &t }
 func date(y, m, d int) *time.Time {
 	t := time.Date(y, time.Month(m), d, 0, 0, 0, 0, time.UTC)
 	return &t

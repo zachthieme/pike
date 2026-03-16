@@ -164,10 +164,7 @@ func readLines(path string) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	s := string(data)
-	if strings.HasSuffix(s, "\n") {
-		s = s[:len(s)-1]
-	}
+	s := strings.TrimSuffix(string(data), "\n")
 	return strings.Split(s, "\n"), nil
 }
 

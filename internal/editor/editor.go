@@ -50,7 +50,7 @@ func Command(editor, file string, line int) *exec.Cmd {
 		fileArgs = []string{file}
 	}
 
-	allArgs := append(prefixArgs, fileArgs...)
-	cmd := exec.Command(executable, allArgs...)
+	prefixArgs = append(prefixArgs, fileArgs...)
+	cmd := exec.Command(executable, prefixArgs...)
 	return cmd
 }

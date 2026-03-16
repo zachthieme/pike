@@ -103,11 +103,12 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	case key.Matches(msg, m.keys.Escape):
 		// Escape priority: dismiss summary -> exit mode -> exit focus -> do nothing
-		if m.showSummary {
+		switch {
+		case m.showSummary:
 			m.showSummary = false
-		} else if m.mode != modeDashboard {
+		case m.mode != modeDashboard:
 			m.exitToDashboard()
-		} else if m.focusedView != "" && !m.viewLocked {
+		case m.focusedView != "" && !m.viewLocked:
 			m.focusedView = ""
 			m.rebuildSections()
 			m.clampCursor()
@@ -170,18 +171,18 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	case key.Matches(msg, m.keys.AllTasks):
 		focusCmd := m.enterAllTasksMode(false, "")
-		return m, tea.Batch(focusCmd, func() tea.Msg { return tea.ClearScreen() })
+		return m, tea.Batch(focusCmd, tea.ClearScreen)
 
 	case key.Matches(msg, m.keys.TagSearch):
 		focusCmd := m.enterTagSearchMode()
-		return m, tea.Batch(focusCmd, func() tea.Msg { return tea.ClearScreen() })
+		return m, tea.Batch(focusCmd, tea.ClearScreen)
 
 	case key.Matches(msg, m.keys.RecentlyCompleted):
 		if m.mode == modeRecentlyCompleted {
 			return m, nil
 		}
 		focusCmd := m.enterRecentlyCompletedMode()
-		return m, tea.Batch(focusCmd, func() tea.Msg { return tea.ClearScreen() })
+		return m, tea.Batch(focusCmd, tea.ClearScreen)
 
 	case key.Matches(msg, m.keys.ToggleHidden):
 		m.showHidden = !m.showHidden

@@ -170,7 +170,9 @@ func TestIncrementalRefreshMtime(t *testing.T) {
 	writeFile(t, dir, "a.md", "- [ ] Task A updated\n- [ ] Task A second\n")
 	// Touch to ensure mtime is newer
 	now := time.Now().Add(time.Second)
-	os.Chtimes(filepath.Join(dir, "a.md"), now, now)
+	if err := os.Chtimes(filepath.Join(dir, "a.md"), now, now); err != nil {
+		t.Fatalf("Chtimes: %v", err)
+	}
 
 	tasks, err = s.Refresh(ctx)
 	if err != nil {

@@ -164,7 +164,7 @@ func (s *Scanner) parseFileInto(absPath, relPath string, modTime time.Time, mtim
 	if err != nil {
 		return err
 	}
-	defer f.Close()
+	defer f.Close() //nolint:errcheck // read-only file; close error not actionable
 
 	var fileTasks []model.Task
 	sc := bufio.NewScanner(f)
@@ -192,7 +192,7 @@ func (s *Scanner) parseFileInto(absPath, relPath string, modTime time.Time, mtim
 // Patterns are validated at Scanner creation time, so errors are not expected.
 func (s *Scanner) matchesInclude(relPath string) bool {
 	for _, pattern := range s.include {
-		matched, _ := doublestar.Match(pattern, relPath)
+		matched, _ := doublestar.Match(pattern, relPath) //nolint:errcheck // patterns validated at construction time
 		if matched {
 			return true
 		}
@@ -204,7 +204,7 @@ func (s *Scanner) matchesInclude(relPath string) bool {
 // Patterns are validated at Scanner creation time, so errors are not expected.
 func (s *Scanner) matchesExclude(relPath string) bool {
 	for _, pattern := range s.exclude {
-		matched, _ := doublestar.Match(pattern, relPath)
+		matched, _ := doublestar.Match(pattern, relPath) //nolint:errcheck // patterns validated at construction time
 		if matched {
 			return true
 		}
