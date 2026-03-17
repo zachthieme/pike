@@ -1,3 +1,4 @@
+// Package sort provides task sorting strategies and pin partitioning.
 package sort
 
 import (

@@ -1,3 +1,4 @@
+// Package main provides the pike CLI, a terminal task dashboard that reads markdown files.
 package main
 
 import (

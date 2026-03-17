@@ -1,3 +1,4 @@
+// Package model defines the core data types for tasks, tags, and warnings.
 package model
 
 import "time"

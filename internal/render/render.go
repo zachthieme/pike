@@ -1,3 +1,4 @@
+// Package render formats tasks for stdout as plain text, styled ANSI, or JSON.
 package render
 
 import (

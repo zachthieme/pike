@@ -1,3 +1,4 @@
+// Package toggle performs atomic file mutations for task completion and visibility.
 package toggle
 
 import (

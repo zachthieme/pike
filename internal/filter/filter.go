@@ -1,3 +1,4 @@
+// Package filter applies query and sort pipelines to task collections.
 package filter
 
 import (

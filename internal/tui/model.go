@@ -1,3 +1,4 @@
+// Package tui implements the interactive Bubble Tea terminal dashboard.
 package tui
 
 import (

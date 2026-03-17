@@ -1,3 +1,4 @@
+// Package scanner walks directories for markdown files with mtime-based caching.
 package scanner
 
 import (

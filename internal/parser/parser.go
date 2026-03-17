@@ -1,3 +1,4 @@
+// Package parser extracts tasks and tags from markdown checkbox lines.
 package parser
 
 import (

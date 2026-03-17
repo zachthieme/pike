@@ -1,3 +1,4 @@
+// Package style provides tag coloring, link prettification, and ANSI formatting.
 package style
 
 import (

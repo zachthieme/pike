@@ -1,3 +1,4 @@
+// Package editor constructs commands to open files at specific lines in text editors.
 package editor
 
 import (
