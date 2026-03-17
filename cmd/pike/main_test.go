@@ -221,3 +221,107 @@ func TestJSONFlag(t *testing.T) {
 		t.Errorf("expected JSON to contain 'Buy milk', got %q", out)
 	}
 }
+
+func TestResolveColorMode_ForceColor(t *testing.T) {
+	var buf bytes.Buffer
+	noColor := resolveColorMode(true, false, &buf)
+	if noColor {
+		t.Error("expected noColor=false when --color is forced")
+	}
+}
+
+func TestResolveColorMode_ForceNoColor(t *testing.T) {
+	var buf bytes.Buffer
+	noColor := resolveColorMode(false, true, &buf)
+	if !noColor {
+		t.Error("expected noColor=true when --no-color is forced")
+	}
+}
+
+func TestConfigLoadError(t *testing.T) {
+	dir := t.TempDir()
+	badConfig := filepath.Join(dir, "bad.yaml")
+	if err := os.WriteFile(badConfig, []byte("{{{"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	var stdout, stderr bytes.Buffer
+	err := run([]string{"--config", badConfig, "--dir", dir}, &stdout, &stderr)
+	if err == nil {
+		t.Fatal("expected error for bad config")
+	}
+	if !strings.Contains(err.Error(), "loading config") {
+		t.Errorf("expected 'loading config' error, got: %v", err)
+	}
+}
+
+func TestScannerError(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.yaml")
+	if err := os.WriteFile(cfgPath, []byte("notes_dir: "+dir+"\ninclude:\n  - \"[invalid\"\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	var stdout, stderr bytes.Buffer
+	err := run([]string{"--config", cfgPath, "--dir", dir}, &stdout, &stderr)
+	if err == nil {
+		t.Fatal("expected error for invalid glob pattern")
+	}
+	if !strings.Contains(err.Error(), "invalid glob") {
+		t.Errorf("expected 'invalid glob' error, got: %v", err)
+	}
+}
+
+func TestViewFlagIgnoredInQueryMode(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "tasks.md"), []byte("- [ ] A task\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	var stdout, stderr bytes.Buffer
+	err := run([]string{"--dir", dir, "--query", "open", "--view", "SomeView", "--no-color"}, &stdout, &stderr)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(stdout.String(), "A task") {
+		t.Errorf("expected query results despite --view flag, got: %q", stdout.String())
+	}
+}
+
+func TestSummaryWithNoTasks(t *testing.T) {
+	dir := t.TempDir()
+	var stdout, stderr bytes.Buffer
+	err := run([]string{"--dir", dir, "--summary", "--no-color"}, &stdout, &stderr)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	out := stdout.String()
+	if !strings.Contains(out, "Open tasks") {
+		t.Errorf("expected summary output even with no tasks, got: %q", out)
+	}
+}
+
+func TestInvalidQueryError(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "test.md"), []byte("- [ ] task\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	var stdout, stderr bytes.Buffer
+	err := run([]string{"--dir", dir, "--query", "((("}, &stdout, &stderr)
+	if err == nil {
+		t.Fatal("expected error for invalid query")
+	}
+}
+
+func TestWarningOutput(t *testing.T) {
+	dir := t.TempDir()
+	content := "- [ ] Task with bad date @due(not-a-date)\n"
+	if err := os.WriteFile(filepath.Join(dir, "test.md"), []byte(content), 0644); err != nil {
+		t.Fatal(err)
+	}
+	var stdout, stderr bytes.Buffer
+	err := run([]string{"--dir", dir, "--query", "open", "--no-color"}, &stdout, &stderr)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(stderr.String(), "warning:") || !strings.Contains(stderr.String(), "test.md") {
+		t.Errorf("expected warning mentioning file on stderr, got: %q", stderr.String())
+	}
+}
