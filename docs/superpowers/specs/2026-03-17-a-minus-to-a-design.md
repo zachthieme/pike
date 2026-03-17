@@ -11,15 +11,16 @@ Five improvements identified from a principal-engineer-level code review, chosen
 ## 1. TUI Model Decomposition
 
 ### Problem
-`handleKey()` is 370 lines with 6 nested dispatch contexts. `tasks.go` is 446 lines mixing navigation, filtering, and mode transitions. The TUI package is the weakest-tested area (70.2% coverage).
+`keys.go` is 370 lines total, with `handleKey()` spanning 234 lines across 6 nested dispatch contexts. `tasks.go` is 446 lines mixing navigation, filtering, and mode transitions. The TUI package is the weakest-tested area (70.2% coverage).
 
 ### Design
 
 **Navigator** (`internal/tui/navigator.go`):
 - Stateful helper (not a tea.Model sub-model — no message passing overhead)
-- Owns: `cursor int`, reference to current `sections []filter.ViewResult`
-- Methods: `CursorUp()`, `CursorDown()`, `JumpToNextSection()`, `JumpToPrevSection()`, `JumpToTop()`, `JumpToBottom()`, `ClampCursor()`, `FocusSection(index)`, `Cursor() int`
-- Extracted from: `tasks.go` (8 cursor/navigation functions)
+- Owns: `cursor int`, `height int`
+- Receives sections via a `func() []filter.ViewResult` callback (the output of `displaySections()`, not raw `m.sections`) so cursor bounds are correct when a view is focused
+- Methods: `CursorUp()`, `CursorDown()`, `JumpToNextSection()`, `JumpToPrevSection()`, `JumpToTop()`, `JumpToBottom()`, `ClampCursor()`, `FocusSection(index)`, `Cursor() int`, `FlatTasks() []model.Task`, `CountFlatTasks() int`, `PageScroll(direction int)`
+- Extracted from: `tasks.go` (8 cursor/navigation functions including `flatTasks`, `countFlatTasks`, `pageScroll`)
 
 **Modes file** (`internal/tui/modes.go`):
 - Methods on Model, moved from `tasks.go`
@@ -28,8 +29,10 @@ Five improvements identified from a principal-engineer-level code review, chosen
 
 **handleKey() simplification:**
 - Cursor logic replaced by `m.nav.CursorUp()` etc.
+- `toggleTask()` and `openEditor()` resolve the selected task via `m.nav.FlatTasks()`
 - Nested dispatch structure preserved (correctly models priority chain)
-- Estimated: 370 → ~280 lines
+- Estimated: `handleKey()` from ~234 → ~180 lines
+- `processFilterOutput`, `openEditor`, `resolveFilePath`, `toggleTask`, `toggleHiddenTag` remain in `keys.go`
 
 **Files:**
 - New: `navigator.go`, `navigator_test.go`, `modes.go`
