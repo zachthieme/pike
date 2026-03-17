@@ -2,6 +2,7 @@
 package toggle
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -33,7 +34,10 @@ func lockFile(path string) *sync.Mutex {
 // Complete marks an open checkbox task as completed by modifying the source file.
 // Replaces - [ ] with - [x] and appends @completed(YYYY-MM-DD).
 // Returns an error if the line doesn't contain - [ ] (stale data).
-func Complete(filePath string, line int, date time.Time) error {
+func Complete(ctx context.Context, filePath string, line int, date time.Time) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	mu := lockFile(filePath)
 	defer mu.Unlock()
 
@@ -59,13 +63,19 @@ func Complete(filePath string, line int, date time.Time) error {
 	if err := verifyUnmodified(filePath, line, originalLine); err != nil {
 		return err
 	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	return writeLines(filePath, lines)
 }
 
 // Uncomplete marks a completed checkbox task as open by modifying the source file.
 // Replaces - [x] with - [ ] and removes @completed(...) tag.
 // Returns an error if the line doesn't contain - [x] (stale data).
-func Uncomplete(filePath string, line int) error {
+func Uncomplete(ctx context.Context, filePath string, line int) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	mu := lockFile(filePath)
 	defer mu.Unlock()
 
@@ -102,11 +112,17 @@ func Uncomplete(filePath string, line int) error {
 	if err := verifyUnmodified(filePath, line, originalLine); err != nil {
 		return err
 	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	return writeLines(filePath, lines)
 }
 
 // ToggleHidden adds @hidden to a task line if absent, or removes it if present.
-func ToggleHidden(filePath string, line int) error {
+func ToggleHidden(ctx context.Context, filePath string, line int) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	mu := lockFile(filePath)
 	defer mu.Unlock()
 
@@ -138,6 +154,9 @@ func ToggleHidden(filePath string, line int) error {
 
 	lines[idx] = l
 	if err := verifyUnmodified(filePath, line, originalLine); err != nil {
+		return err
+	}
+	if err := ctx.Err(); err != nil {
 		return err
 	}
 	return writeLines(filePath, lines)

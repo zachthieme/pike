@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"context"
 	"path/filepath"
 
 	"pike/internal/editor"
@@ -345,9 +346,9 @@ func (m Model) toggleTask() (tea.Model, tea.Cmd) {
 	return m, func() tea.Msg {
 		var err error
 		if state == model.Open {
-			err = toggle.Complete(filePath, line, now)
+			err = toggle.Complete(context.Background(), filePath, line, now)
 		} else {
-			err = toggle.Uncomplete(filePath, line)
+			err = toggle.Uncomplete(context.Background(), filePath, line)
 		}
 		return toggleResultMsg{Err: err}
 	}
@@ -364,7 +365,7 @@ func (m Model) toggleHiddenTag() (tea.Model, tea.Cmd) {
 	line := task.Line
 
 	return m, func() tea.Msg {
-		return toggleResultMsg{Err: toggle.ToggleHidden(filePath, line)}
+		return toggleResultMsg{Err: toggle.ToggleHidden(context.Background(), filePath, line)}
 	}
 }
 
