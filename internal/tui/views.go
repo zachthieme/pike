@@ -151,7 +151,7 @@ func (m Model) viewAllTasks() string {
 	}
 
 	for maxTasks > 1 {
-		start, end := scrollWindow(m.cursor, len(tasks), maxTasks)
+		start, end := scrollWindow(m.nav.Cursor(), len(tasks), maxTasks)
 		rendered := m.renderSection(sec.Title, tasks[start:end], sec.Color, start, hiddenCount, len(tasks))
 		renderedHeight := lipgloss.Height(rendered)
 		needsFooter := end-start < len(tasks)
@@ -169,7 +169,7 @@ func (m Model) viewAllTasks() string {
 	}
 
 	// Minimal case: 1 task.
-	start, end := scrollWindow(m.cursor, len(tasks), 1)
+	start, end := scrollWindow(m.nav.Cursor(), len(tasks), 1)
 	rendered := m.renderSection(sec.Title, tasks[start:end], sec.Color, start, hiddenCount, len(tasks))
 	parts = append(parts, rendered)
 	if len(tasks) > 1 {

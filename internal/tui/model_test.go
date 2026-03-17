@@ -81,7 +81,7 @@ func testModel(tasks []model.Task, views []config.ViewConfig) Model {
 	m := NewModel(cfg, tasks, nil)
 	m.now = func() time.Time { return testNow }
 	m.rebuildSections()
-	m.clampCursor()
+	m.nav.ClampCursor(m.displaySections())
 	return m
 }
 
@@ -98,64 +98,64 @@ func TestCursorMovementDown(t *testing.T) {
 
 	updated, _ := sendKey(m, "j")
 	m2 := updated.(Model)
-	if m2.cursor != 1 {
-		t.Errorf("expected cursor at 1 after j, got %d", m2.cursor)
+	if m2.nav.Cursor() != 1 {
+		t.Errorf("expected cursor at 1 after j, got %d", m2.nav.Cursor())
 	}
 }
 
 func TestCursorMovementUp(t *testing.T) {
 	m := testModel(testTasks(), testViews())
-	m.cursor = 2
+	m.nav.SetCursor(2)
 
 	updated, _ := sendKey(m, "k")
 	m2 := updated.(Model)
-	if m2.cursor != 1 {
-		t.Errorf("expected cursor at 1 after k, got %d", m2.cursor)
+	if m2.nav.Cursor() != 1 {
+		t.Errorf("expected cursor at 1 after k, got %d", m2.nav.Cursor())
 	}
 }
 
 func TestCursorDoesNotGoNegative(t *testing.T) {
 	m := testModel(testTasks(), testViews())
-	m.cursor = 0
+	m.nav.SetCursor(0)
 
 	updated, _ := sendKey(m, "k")
 	m2 := updated.(Model)
-	if m2.cursor != 0 {
-		t.Errorf("expected cursor to stay at 0, got %d", m2.cursor)
+	if m2.nav.Cursor() != 0 {
+		t.Errorf("expected cursor to stay at 0, got %d", m2.nav.Cursor())
 	}
 }
 
 func TestCursorDoesNotExceedTasks(t *testing.T) {
 	m := testModel(testTasks(), testViews())
-	flatLen := len(m.flatTasks())
-	m.cursor = flatLen - 1
+	flatLen := len(flatTasks(m.displaySections()))
+	m.nav.SetCursor(flatLen - 1)
 
 	updated, _ := sendKey(m, "j")
 	m2 := updated.(Model)
-	if m2.cursor != flatLen-1 {
-		t.Errorf("expected cursor to stay at %d, got %d", flatLen-1, m2.cursor)
+	if m2.nav.Cursor() != flatLen-1 {
+		t.Errorf("expected cursor to stay at %d, got %d", flatLen-1, m2.nav.Cursor())
 	}
 }
 
 func TestGotoTop(t *testing.T) {
 	m := testModel(testTasks(), testViews())
-	m.cursor = 3
+	m.nav.SetCursor(3)
 
 	updated, _ := sendKey(m, "g")
 	m2 := updated.(Model)
-	if m2.cursor != 0 {
-		t.Errorf("expected cursor at 0 after g, got %d", m2.cursor)
+	if m2.nav.Cursor() != 0 {
+		t.Errorf("expected cursor at 0 after g, got %d", m2.nav.Cursor())
 	}
 }
 
 func TestGotoBottom(t *testing.T) {
 	m := testModel(testTasks(), testViews())
-	flatLen := len(m.flatTasks())
+	flatLen := len(flatTasks(m.displaySections()))
 
 	updated, _ := sendKey(m, "G")
 	m2 := updated.(Model)
-	if m2.cursor != flatLen-1 {
-		t.Errorf("expected cursor at %d after G, got %d", flatLen-1, m2.cursor)
+	if m2.nav.Cursor() != flatLen-1 {
+		t.Errorf("expected cursor at %d after G, got %d", flatLen-1, m2.nav.Cursor())
 	}
 }
 
@@ -173,8 +173,8 @@ func TestTabNextSection(t *testing.T) {
 			break
 		}
 	}
-	if m2.cursor != firstSectionTasks {
-		t.Errorf("expected cursor at %d after Tab, got %d", firstSectionTasks, m2.cursor)
+	if m2.nav.Cursor() != firstSectionTasks {
+		t.Errorf("expected cursor at %d after Tab, got %d", firstSectionTasks, m2.nav.Cursor())
 	}
 }
 
@@ -264,7 +264,7 @@ func TestSubstringFilterWithTags(t *testing.T) {
 		m = updated.(Model)
 	}
 
-	flat := m.flatTasks()
+	flat := flatTasks(m.displaySections())
 	if len(flat) != 1 {
 		t.Fatalf("expected 1 matching task, got %d", len(flat))
 	}
@@ -313,7 +313,7 @@ func TestFilterNarrowsResults(t *testing.T) {
 		m = updated.(Model)
 	}
 
-	flat := m.flatTasks()
+	flat := flatTasks(m.displaySections())
 	for _, task := range flat {
 		if !strings.Contains(strings.ToLower(task.Text), "overdue") {
 			t.Errorf("expected all tasks to match filter, got %q", task.Text)
@@ -331,8 +331,8 @@ func TestFilterNavigationWithArrows(t *testing.T) {
 	// Arrow down should move cursor, not type into filter
 	updated, _ = sendSpecialKey(m, tea.KeyDown)
 	m2 := updated.(Model)
-	if m2.cursor != 1 {
-		t.Errorf("expected cursor at 1 after down arrow in filter mode, got %d", m2.cursor)
+	if m2.nav.Cursor() != 1 {
+		t.Errorf("expected cursor at 1 after down arrow in filter mode, got %d", m2.nav.Cursor())
 	}
 }
 
@@ -434,8 +434,8 @@ func TestRefreshMsg(t *testing.T) {
 	m := testModel(initialTasks, views)
 	m.scanFunc = func() ([]model.Task, error) { return newTasks, nil }
 
-	if len(m.flatTasks()) != 1 {
-		t.Fatalf("expected 1 task initially, got %d", len(m.flatTasks()))
+	if len(flatTasks(m.displaySections())) != 1 {
+		t.Fatalf("expected 1 task initially, got %d", len(flatTasks(m.displaySections())))
 	}
 
 	// RefreshMsg launches an async scan; simulate receiving the result.
@@ -444,8 +444,8 @@ func TestRefreshMsg(t *testing.T) {
 	// Feed the scan result directly.
 	updated, _ = m2.Update(scanResultMsg{Tasks: newTasks})
 	m3 := updated.(Model)
-	if len(m3.flatTasks()) != 2 {
-		t.Fatalf("expected 2 tasks after refresh, got %d", len(m3.flatTasks()))
+	if len(flatTasks(m3.displaySections())) != 2 {
+		t.Fatalf("expected 2 tasks after refresh, got %d", len(flatTasks(m3.displaySections())))
 	}
 }
 
@@ -493,15 +493,15 @@ func TestArrowKeys(t *testing.T) {
 
 	updated, _ := sendSpecialKey(m, tea.KeyDown)
 	m2 := updated.(Model)
-	if m2.cursor != 1 {
-		t.Errorf("expected cursor at 1 after down arrow, got %d", m2.cursor)
+	if m2.nav.Cursor() != 1 {
+		t.Errorf("expected cursor at 1 after down arrow, got %d", m2.nav.Cursor())
 	}
 
-	m2.cursor = 2
+	m2.nav.SetCursor(2)
 	updated, _ = sendSpecialKey(m2, tea.KeyUp)
 	m3 := updated.(Model)
-	if m3.cursor != 1 {
-		t.Errorf("expected cursor at 1 after up arrow, got %d", m3.cursor)
+	if m3.nav.Cursor() != 1 {
+		t.Errorf("expected cursor at 1 after up arrow, got %d", m3.nav.Cursor())
 	}
 }
 
@@ -516,7 +516,7 @@ func TestFilterPartialTagMatch(t *testing.T) {
 		m = updated.(Model)
 	}
 
-	flat := m.flatTasks()
+	flat := flatTasks(m.displaySections())
 	if len(flat) == 0 {
 		t.Fatal("expected partial tag @du to match tasks with @due, got 0 results")
 	}
@@ -538,7 +538,7 @@ func TestFilterFullTagMatch(t *testing.T) {
 		m = updated.(Model)
 	}
 
-	flat := m.flatTasks()
+	flat := flatTasks(m.displaySections())
 	if len(flat) == 0 {
 		t.Fatal("expected @today to match tasks, got 0 results")
 	}
@@ -643,7 +643,7 @@ func TestTagSelectShowsCompletedTasks(t *testing.T) {
 	}
 
 	// Should include the completed task.
-	flat := m.flatTasks()
+	flat := flatTasks(m.displaySections())
 	found := false
 	for _, task := range flat {
 		if task.State == model.Completed {
@@ -736,7 +736,7 @@ func TestNegationWithDSL(t *testing.T) {
 		m = updated.(Model)
 	}
 
-	flat := m.flatTasks()
+	flat := flatTasks(m.displaySections())
 	for _, task := range flat {
 		if task.HasTag("due") {
 			t.Errorf("expected 'not @du' to exclude tasks with @due, but found %q", task.Text)
@@ -837,31 +837,32 @@ func TestPageScroll(t *testing.T) {
 	}
 	m := testModel(tasks, views)
 	m.height = 30
+	m.nav.SetHeight(30)
 
 	// Scroll down
-	m.pageScroll(1)
-	if m.cursor <= 0 {
-		t.Errorf("expected cursor > 0 after pageScroll(1), got %d", m.cursor)
+	m.nav.PageScroll(1, m.displaySections())
+	if m.nav.Cursor() <= 0 {
+		t.Errorf("expected cursor > 0 after PageScroll(1), got %d", m.nav.Cursor())
 	}
-	first := m.cursor
+	first := m.nav.Cursor()
 
 	// Scroll down again
-	m.pageScroll(1)
-	if m.cursor <= first {
-		t.Errorf("expected cursor > %d after 2nd pageScroll(1), got %d", first, m.cursor)
+	m.nav.PageScroll(1, m.displaySections())
+	if m.nav.Cursor() <= first {
+		t.Errorf("expected cursor > %d after 2nd PageScroll(1), got %d", first, m.nav.Cursor())
 	}
 
 	// Scroll back up
-	m.pageScroll(-1)
-	if m.cursor != first {
-		t.Errorf("expected cursor back to %d after pageScroll(-1), got %d", first, m.cursor)
+	m.nav.PageScroll(-1, m.displaySections())
+	if m.nav.Cursor() != first {
+		t.Errorf("expected cursor back to %d after PageScroll(-1), got %d", first, m.nav.Cursor())
 	}
 
 	// Scroll up past top clamps to 0
-	m.cursor = 2
-	m.pageScroll(-1)
-	if m.cursor != 0 {
-		t.Errorf("expected cursor clamped to 0, got %d", m.cursor)
+	m.nav.SetCursor(2)
+	m.nav.PageScroll(-1, m.displaySections())
+	if m.nav.Cursor() != 0 {
+		t.Errorf("expected cursor clamped to 0, got %d", m.nav.Cursor())
 	}
 }
 
@@ -975,12 +976,12 @@ func TestJKTypeIntoFilterWhenInputFocused(t *testing.T) {
 	}
 
 	// Press 'j' — should type into filter, not move cursor.
-	cursorBefore := m.cursor
+	cursorBefore := m.nav.Cursor()
 	updated, _ = sendKey(m, "j")
 	m = updated.(Model)
 
-	if m.cursor != cursorBefore {
-		t.Errorf("expected cursor unchanged (typed j into filter), but cursor moved from %d to %d", cursorBefore, m.cursor)
+	if m.nav.Cursor() != cursorBefore {
+		t.Errorf("expected cursor unchanged (typed j into filter), but cursor moved from %d to %d", cursorBefore, m.nav.Cursor())
 	}
 	if m.filterBar.Text() != "j" {
 		t.Errorf("expected filter text 'j', got %q", m.filterBar.Text())
@@ -1009,7 +1010,7 @@ func TestProcessFilterOutputRebuildsOnChange(t *testing.T) {
 	}
 
 	// Sections should be filtered (inline, not deferred).
-	flat := m.flatTasks()
+	flat := flatTasks(m.displaySections())
 	for _, task := range flat {
 		if !strings.Contains(strings.ToLower(task.Text), "overdue") {
 			t.Errorf("expected all tasks to match filter, got %q", task.Text)
@@ -1056,7 +1057,7 @@ func TestProcessFilterOutputPreservesTextInputCmd(t *testing.T) {
 	// cmd may be nil if textinput doesn't produce one, so just verify
 	// the filter output was processed (sections rebuilt).
 	_ = cmd
-	flat := m.flatTasks()
+	flat := flatTasks(m.displaySections())
 	// "x" shouldn't match any tasks
 	if len(flat) != 0 {
 		t.Errorf("expected 0 tasks matching 'x', got %d", len(flat))
@@ -1186,30 +1187,31 @@ func TestCursorAtBoundaries(t *testing.T) {
 	m := testModel(testTasks(), testViews())
 	updated, _ := sendKey(m, "k")
 	m2 := updated.(Model)
-	if m2.cursor != 0 {
-		t.Errorf("cursor = %d, want 0 (at top)", m2.cursor)
+	if m2.nav.Cursor() != 0 {
+		t.Errorf("cursor = %d, want 0 (at top)", m2.nav.Cursor())
 	}
-	total := m.countFlatTasks()
-	m.cursor = total - 1
+	total := countFlatTasks(m.displaySections())
+	m.nav.SetCursor(total - 1)
 	updated, _ = sendKey(m, "j")
 	m2 = updated.(Model)
-	if m2.cursor != total-1 {
-		t.Errorf("cursor = %d, want %d (at bottom)", m2.cursor, total-1)
+	if m2.nav.Cursor() != total-1 {
+		t.Errorf("cursor = %d, want %d (at bottom)", m2.nav.Cursor(), total-1)
 	}
 }
 
 func TestPageScrollAcrossSections(t *testing.T) {
 	m := testModel(testTasks(), testViews())
 	m.height = 20
-	m.cursor = 0
+	m.nav.SetHeight(20)
+	m.nav.SetCursor(0)
 	// PageDown is bound to ctrl+d.
 	updated, _ := sendSpecialKey(m, tea.KeyCtrlD)
 	m2 := updated.(Model)
-	if m2.cursor == 0 {
+	if m2.nav.Cursor() == 0 {
 		t.Error("cursor should have moved on page down")
 	}
-	if m2.cursor >= m.countFlatTasks() {
-		t.Errorf("cursor %d out of bounds (total %d)", m2.cursor, m.countFlatTasks())
+	if m2.nav.Cursor() >= countFlatTasks(m.displaySections()) {
+		t.Errorf("cursor %d out of bounds (total %d)", m2.nav.Cursor(), countFlatTasks(m.displaySections()))
 	}
 }
 
@@ -1241,8 +1243,8 @@ func TestKeyPressesInAllTasksMode(t *testing.T) {
 	}
 	updated, _ = sendSpecialKey(m2, tea.KeyDown)
 	m3 := updated.(Model)
-	if m3.cursor != 1 {
-		t.Errorf("cursor = %d, want 1", m3.cursor)
+	if m3.nav.Cursor() != 1 {
+		t.Errorf("cursor = %d, want 1", m3.nav.Cursor())
 	}
 }
 

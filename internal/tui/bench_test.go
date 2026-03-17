@@ -158,6 +158,6 @@ func BenchmarkFlatTasks(b *testing.B) {
 	m.height = 40
 	b.ResetTimer()
 	for b.Loop() {
-		m.flatTasks()
+		flatTasks(m.displaySections())
 	}
 }

@@ -23,7 +23,7 @@ type Model struct {
 	hiddenCounts       []int        // per-section count of @hidden tasks that were removed
 	openCount          int          // cached count of open checkbox tasks, updated on rebuild
 	completedThisWeek  int          // cached count of tasks completed since start of week
-	cursor             int          // index into flat task list across all sections
+	nav                Navigator    // cursor + navigation state
 	focusedView        string       // "" = dashboard, otherwise title of focused section
 	viewLocked         bool         // when true, block mode-switching keys and prevent unfocusing (set via --view flag)
 	showSummary        bool
@@ -68,7 +68,7 @@ func NewModel(cfg *config.Config, tasks []model.Task, scanFunc func() ([]model.T
 	}
 
 	m.rebuildSections()
-	m.clampCursor()
+	m.nav.ClampCursor(m.displaySections())
 
 	m.customKeys = make([]key.Binding, len(cfg.CustomBindings))
 	for i, cb := range cfg.CustomBindings {
@@ -106,7 +106,7 @@ func (m *Model) SetFocusedView(title string) {
 		m.keys.FocusSection[i].SetEnabled(false)
 	}
 	m.rebuildSections()
-	m.clampCursor()
+	m.nav.ClampCursor(m.displaySections())
 }
 
 // Init implements tea.Model.
@@ -125,6 +125,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
+		m.nav.SetHeight(msg.Height)
 		return m, nil
 
 	case RefreshMsg:
@@ -187,7 +188,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Rebuild sections if tasks or config changed (config affects views, tag colors).
 		if msg.Tasks != nil || msg.Config != nil {
 			m.rebuildSections()
-			m.clampCursor()
+			m.nav.ClampCursor(m.displaySections())
 		}
 		if m.warningsFunc != nil {
 			m.warnings = m.warningsFunc()

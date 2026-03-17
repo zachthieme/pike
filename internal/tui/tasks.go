@@ -199,116 +199,6 @@ func applyDSLFilter(tasks []model.Task, filterText string, now time.Time) ([]mod
 	return filtered, nil
 }
 
-// flatTasks returns all tasks across displayed sections in order.
-func (m Model) flatTasks() []model.Task {
-	var tasks []model.Task
-	for _, sec := range m.displaySections() {
-		if len(sec.Tasks) > 0 {
-			tasks = append(tasks, sec.Tasks...)
-		}
-	}
-	return tasks
-}
-
-// pageScroll moves the cursor by half the visible task window. direction is 1 for down, -1 for up.
-func (m *Model) pageScroll(direction int) {
-	visible := max(4, m.height-pageScrollChrome)
-	m.cursor += direction * (visible / 2)
-	m.clampCursor()
-}
-
-// countFlatTasks returns the total number of tasks across displayed sections.
-func (m Model) countFlatTasks() int {
-	n := 0
-	for _, sec := range m.displaySections() {
-		n += len(sec.Tasks)
-	}
-	return n
-}
-
-// clampCursor ensures cursor is within valid bounds.
-func (m *Model) clampCursor() {
-	n := m.countFlatTasks()
-	if n == 0 {
-		m.cursor = 0
-		return
-	}
-	if m.cursor >= n {
-		m.cursor = n - 1
-	}
-	if m.cursor < 0 {
-		m.cursor = 0
-	}
-}
-
-// cursorDown moves the cursor down one position if possible.
-func (m *Model) cursorDown() {
-	n := m.countFlatTasks()
-	if n > 0 && m.cursor < n-1 {
-		m.cursor++
-	}
-}
-
-// cursorUp moves the cursor up one position if possible.
-func (m *Model) cursorUp() {
-	if m.cursor > 0 {
-		m.cursor--
-	}
-}
-
-// cursorSection returns the index of the section the cursor is currently in,
-// or -1 if no section contains the cursor.
-func (m Model) cursorSection() int {
-	flatIdx := 0
-	for i, sec := range m.displaySections() {
-		if len(sec.Tasks) == 0 {
-			continue
-		}
-		if m.cursor >= flatIdx && m.cursor < flatIdx+len(sec.Tasks) {
-			return i
-		}
-		flatIdx += len(sec.Tasks)
-	}
-	return -1
-}
-
-// jumpToNextSection moves the cursor to the first task of the next non-empty section.
-func (m *Model) jumpToNextSection() {
-	sections := m.displaySections()
-	current := m.cursorSection()
-	flatIdx := 0
-	for i, sec := range sections {
-		if len(sec.Tasks) == 0 {
-			continue
-		}
-		if i > current {
-			m.cursor = flatIdx
-			return
-		}
-		flatIdx += len(sec.Tasks)
-	}
-}
-
-// jumpToPrevSection moves the cursor to the first task of the previous non-empty section.
-func (m *Model) jumpToPrevSection() {
-	current := m.cursorSection()
-	flatIdx := 0
-	prevStart := -1
-	for i, sec := range m.displaySections() {
-		if len(sec.Tasks) == 0 {
-			continue
-		}
-		if i >= current {
-			break
-		}
-		prevStart = flatIdx
-		flatIdx += len(sec.Tasks)
-	}
-	if prevStart >= 0 {
-		m.cursor = prevStart
-	}
-}
-
 // visibleSections returns non-empty sections from the cached unfiltered view set.
 func (m Model) visibleSections() []filter.ViewResult {
 	// Use cached unfiltered results when available (dashboard mode).
@@ -367,7 +257,7 @@ func (m *Model) exitToDashboard() {
 	m.filterBar, _ = m.filterBar.Update(FilterDeactivateMsg{})
 	m.showAll = false
 	m.rebuildSections()
-	m.clampCursor()
+	m.nav.ClampCursor(m.displaySections())
 }
 
 // enterAllTasksMode switches to all-tasks mode with a focused filter input.
@@ -375,7 +265,7 @@ func (m *Model) exitToDashboard() {
 func (m *Model) enterAllTasksMode(showAll bool, initialFilter string) tea.Cmd {
 	m.mode = modeAllTasks
 	m.showAll = showAll
-	m.cursor = 0
+	m.nav.JumpToTop()
 	var cmd tea.Cmd
 	m.filterBar, cmd = m.filterBar.Update(FilterActivateMsg{
 		Mode:         filterSubstring,
@@ -383,7 +273,7 @@ func (m *Model) enterAllTasksMode(showAll bool, initialFilter string) tea.Cmd {
 		Placeholder:  "search tasks...",
 	})
 	m.rebuildSections()
-	m.clampCursor()
+	m.nav.ClampCursor(m.displaySections())
 	return cmd
 }
 
@@ -392,7 +282,7 @@ func (m *Model) enterAllTasksMode(showAll bool, initialFilter string) tea.Cmd {
 func (m *Model) enterQueryMode(query string, sortOrder string) tea.Cmd {
 	m.mode = modeAllTasks
 	m.showAll = true
-	m.cursor = 0
+	m.nav.JumpToTop()
 	if sortOrder == "" {
 		sortOrder = "file"
 	}
@@ -404,7 +294,7 @@ func (m *Model) enterQueryMode(query string, sortOrder string) tea.Cmd {
 		Placeholder:  "query...",
 	})
 	m.rebuildSections()
-	m.clampCursor()
+	m.nav.ClampCursor(m.displaySections())
 	return cmd
 }
 
@@ -422,7 +312,7 @@ func (m *Model) enterTagSearchMode() tea.Cmd {
 func (m *Model) enterRecentlyCompletedMode() tea.Cmd {
 	queryStr := fmt.Sprintf("completed and @completed >= today-%dd", m.config.RecentlyCompletedDays)
 	m.mode = modeRecentlyCompleted
-	m.cursor = 0
+	m.nav.JumpToTop()
 	var cmd tea.Cmd
 	m.filterBar, cmd = m.filterBar.Update(FilterActivateMsg{
 		Mode:         filterQuery,
@@ -430,7 +320,7 @@ func (m *Model) enterRecentlyCompletedMode() tea.Cmd {
 		Placeholder:  "type to filter...",
 	})
 	m.rebuildSections()
-	m.clampCursor()
+	m.nav.ClampCursor(m.displaySections())
 	return cmd
 }
 

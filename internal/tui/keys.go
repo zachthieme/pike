@@ -32,16 +32,16 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if msg.Type != tea.KeyRunes {
 			switch {
 			case key.Matches(msg, m.keys.Down):
-				m.cursorDown()
+				m.nav.CursorDown(m.displaySections())
 				return m, nil
 			case key.Matches(msg, m.keys.Up):
-				m.cursorUp()
+				m.nav.CursorUp()
 				return m, nil
 			case key.Matches(msg, m.keys.PageDown):
-				m.pageScroll(1)
+				m.nav.PageScroll(1, m.displaySections())
 				return m, tea.ClearScreen
 			case key.Matches(msg, m.keys.PageUp):
-				m.pageScroll(-1)
+				m.nav.PageScroll(-1, m.displaySections())
 				return m, tea.ClearScreen
 			}
 		}
@@ -68,28 +68,28 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		case key.Matches(msg, m.keys.ToggleHidden):
 			m.showHidden = !m.showHidden
 			m.rebuildSections()
-			m.clampCursor()
+			m.nav.ClampCursor(m.displaySections())
 			return m, nil
 		case key.Matches(msg, m.keys.Down):
-			m.cursorDown()
+			m.nav.CursorDown(m.displaySections())
 			return m, nil
 		case key.Matches(msg, m.keys.Up):
-			m.cursorUp()
+			m.nav.CursorUp()
 			return m, nil
 		case key.Matches(msg, m.keys.Top):
-			m.cursor = 0
+			m.nav.JumpToTop()
 			return m, nil
 		case key.Matches(msg, m.keys.Bottom):
-			m.cursor = max(0, m.countFlatTasks()-1)
+			m.nav.JumpToBottom(m.displaySections())
 			return m, nil
 		case key.Matches(msg, m.keys.PageDown):
-			m.pageScroll(1)
+			m.nav.PageScroll(1, m.displaySections())
 			return m, tea.ClearScreen
 		case key.Matches(msg, m.keys.PageUp):
-			m.pageScroll(-1)
+			m.nav.PageScroll(-1, m.displaySections())
 			return m, tea.ClearScreen
 		case key.Matches(msg, m.keys.PrevSection):
-			m.jumpToPrevSection()
+			m.nav.JumpToPrevSection(m.displaySections())
 			return m, nil
 		case key.Matches(msg, m.keys.Enter):
 			return m.openEditor()
@@ -107,7 +107,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 						if sec.Title == cb.View {
 							m.focusedView = cb.View
 							m.rebuildSections()
-							m.cursor = 0
+							m.nav.JumpToTop()
 							break
 						}
 					}
@@ -137,40 +137,40 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		case m.focusedView != "" && !m.viewLocked:
 			m.focusedView = ""
 			m.rebuildSections()
-			m.clampCursor()
+			m.nav.ClampCursor(m.displaySections())
 		}
 		return m, nil
 
 	case key.Matches(msg, m.keys.Down):
-		m.cursorDown()
+		m.nav.CursorDown(m.displaySections())
 		return m, nil
 
 	case key.Matches(msg, m.keys.Up):
-		m.cursorUp()
+		m.nav.CursorUp()
 		return m, nil
 
 	case key.Matches(msg, m.keys.Top):
-		m.cursor = 0
+		m.nav.JumpToTop()
 		return m, nil
 
 	case key.Matches(msg, m.keys.Bottom):
-		m.cursor = max(0, m.countFlatTasks()-1)
+		m.nav.JumpToBottom(m.displaySections())
 		return m, nil
 
 	case key.Matches(msg, m.keys.PageDown):
-		m.pageScroll(1)
+		m.nav.PageScroll(1, m.displaySections())
 		return m, tea.ClearScreen
 
 	case key.Matches(msg, m.keys.PageUp):
-		m.pageScroll(-1)
+		m.nav.PageScroll(-1, m.displaySections())
 		return m, tea.ClearScreen
 
 	case key.Matches(msg, m.keys.NextSection):
-		m.jumpToNextSection()
+		m.nav.JumpToNextSection(m.displaySections())
 		return m, nil
 
 	case key.Matches(msg, m.keys.PrevSection):
-		m.jumpToPrevSection()
+		m.nav.JumpToPrevSection(m.displaySections())
 		return m, nil
 
 	case key.Matches(msg, m.keys.Summary):
@@ -213,7 +213,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case key.Matches(msg, m.keys.ToggleHidden):
 		m.showHidden = !m.showHidden
 		m.rebuildSections()
-		m.clampCursor()
+		m.nav.ClampCursor(m.displaySections())
 		return m, nil
 
 	case key.Matches(msg, m.keys.Refresh):
@@ -237,7 +237,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				if i < len(sections) {
 					m.focusedView = sections[i].Title
 					m.rebuildSections()
-					m.cursor = 0
+					m.nav.JumpToTop()
 				}
 				return m, nil
 			}
@@ -265,7 +265,7 @@ func (m Model) processFilterOutput(filterCmd tea.Cmd) (tea.Model, tea.Cmd) {
 			extraCmd = m.enterTagSearchMode()
 		} else {
 			m.rebuildSections()
-			m.clampCursor()
+			m.nav.ClampCursor(m.displaySections())
 		}
 	case FilterSubmittedMsg:
 		// No-op — focus transition handled inside FilterBar.
@@ -280,11 +280,11 @@ func (m Model) processFilterOutput(filterCmd tea.Cmd) (tea.Model, tea.Cmd) {
 				m.mode = modeDashboard
 			}
 			m.rebuildSections()
-			m.clampCursor()
+			m.nav.ClampCursor(m.displaySections())
 		}
 	case FilterModeChangedMsg:
 		m.rebuildSections()
-		m.clampCursor()
+		m.nav.ClampCursor(m.displaySections())
 	}
 
 	// Combine the FilterBar's tea.Cmd (textinput blink/focus) with any
@@ -303,12 +303,12 @@ func (m Model) processFilterOutput(filterCmd tea.Cmd) (tea.Model, tea.Cmd) {
 
 // openEditor launches the editor for the task at the current cursor position.
 func (m Model) openEditor() (tea.Model, tea.Cmd) {
-	flatTasks := m.flatTasks()
-	if len(flatTasks) == 0 || m.cursor >= len(flatTasks) {
+	tasks := flatTasks(m.displaySections())
+	if len(tasks) == 0 || m.nav.Cursor() >= len(tasks) {
 		return m, nil
 	}
 
-	task := flatTasks[m.cursor]
+	task := tasks[m.nav.Cursor()]
 	editorName := editor.ResolveEditor(m.editorCmd)
 
 	filePath := m.resolveFilePath(task.File)
@@ -329,11 +329,11 @@ func (m Model) resolveFilePath(relPath string) string {
 
 // toggleTask completes or uncompletes the task at the cursor asynchronously.
 func (m Model) toggleTask() (tea.Model, tea.Cmd) {
-	flatTasks := m.flatTasks()
-	if len(flatTasks) == 0 || m.cursor >= len(flatTasks) {
+	tasks := flatTasks(m.displaySections())
+	if len(tasks) == 0 || m.nav.Cursor() >= len(tasks) {
 		return m, nil
 	}
-	task := flatTasks[m.cursor]
+	task := tasks[m.nav.Cursor()]
 	if !task.HasCheckbox {
 		return m, nil
 	}
@@ -356,11 +356,11 @@ func (m Model) toggleTask() (tea.Model, tea.Cmd) {
 
 // toggleHiddenTag adds or removes @hidden from the task at the cursor asynchronously.
 func (m Model) toggleHiddenTag() (tea.Model, tea.Cmd) {
-	flatTasks := m.flatTasks()
-	if len(flatTasks) == 0 || m.cursor >= len(flatTasks) {
+	tasks := flatTasks(m.displaySections())
+	if len(tasks) == 0 || m.nav.Cursor() >= len(tasks) {
 		return m, nil
 	}
-	task := flatTasks[m.cursor]
+	task := tasks[m.nav.Cursor()]
 	filePath := m.resolveFilePath(task.File)
 	line := task.Line
 
