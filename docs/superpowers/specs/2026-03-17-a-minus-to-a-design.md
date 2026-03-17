@@ -30,7 +30,7 @@ Five improvements identified from a principal-engineer-level code review, chosen
 
 **handleKey() simplification:**
 - Cursor logic replaced by `m.nav.CursorUp()` etc.
-- `toggleTask()` and `openEditor()` resolve the selected task via `m.nav.FlatTasks()`
+- `toggleTask()` and `openEditor()` resolve the selected task via `flatTasks(m.displaySections())`
 - Nested dispatch structure preserved (correctly models priority chain)
 - Estimated: `handleKey()` from ~234 → ~180 lines
 - `processFilterOutput`, `openEditor`, `resolveFilePath`, `toggleTask`, `toggleHiddenTag` remain in `keys.go`
