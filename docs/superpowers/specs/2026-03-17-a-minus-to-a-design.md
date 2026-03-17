@@ -18,9 +18,10 @@ Five improvements identified from a principal-engineer-level code review, chosen
 **Navigator** (`internal/tui/navigator.go`):
 - Stateful helper (not a tea.Model sub-model — no message passing overhead)
 - Owns: `cursor int`, `height int`
-- Receives sections via a `func() []filter.ViewResult` callback (the output of `displaySections()`, not raw `m.sections`) so cursor bounds are correct when a view is focused
-- Methods: `CursorUp()`, `CursorDown()`, `JumpToNextSection()`, `JumpToPrevSection()`, `JumpToTop()`, `JumpToBottom()`, `ClampCursor()`, `FocusSection(index)`, `Cursor() int`, `FlatTasks() []model.Task`, `CountFlatTasks() int`, `PageScroll(direction int)`
-- Extracted from: `tasks.go` (8 cursor/navigation functions including `flatTasks`, `countFlatTasks`, `pageScroll`)
+- Methods that need section data accept `[]filter.ViewResult` as a parameter (not a stored callback) to avoid stale closure bugs with Bubble Tea's value semantics
+- Navigator methods: `CursorUp()`, `CursorDown(sections)`, `JumpToNextSection(sections)`, `JumpToPrevSection(sections)`, `JumpToTop()`, `JumpToBottom(sections)`, `ClampCursor(sections)`, `FocusSection(sections, index)`, `Cursor() int`, `PageScroll(direction, sections)`
+- Package-level functions: `flatTasks(sections) []model.Task`, `countFlatTasks(sections) int`
+- Extracted from: `tasks.go` (10 cursor/navigation functions including `flatTasks`, `countFlatTasks`, `pageScroll`)
 
 **Modes file** (`internal/tui/modes.go`):
 - Methods on Model, moved from `tasks.go`
