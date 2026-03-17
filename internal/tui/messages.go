@@ -40,9 +40,35 @@ const (
 )
 
 // filterPrompt maps each filter mode to its prompt string.
-var filterPrompt = map[filterMode]string{
+var filterPrompt = [...]string{
 	filterSubstring: "/ ",
 	filterQuery:     "? ",
+}
+
+func (v viewMode) String() string {
+	switch v {
+	case modeDashboard:
+		return "dashboard"
+	case modeAllTasks:
+		return "all-tasks"
+	case modeTagSearch:
+		return "tag-search"
+	case modeRecentlyCompleted:
+		return "recently-completed"
+	default:
+		return "unknown"
+	}
+}
+
+func (f filterMode) String() string {
+	switch f {
+	case filterSubstring:
+		return "substring"
+	case filterQuery:
+		return "query"
+	default:
+		return "unknown"
+	}
 }
 
 // --- FilterBar messages ---

@@ -42,11 +42,6 @@ func NewFilterBar() FilterBar {
 	}
 }
 
-// Init implements tea.Model. Returns nil.
-func (f FilterBar) Init() tea.Cmd {
-	return nil
-}
-
 // Update handles incoming messages and returns an updated FilterBar and optional command.
 func (f FilterBar) Update(msg tea.Msg) (FilterBar, tea.Cmd) {
 	switch m := msg.(type) {
@@ -54,9 +49,7 @@ func (f FilterBar) Update(msg tea.Msg) (FilterBar, tea.Cmd) {
 		f.active = true
 		f.mode = m.Mode
 		f.queryErr = nil
-		if prompt, ok := filterPrompt[m.Mode]; ok {
-			f.input.Prompt = prompt
-		}
+		f.input.Prompt = filterPrompt[m.Mode]
 		if m.Placeholder != "" {
 			f.input.Placeholder = m.Placeholder
 		}

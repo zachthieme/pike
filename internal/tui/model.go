@@ -49,7 +49,7 @@ type Model struct {
 }
 
 // NewModel creates a new TUI model with the given configuration and initial tasks.
-func NewModel(cfg *config.Config, tasks []model.Task, scanFunc func() ([]model.Task, error), configFunc ...func() (*config.Config, error)) Model {
+func NewModel(cfg *config.Config, tasks []model.Task, scanFunc func() ([]model.Task, error), configFunc func() (*config.Config, error)) Model {
 	m := Model{
 		config:      cfg,
 		allTasks:    tasks,
@@ -63,9 +63,7 @@ func NewModel(cfg *config.Config, tasks []model.Task, scanFunc func() ([]model.T
 		customBindings: cfg.CustomBindings,
 		now:            time.Now,
 	}
-	if len(configFunc) > 0 {
-		m.configFunc = configFunc[0]
-	}
+	m.configFunc = configFunc
 
 	m.rebuildSections()
 	m.nav.ClampCursor(m.displaySections())

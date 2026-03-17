@@ -34,11 +34,6 @@ func NewTagSearch() TagSearch {
 	}
 }
 
-// Init implements tea.Model. Returns nil.
-func (t TagSearch) Init() tea.Cmd {
-	return nil
-}
-
 // Update handles incoming messages and returns an updated TagSearch and optional command.
 func (t TagSearch) Update(msg tea.Msg) (TagSearch, tea.Cmd) {
 	switch m := msg.(type) {

@@ -80,7 +80,7 @@ func BenchmarkRebuildSections(b *testing.B) {
 		b.Run(fmt.Sprintf("tasks_%d", size), func(b *testing.B) {
 			tasks := makeBenchTasks(size)
 			cfg := benchConfig()
-			m := NewModel(cfg, tasks, nil)
+			m := NewModel(cfg, tasks, nil, nil)
 			m.width = 120
 			m.height = 40
 			b.ResetTimer()
@@ -153,7 +153,7 @@ func BenchmarkTruncateView(b *testing.B) {
 func BenchmarkFlatTasks(b *testing.B) {
 	tasks := makeBenchTasks(1000)
 	cfg := benchConfig()
-	m := NewModel(cfg, tasks, nil)
+	m := NewModel(cfg, tasks, nil, nil)
 	m.width = 120
 	m.height = 40
 	b.ResetTimer()

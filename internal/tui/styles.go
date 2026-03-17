@@ -2,7 +2,6 @@ package tui
 
 import (
 	"strings"
-	"sync"
 
 	"github.com/charmbracelet/lipgloss"
 )
@@ -47,8 +46,8 @@ var (
 
 // Parameterized style caches.
 var (
-	boldColorCache sync.Map // color string → lipgloss.Style (bold + foreground)
-	tagStyleCache  sync.Map // color string → lipgloss.Style (foreground only)
+	boldColorCache = make(map[string]lipgloss.Style) // color string → lipgloss.Style (bold + foreground)
+	tagStyleCache  = make(map[string]lipgloss.Style) // color string → lipgloss.Style (foreground only)
 )
 
 // SectionHeaderStyle returns a bold style with the given color for section headers.
@@ -58,11 +57,11 @@ func SectionHeaderStyle(color string) lipgloss.Style {
 
 // boldColorStyle returns a cached bold + foreground style for the given color.
 func boldColorStyle(color string) lipgloss.Style {
-	if v, ok := boldColorCache.Load(color); ok {
-		return v.(lipgloss.Style)
+	if s, ok := boldColorCache[color]; ok {
+		return s
 	}
 	s := lipgloss.NewStyle().Bold(true).Foreground(resolveColor(color))
-	boldColorCache.Store(color, s)
+	boldColorCache[color] = s
 	return s
 }
 
@@ -77,11 +76,11 @@ func TaskStyle(selected bool) lipgloss.Style {
 
 // TagStyle returns a colored style for rendering tag tokens.
 func TagStyle(color string) lipgloss.Style {
-	if v, ok := tagStyleCache.Load(color); ok {
-		return v.(lipgloss.Style)
+	if s, ok := tagStyleCache[color]; ok {
+		return s
 	}
 	s := lipgloss.NewStyle().Foreground(resolveColor(color))
-	tagStyleCache.Store(color, s)
+	tagStyleCache[color] = s
 	return s
 }
 

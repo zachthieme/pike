@@ -387,10 +387,15 @@ internal/
   style/style.go               Tag coloring, link prettification, task markers
   tui/
     model.go                   Bubbletea Model struct, Init, Update
-    keys.go                    Key handlers and mode transitions
-    views.go                   View rendering (dashboard, all-tasks, tag search)
-    tasks.go                   Task filtering, sections, cursor, counting
+    keys.go                    Key handlers and input dispatch
+    modes.go                   Mode transitions, section rebuilding, filtering
+    navigator.go               Cursor and section navigation
+    filterbar.go               Filter bar sub-model (substring/DSL input)
+    tagsearch.go               Tag search sub-model (tag picker)
+    messages.go                Message types and shared enums
+    views.go                   View rendering (dashboard, all-tasks, focused)
     sections.go                Section rendering with borders
+    tasks.go                   Task formatting and utility functions
     styles.go                  Lipgloss style helpers and caches
     keymap.go                  Key bindings
     summary.go                 Summary overlay

@@ -1,5 +1,18 @@
 # Changelog
 
+### v1.6.1 — March 17, 2026: Idiomatic Go & Bubble Tea Cleanup
+
+**Toggle file permissions:**
+- `writeLines` now preserves original file permissions instead of hardcoding `0644`
+- All toggle operations (`Complete`, `Uncomplete`, `ToggleHidden`) stat the file before writing
+
+**TUI cleanup:**
+- Replaced `sync.Map` style caches with plain maps (Bubble Tea is single-threaded)
+- Changed `filterPrompt` from map to array (indexed by iota enum)
+- Made `NewModel` `configFunc` parameter explicit instead of variadic
+- Removed unused `Init()` methods from `FilterBar` and `TagSearch` sub-models
+- Added `String()` methods to `viewMode` and `filterMode` enums
+
 ### v1.6.0 — March 17, 2026: Code Quality Improvements
 
 **TUI decomposition:**

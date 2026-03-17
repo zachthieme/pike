@@ -45,6 +45,10 @@ func Complete(ctx context.Context, filePath string, line int, date time.Time) er
 	if err != nil {
 		return err
 	}
+	info, err := os.Stat(filePath)
+	if err != nil {
+		return fmt.Errorf("stat file: %w", err)
+	}
 	if line < 1 || line > len(lines) {
 		return fmt.Errorf("%w: line %d (file has %d lines)", ErrLineOutOfRange, line, len(lines))
 	}
@@ -66,7 +70,7 @@ func Complete(ctx context.Context, filePath string, line int, date time.Time) er
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	return writeLines(filePath, lines)
+	return writeLines(filePath, lines, info.Mode())
 }
 
 // Uncomplete marks a completed checkbox task as open by modifying the source file.
@@ -82,6 +86,10 @@ func Uncomplete(ctx context.Context, filePath string, line int) error {
 	lines, err := readLines(filePath)
 	if err != nil {
 		return err
+	}
+	info, err := os.Stat(filePath)
+	if err != nil {
+		return fmt.Errorf("stat file: %w", err)
 	}
 	if line < 1 || line > len(lines) {
 		return fmt.Errorf("%w: line %d (file has %d lines)", ErrLineOutOfRange, line, len(lines))
@@ -115,7 +123,7 @@ func Uncomplete(ctx context.Context, filePath string, line int) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	return writeLines(filePath, lines)
+	return writeLines(filePath, lines, info.Mode())
 }
 
 // ToggleHidden adds @hidden to a task line if absent, or removes it if present.
@@ -129,6 +137,10 @@ func ToggleHidden(ctx context.Context, filePath string, line int) error {
 	lines, err := readLines(filePath)
 	if err != nil {
 		return err
+	}
+	info, err := os.Stat(filePath)
+	if err != nil {
+		return fmt.Errorf("stat file: %w", err)
 	}
 	if line < 1 || line > len(lines) {
 		return fmt.Errorf("%w: line %d (file has %d lines)", ErrLineOutOfRange, line, len(lines))
@@ -159,7 +171,7 @@ func ToggleHidden(ctx context.Context, filePath string, line int) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	return writeLines(filePath, lines)
+	return writeLines(filePath, lines, info.Mode())
 }
 
 // verifyUnmodified re-reads the file and checks that the target line hasn't
@@ -189,10 +201,10 @@ func readLines(path string) ([]string, error) {
 }
 
 // writeLines writes lines atomically using write-to-temp + rename.
-func writeLines(path string, lines []string) error {
+func writeLines(path string, lines []string, perm os.FileMode) error {
 	content := strings.Join(lines, "\n") + "\n"
 	tmp := path + ".pike-tmp"
-	if err := os.WriteFile(tmp, []byte(content), 0o644); err != nil {
+	if err := os.WriteFile(tmp, []byte(content), perm); err != nil {
 		return err
 	}
 	if err := os.Rename(tmp, path); err != nil {
