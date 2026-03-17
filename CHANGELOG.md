@@ -1,5 +1,25 @@
 # Changelog
 
+### v1.6.0 — March 17, 2026: Code Quality Improvements
+
+**TUI decomposition:**
+- Extracted `Navigator` type for cursor/section navigation, removing 9 functions from the monolithic `tasks.go`
+- Split `tasks.go` (446 lines) into `modes.go` (mode transitions, section rebuilding) and `tasks.go` (utilities)
+- Navigator accepts sections as parameters to avoid stale closure bugs with Bubble Tea's value semantics
+
+**context.Context threading:**
+- `toggle.Complete`, `toggle.Uncomplete`, and `toggle.ToggleHidden` now accept `context.Context` as their first parameter
+- Context checked before acquiring file lock and before atomic write, enabling cancellation of in-flight toggles
+
+**Testing:**
+- 9 integration tests exercising the full scan → parse → filter → render pipeline with real files
+- 8 new CLI tests covering color mode flags, config/scanner errors, query validation, and warning output
+- 12 Navigator unit tests covering cursor movement, section jumping, page scrolling, and edge cases
+- 3 toggle cancellation tests verifying cancelled contexts don't modify files
+
+**Documentation:**
+- Package-level godoc comments added to all 13 packages
+
 ### v1.5.0 — March 16, 2026: Custom Keybindings
 
 **Configurable keybindings:**
