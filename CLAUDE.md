@@ -46,6 +46,8 @@ Always run `make test` and `make lint` before committing. CI enforces both.
 
 **Rule of thumb:** if you'd want someone to review it before it ships, use a PR. If it's obviously correct, push to main.
 
+**Before merging feature branches**, squash commits into a clean history (typically 2-4 commits: implementation, tests, docs). Intermediate fix-up and review-feedback commits should be squashed into the commits they fix. The merge log should read like a changelog, not a work diary.
+
 ## How to Release
 
 Releases are fully automated via GoReleaser + GitHub Actions.
