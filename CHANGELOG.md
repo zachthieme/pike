@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v1.7.0 — March 18, 2026: File-Scoped Task Queries
 
 - `--scope <file>` flag: filter open tasks to those referencing the given file (by wiki-link, filename, or display name). Composes with `--query`, `--view`, `--json`, `--count`, and `--sort`.
 
