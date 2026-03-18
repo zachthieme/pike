@@ -83,6 +83,17 @@ open and "meeting notes"                # open tasks containing "meeting notes"
 @talk and open                          # open tasks tagged @talk
 ```
 
+## Scope
+
+`--scope <file>` is a CLI-only filter that restricts results to tasks referencing the given file. It can be combined with any query or view:
+
+```
+pike --scope "Bob Smith.md"                        # all open tasks about Bob
+pike --scope "Bob Smith.md" --query "@talk"         # @talk tasks about Bob
+pike --scope "Bob Smith.md" --query "open and @due < today"  # overdue tasks about Bob
+pike --scope "Bob Smith.md" --view "Today"          # today's view scoped to Bob
+```
+
 ## View Config Example
 
 ```yaml

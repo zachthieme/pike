@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- `--scope <file>` flag: filter open tasks to those referencing the given file (by wiki-link, filename, or display name). Composes with `--query`, `--view`, `--json`, `--count`, and `--sort`.
+
 ### v1.6.1 — March 17, 2026: Idiomatic Go & Bubble Tea Cleanup
 
 **Toggle file permissions:**

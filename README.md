@@ -93,6 +93,7 @@ pike [flags]
 | `--config <path>` | `-c` | Config file path |
 | `--view <name>` | `-w` | Start focused on a named section |
 | `--query <query>` | `-q` | Run a query, print results to stdout, and exit |
+| `--scope <file>` | | Filter to tasks referencing the given file's subject |
 | `--sort <order>` | | Sort order for `--query` mode (default: `file`) |
 | `--summary` | | Print task summary counts and exit |
 | `--color` | | Force color output |
@@ -117,6 +118,18 @@ pike --summary
 
 # Start focused on the "Today" section
 pike -w Today
+```
+
+### Scope
+
+`--scope <file>` filters results to open tasks that reference a given file by name (wiki-links, plain filename, or display name). It works with `--query`, `--view`, `--json`, `--count`, and `--sort`.
+
+```bash
+pike --scope "Bob Smith.md"                           # open tasks referencing Bob
+pike --scope "Bob Smith.md" --query "@talk"            # @talk tasks about Bob
+pike --scope "Bob Smith.md" --view "Today"             # today's tasks about Bob
+pike --scope "Bob Smith.md" --json                     # JSON output
+pike --scope "Bob Smith.md" --count                    # count only
 ```
 
 ## Configuration
