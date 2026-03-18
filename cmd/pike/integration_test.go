@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"os"
 	"path/filepath"
@@ -219,5 +220,197 @@ func TestIntegration_SummaryPath(t *testing.T) {
 	}
 	if len(overdue) != 1 {
 		t.Errorf("expected 1 overdue task, got %d", len(overdue))
+	}
+}
+
+// runCLI is a helper that calls run() with the given args and returns stdout/stderr.
+func runCLI(t *testing.T, args []string) (stdout, stderr string, err error) {
+	t.Helper()
+	var out, errOut bytes.Buffer
+	err = run(args, &out, &errOut)
+	return out.String(), errOut.String(), err
+}
+
+func TestIntegration_ScopeBasic(t *testing.T) {
+	dir := t.TempDir()
+	setupFiles(t, dir, map[string]string{
+		"people/Bob Smith.md": "# Bob Smith\n- [ ] My own task @today\n",
+		"projects/alpha.md":   "# Alpha\n- [ ] Talk to [[Bob Smith]] about deployment @talk\n- [x] Done with [[bob-smith]] @completed(2026-01-01)\n- [ ] Unrelated task @today\n",
+		"projects/beta.md":    "# Beta\n- [ ] @delegated([[bob-smith]]) finish report\n",
+	})
+
+	stdout, _, err := runCLI(t, []string{"--dir", dir, "--scope", filepath.Join(dir, "people/Bob Smith.md"), "--no-color"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Should include open tasks referencing Bob from other files
+	if !strings.Contains(stdout, "Talk to [[Bob Smith]]") {
+		t.Errorf("expected wikilink task in output:\n%s", stdout)
+	}
+	if !strings.Contains(stdout, "@delegated([[bob-smith]])") {
+		t.Errorf("expected delegated task in output:\n%s", stdout)
+	}
+	// Should exclude self (Bob Smith.md's own tasks)
+	if strings.Contains(stdout, "My own task") {
+		t.Errorf("should not contain scoped file's own tasks:\n%s", stdout)
+	}
+	// Should exclude unrelated tasks
+	if strings.Contains(stdout, "Unrelated task") {
+		t.Errorf("should not contain unrelated tasks:\n%s", stdout)
+	}
+	// Should exclude completed tasks (implicit open filter)
+	if strings.Contains(stdout, "Done with") {
+		t.Errorf("should not contain completed tasks:\n%s", stdout)
+	}
+}
+
+func TestIntegration_ScopeWithQuery(t *testing.T) {
+	dir := t.TempDir()
+	setupFiles(t, dir, map[string]string{
+		"people/Bob Smith.md": "# Bob Smith\n",
+		"tasks.md":            "# Tasks\n- [ ] Talk to [[Bob Smith]] @talk\n- [ ] Ask [[bob-smith]] about API @today\n",
+	})
+
+	stdout, _, err := runCLI(t, []string{"--dir", dir, "--scope", filepath.Join(dir, "people/Bob Smith.md"), "--query", "@talk", "--no-color"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if !strings.Contains(stdout, "@talk") {
+		t.Errorf("expected @talk task in output:\n%s", stdout)
+	}
+	// @today task references Bob but doesn't have @talk
+	if strings.Contains(stdout, "@today") {
+		t.Errorf("should not contain non-@talk tasks:\n%s", stdout)
+	}
+}
+
+func TestIntegration_ScopeWithCount(t *testing.T) {
+	dir := t.TempDir()
+	setupFiles(t, dir, map[string]string{
+		"people/Bob Smith.md": "# Bob Smith\n",
+		"tasks.md":            "# Tasks\n- [ ] Talk to [[Bob Smith]] @talk\n- [ ] Ask [[bob-smith]] about API\n",
+	})
+
+	stdout, _, err := runCLI(t, []string{"--dir", dir, "--scope", filepath.Join(dir, "people/Bob Smith.md"), "--count"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if strings.TrimSpace(stdout) != "2" {
+		t.Errorf("expected count 2, got %q", strings.TrimSpace(stdout))
+	}
+}
+
+func TestIntegration_ScopeWithJSON(t *testing.T) {
+	dir := t.TempDir()
+	setupFiles(t, dir, map[string]string{
+		"people/Bob Smith.md": "# Bob Smith\n",
+		"tasks.md":            "# Tasks\n- [ ] Talk to [[Bob Smith]] @talk\n",
+	})
+
+	stdout, _, err := runCLI(t, []string{"--dir", dir, "--scope", filepath.Join(dir, "people/Bob Smith.md"), "--json"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if !strings.Contains(stdout, `"text"`) {
+		t.Errorf("expected JSON output:\n%s", stdout)
+	}
+	if !strings.Contains(stdout, "Bob Smith") {
+		t.Errorf("expected Bob Smith in JSON output:\n%s", stdout)
+	}
+}
+
+func TestIntegration_ScopePlusSummaryError(t *testing.T) {
+	dir := t.TempDir()
+	setupFiles(t, dir, map[string]string{
+		"people/Bob Smith.md": "# Bob Smith\n",
+	})
+
+	_, _, err := runCLI(t, []string{"--dir", dir, "--scope", filepath.Join(dir, "people/Bob Smith.md"), "--summary"})
+	if err == nil {
+		t.Fatal("expected error for --scope + --summary")
+	}
+	if !strings.Contains(err.Error(), "--scope and --summary cannot be combined") {
+		t.Errorf("unexpected error message: %v", err)
+	}
+}
+
+func TestIntegration_ScopeViewAndQueryError(t *testing.T) {
+	dir := t.TempDir()
+	setupFiles(t, dir, map[string]string{
+		"people/Bob Smith.md": "# Bob Smith\n",
+	})
+
+	_, _, err := runCLI(t, []string{"--dir", dir, "--scope", filepath.Join(dir, "people/Bob Smith.md"), "--view", "Today", "--query", "@talk"})
+	if err == nil {
+		t.Fatal("expected error for --scope + --view + --query")
+	}
+	if !strings.Contains(err.Error(), "--view and --query cannot both be used with --scope") {
+		t.Errorf("unexpected error message: %v", err)
+	}
+}
+
+func TestIntegration_ScopeFileNotFound(t *testing.T) {
+	dir := t.TempDir()
+	setupFiles(t, dir, map[string]string{
+		"tasks.md": "# Tasks\n- [ ] A task\n",
+	})
+
+	_, _, err := runCLI(t, []string{"--dir", dir, "--scope", filepath.Join(dir, "nonexistent.md")})
+	if err == nil {
+		t.Fatal("expected error for non-existent scope file")
+	}
+	if !strings.Contains(err.Error(), "file not found") {
+		t.Errorf("unexpected error message: %v", err)
+	}
+}
+
+func TestIntegration_ScopeNoMatches(t *testing.T) {
+	dir := t.TempDir()
+	setupFiles(t, dir, map[string]string{
+		"people/Bob Smith.md": "# Bob Smith\n",
+		"tasks.md":            "# Tasks\n- [ ] Unrelated task @today\n",
+	})
+
+	stdout, _, err := runCLI(t, []string{"--dir", dir, "--scope", filepath.Join(dir, "people/Bob Smith.md"), "--no-color"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if strings.TrimSpace(stdout) != "" {
+		t.Errorf("expected empty output for no matches, got:\n%s", stdout)
+	}
+}
+
+func TestIntegration_ScopeWithView(t *testing.T) {
+	dir := t.TempDir()
+	setupFiles(t, dir, map[string]string{
+		"people/Bob Smith.md": "# Bob Smith\n",
+		"tasks.md":            "# Tasks\n- [ ] Talk to [[Bob Smith]] @today\n- [ ] Ask [[bob-smith]] about API @talk\n",
+	})
+
+	// Write a config file with a "Today" view.
+	configPath := filepath.Join(dir, "config.yaml")
+	configContent := "notes_dir: " + dir + "\nviews:\n  - title: \"Today\"\n    query: \"open and @today\"\n    sort: file\n    order: 1\n"
+	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Clear env vars that could override notes_dir from config.
+	t.Setenv("NOTES", "")
+	t.Setenv("PIKE_CONFIG", "")
+
+	stdout, _, err := runCLI(t, []string{"--config", configPath, "--scope", filepath.Join(dir, "people/Bob Smith.md"), "--view", "Today", "--no-color"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if !strings.Contains(stdout, "@today") {
+		t.Errorf("expected @today task in output:\n%s", stdout)
+	}
+	if strings.Contains(stdout, "@talk") {
+		t.Errorf("should not contain non-today tasks:\n%s", stdout)
 	}
 }

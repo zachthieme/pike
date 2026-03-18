@@ -19,6 +19,7 @@ import (
 	"pike/internal/model"
 	"pike/internal/render"
 	"pike/internal/scanner"
+	"pike/internal/scope"
 	"pike/internal/tui"
 )
 
@@ -31,13 +32,14 @@ Usage:
 
 Flags:
   --dir, -d <path>       Notes directory (overrides config/env)
+  --scope, -s <path>     Scope to tasks referencing this file
   --config, -c <path>    Config file path
   --view, -w <name>      Start focused on a specific section
   --summary              Print summary counts to stdout and exit
   --query, -q <query>    Run a one-shot query, print results to stdout and exit
-  --sort <order>         Sort order for --query mode (default: "file")
-  --count                Print result count only (use with --query)
-  --json                 Output results as JSON (use with --query)
+  --sort <order>         Sort order for --query/--scope mode (default: "file")
+  --count                Print result count only (use with --query or --scope)
+  --json                 Output results as JSON (use with --query or --scope)
   --color                Force color output
   --no-color             Disable color output
   --help, -h             Show help
@@ -65,6 +67,7 @@ func run(args []string, stdout, stderr io.Writer) error {
 		summaryFlag bool
 		queryFlag   string
 		sortFlag    string
+		scopeFlag   string
 		countFlag   bool
 		jsonFlag    bool
 		colorFlag   bool
@@ -78,7 +81,8 @@ func run(args []string, stdout, stderr io.Writer) error {
 	fs.StringVar(&viewFlag, "view", "", "Start focused on a specific section")
 	fs.BoolVar(&summaryFlag, "summary", false, "Print summary counts")
 	fs.StringVar(&queryFlag, "query", "", "Run a one-shot query")
-	fs.StringVar(&sortFlag, "sort", "file", "Sort order for --query mode")
+	fs.StringVar(&sortFlag, "sort", "file", "Sort order for --query/--scope mode")
+	fs.StringVar(&scopeFlag, "scope", "", "Scope to tasks referencing this file")
 	fs.BoolVar(&countFlag, "count", false, "Print result count only")
 	fs.BoolVar(&jsonFlag, "json", false, "Output results as JSON")
 	fs.BoolVar(&colorFlag, "color", false, "Force color output")
@@ -106,14 +110,22 @@ func run(args []string, stdout, stderr io.Writer) error {
 	}
 
 	// Warn if query-only flags are provided without --query.
-	if sortFlag != "file" && queryFlag == "" {
-		_, _ = fmt.Fprintf(stderr, "warning: --sort is only used with --query\n")
+	if sortFlag != "file" && queryFlag == "" && scopeFlag == "" {
+		_, _ = fmt.Fprintf(stderr, "warning: --sort is only used with --query or --scope\n")
 	}
-	if countFlag && queryFlag == "" {
-		_, _ = fmt.Fprintf(stderr, "warning: --count is only used with --query\n")
+	if countFlag && queryFlag == "" && scopeFlag == "" {
+		_, _ = fmt.Fprintf(stderr, "warning: --count is only used with --query or --scope\n")
 	}
-	if jsonFlag && queryFlag == "" {
-		_, _ = fmt.Fprintf(stderr, "warning: --json is only used with --query\n")
+	if jsonFlag && queryFlag == "" && scopeFlag == "" {
+		_, _ = fmt.Fprintf(stderr, "warning: --json is only used with --query or --scope\n")
+	}
+
+	// Validate --scope flag.
+	if scopeFlag != "" && summaryFlag {
+		return fmt.Errorf("--scope and --summary cannot be combined")
+	}
+	if scopeFlag != "" && viewFlag != "" && queryFlag != "" {
+		return fmt.Errorf("--view and --query cannot both be used with --scope")
 	}
 
 	// Determine color mode.
@@ -146,12 +158,58 @@ func run(args []string, stdout, stderr io.Writer) error {
 		_, _ = fmt.Fprintf(stderr, "warning: %s:%d: %s\n", w.File, w.Line, w.Message)
 	}
 
+	// Apply scope filter if --scope is set.
+	if scopeFlag != "" {
+		info, err := os.Stat(scopeFlag)
+		if err != nil {
+			if os.IsNotExist(err) {
+				return fmt.Errorf("scope: file not found: %s", scopeFlag)
+			}
+			return fmt.Errorf("scope: %w", err)
+		}
+		if info.IsDir() {
+			return fmt.Errorf("scope: expected a file, got directory: %s", scopeFlag)
+		}
+
+		identities := scope.Identity(scopeFlag)
+		excludePath, err := scope.RelPath(scopeFlag, cfg.NotesDir)
+		if err != nil {
+			return fmt.Errorf("scope: %w", err)
+		}
+		tasks = scope.Filter(tasks, identities, excludePath)
+	}
+
 	now := time.Now()
 
 	// Branch on mode.
 	switch {
 	case summaryFlag:
 		return runSummary(stdout, tasks, now, noColor)
+	case scopeFlag != "":
+		// Resolve scope query: --view extracts the view's query+sort,
+		// --query uses the given query, otherwise default to "open".
+		scopeQuery := "open"
+		scopeSort := sortFlag
+		if viewFlag != "" {
+			v, err := findView(cfg.Views, viewFlag)
+			if err != nil {
+				return err
+			}
+			scopeQuery = v.Query
+			if v.Sort != "" {
+				scopeSort = v.Sort
+			}
+		} else if queryFlag != "" {
+			scopeQuery = queryFlag
+		}
+		return runQuery(stdout, tasks, scopeQuery, queryOpts{
+			sortOrder:  scopeSort,
+			tagColors:  cfg.TagColors,
+			now:        now,
+			noColor:    noColor,
+			count:      countFlag,
+			jsonOutput: jsonFlag,
+		})
 	case queryFlag != "":
 		return runQuery(stdout, tasks, queryFlag, queryOpts{
 			sortOrder:  sortFlag,
@@ -174,6 +232,7 @@ func expandShortFlags(args []string) []string {
 		"-c": "--config",
 		"-w": "--view",
 		"-q": "--query",
+		"-s": "--scope",
 		"-h": "--help",
 		"-v": "--version",
 	}
@@ -285,6 +344,16 @@ func runQuery(w io.Writer, tasks []model.Task, queryStr string, opts queryOpts) 
 	return nil
 }
 
+// findView returns the ViewConfig matching the given title (case-insensitive).
+func findView(views []config.ViewConfig, title string) (*config.ViewConfig, error) {
+	for i := range views {
+		if strings.EqualFold(views[i].Title, title) {
+			return &views[i], nil
+		}
+	}
+	return nil, fmt.Errorf("unknown view %q", title)
+}
+
 func runTUI(_ io.Writer, cfg *config.Config, tasks []model.Task, sc *scanner.Scanner, viewFlag string, configPath string) error {
 	// Create a cancellable context so in-flight scan goroutines stop when the TUI exits.
 	ctx, cancel := context.WithCancel(context.Background())
@@ -306,17 +375,11 @@ func runTUI(_ io.Writer, cfg *config.Config, tasks []model.Task, sc *scanner.Sca
 
 	// If --view flag is set, find and focus that section.
 	if viewFlag != "" {
-		found := false
-		for _, v := range cfg.Views {
-			if strings.EqualFold(v.Title, viewFlag) {
-				m.SetFocusedView(v.Title)
-				found = true
-				break
-			}
+		v, err := findView(cfg.Views, viewFlag)
+		if err != nil {
+			return err
 		}
-		if !found {
-			return fmt.Errorf("unknown view %q", viewFlag)
-		}
+		m.SetFocusedView(v.Title)
 	}
 
 	p := tea.NewProgram(m, tea.WithAltScreen())
