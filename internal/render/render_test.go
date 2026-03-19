@@ -32,7 +32,7 @@ func TestFormatTask(t *testing.T) {
 		want      string
 	}{
 		{
-			name: "open task with file:line prefix",
+			name: "open task plain",
 			task: model.Task{
 				Text:  "Buy groceries @today",
 				State: model.Open,
@@ -43,7 +43,7 @@ func TestFormatTask(t *testing.T) {
 			},
 			tagColors: tagColors,
 			noColor:   true,
-			want:      "notes/todo.md:5  - [ ] Buy groceries @today",
+			want:      "- [ ] Buy groceries @today",
 		},
 		{
 			name: "colorized @today tag in green",
@@ -57,7 +57,7 @@ func TestFormatTask(t *testing.T) {
 			},
 			tagColors: tagColors,
 			noColor:   false,
-			want:      fmt.Sprintf("notes/todo.md:5  - [ ] Buy groceries %s@today%s", green, reset),
+			want:      fmt.Sprintf("- [ ] Buy groceries %s@today%s", green, reset),
 		},
 		{
 			name: "colorized @risk tag in red",
@@ -71,7 +71,7 @@ func TestFormatTask(t *testing.T) {
 			},
 			tagColors: tagColors,
 			noColor:   false,
-			want:      fmt.Sprintf("work/bugs.md:12  - [ ] Fix critical bug %s@risk%s", red, reset),
+			want:      fmt.Sprintf("- [ ] Fix critical bug %s@risk%s", red, reset),
 		},
 		{
 			name: "colorized @due(...) tag in red",
@@ -85,7 +85,7 @@ func TestFormatTask(t *testing.T) {
 			},
 			tagColors: tagColors,
 			noColor:   false,
-			want:      fmt.Sprintf("work/tasks.md:3  - [ ] Submit report %s@due(%s%s2026-03-15%s%s)%s", red, reset, red, reset, red, reset),
+			want:      fmt.Sprintf("- [ ] Submit report %s@due(%s%s2026-03-15%s%s)%s", red, reset, red, reset, red, reset),
 		},
 		{
 			name: "no-color mode skips ANSI codes",
@@ -99,7 +99,7 @@ func TestFormatTask(t *testing.T) {
 			},
 			tagColors: tagColors,
 			noColor:   true,
-			want:      "work/tasks.md:3  - [ ] Submit report @due(2026-03-15) @risk",
+			want:      "- [ ] Submit report @due(2026-03-15) @risk",
 		},
 		{
 			name: "completed task shows [x]",
@@ -113,7 +113,7 @@ func TestFormatTask(t *testing.T) {
 			},
 			tagColors: tagColors,
 			noColor:   true,
-			want:      "notes/done.md:8  - [x] Write tests @completed(2026-03-10)",
+			want:      "- [x] Write tests @completed(2026-03-10)",
 		},
 		{
 			name: "completed task with color",
@@ -127,7 +127,7 @@ func TestFormatTask(t *testing.T) {
 			},
 			tagColors: tagColors,
 			noColor:   false,
-			want:      fmt.Sprintf("notes/done.md:8  - [x] Write tests %s@completed(%s%s2026-03-10%s%s)%s", green, reset, green, reset, green, reset),
+			want:      fmt.Sprintf("- [x] Write tests %s@completed(%s%s2026-03-10%s%s)%s", green, reset, green, reset, green, reset),
 		},
 		{
 			name: "unknown tag uses _default color",
@@ -141,7 +141,7 @@ func TestFormatTask(t *testing.T) {
 			},
 			tagColors: tagColors,
 			noColor:   false,
-			want:      fmt.Sprintf("notes/ideas.md:1  - [ ] Research topic %s@someothertag%s", cyan, reset),
+			want:      fmt.Sprintf("- [ ] Research topic %s@someothertag%s", cyan, reset),
 		},
 		{
 			name: "multiple tags colorized independently",
@@ -155,7 +155,7 @@ func TestFormatTask(t *testing.T) {
 			},
 			tagColors: tagColors,
 			noColor:   false,
-			want:      fmt.Sprintf("ops/deploy.md:22  - [ ] Deploy service %s@risk%s %s@today%s", red, reset, green, reset),
+			want:      fmt.Sprintf("- [ ] Deploy service %s@risk%s %s@today%s", red, reset, green, reset),
 		},
 		{
 			name: "hex color tag",
@@ -171,7 +171,7 @@ func TestFormatTask(t *testing.T) {
 				"special": "#FF5733",
 			},
 			noColor: false,
-			want:    fmt.Sprintf("notes/todo.md:1  - [ ] Custom color %s@special%s", "\033[38;2;255;87;51m", reset),
+			want:    fmt.Sprintf("- [ ] Custom color %s@special%s", "\033[38;2;255;87;51m", reset),
 		},
 		{
 			name: "nil tagColors uses no coloring",
@@ -185,7 +185,7 @@ func TestFormatTask(t *testing.T) {
 			},
 			tagColors: nil,
 			noColor:   false,
-			want:      "notes/todo.md:1  - [ ] Plain task @today",
+			want:      "- [ ] Plain task @today",
 		},
 	}
 

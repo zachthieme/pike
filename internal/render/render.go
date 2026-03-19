@@ -20,9 +20,9 @@ func FormatTask(task model.Task, tagColors map[string]string, noColor bool) stri
 
 	marker := style.TaskMarker(task, false)
 	if task.HasCheckbox {
-		return fmt.Sprintf("%s:%d  - %s %s", task.File, task.Line, marker, text)
+		return fmt.Sprintf("- %s %s", marker, text)
 	}
-	return fmt.Sprintf("%s:%d  %s %s", task.File, task.Line, marker, text)
+	return fmt.Sprintf("%s %s", marker, text)
 }
 
 // jsonTask is the JSON-serializable representation of a task.

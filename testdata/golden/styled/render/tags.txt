@@ -1,9 +1,9 @@
-tags.md:3  - [ ] Review PR [38;2;166;227;161m@today[0m
-tags.md:4  - [ ] Submit report [38;2;243;139;168m@due([0m[38;2;243;139;168m2026-03-15[0m[38;2;243;139;168m)[0m
-tags.md:5  - [x] Write docs [38;2;166;227;161m@completed([0m[38;2;166;227;161m2026-03-10[0m[38;2;166;227;161m)[0m
-tags.md:6  - [ ] Deploy service [38;2;243;139;168m@risk[0m [38;2;166;227;161m@today[0m
-tags.md:7  - [ ] Escalate issue [38;2;249;226;175m@delegated([0m[38;2;249;226;175mzach[0m[38;2;249;226;175m)[0m
-tags.md:8  - [ ] Fix authentication [38;2;203;166;247m@blocked[0m
-tags.md:9  - Research spike [38;2;243;139;168m@risk[0m
-tags.md:10  - [ ] Hidden task [38;2;148;226;213m@hidden[0m
-tags.md:11  - [ ] Multiple dates [38;2;243;139;168m@due([0m[38;2;243;139;168m2026-03-20[0m[38;2;243;139;168m)[0m with [38;2;243;139;168m@risk[0m
+- [ ] Review PR [38;2;166;227;161m@today[0m
+- [ ] Submit report [38;2;243;139;168m@due([0m[38;2;243;139;168m2026-03-15[0m[38;2;243;139;168m)[0m
+- [x] Write docs [38;2;166;227;161m@completed([0m[38;2;166;227;161m2026-03-10[0m[38;2;166;227;161m)[0m
+- [ ] Deploy service [38;2;243;139;168m@risk[0m [38;2;166;227;161m@today[0m
+- [ ] Escalate issue [38;2;249;226;175m@delegated([0m[38;2;249;226;175mzach[0m[38;2;249;226;175m)[0m
+- [ ] Fix authentication [38;2;203;166;247m@blocked[0m
+- Research spike [38;2;243;139;168m@risk[0m
+- [ ] Hidden task [38;2;148;226;213m@hidden[0m
+- [ ] Multiple dates [38;2;243;139;168m@due([0m[38;2;243;139;168m2026-03-20[0m[38;2;243;139;168m)[0m with [38;2;243;139;168m@risk[0m

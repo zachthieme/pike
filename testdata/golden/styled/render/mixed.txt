@@ -1,4 +1,4 @@
-mixed.md:5  - [ ] High priority bug [38;2;243;139;168m@risk[0m [38;2;243;139;168m@due([0m[38;2;243;139;168m2026-03-14[0m[38;2;243;139;168m)[0m see https://github.com/org/repo/issues/456
-mixed.md:6  - [x] Completed review [38;2;166;227;161m@completed([0m[38;2;166;227;161m2026-03-12[0m[38;2;166;227;161m)[0m [38;2;166;227;161m@today[0m
-mixed.md:7  - [ ] Ask [[alice-bob|Alice Bob]] about [the plan](https://example.com/plan) [38;2;249;226;175m@delegated([0m[38;2;249;226;175malice[0m[38;2;249;226;175m)[0m
-mixed.md:9  - Regular bullet with [38;2;148;226;213m@tag[0m makes it a task
+- [ ] High priority bug [38;2;243;139;168m@risk[0m [38;2;243;139;168m@due([0m[38;2;243;139;168m2026-03-14[0m[38;2;243;139;168m)[0m see https://github.com/org/repo/issues/456
+- [x] Completed review [38;2;166;227;161m@completed([0m[38;2;166;227;161m2026-03-12[0m[38;2;166;227;161m)[0m [38;2;166;227;161m@today[0m
+- [ ] Ask [[alice-bob|Alice Bob]] about [the plan](https://example.com/plan) [38;2;249;226;175m@delegated([0m[38;2;249;226;175malice[0m[38;2;249;226;175m)[0m
+- Regular bullet with [38;2;148;226;213m@tag[0m makes it a task

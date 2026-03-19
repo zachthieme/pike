@@ -1,5 +1,9 @@
 # Changelog
 
+## v1.7.1 — March 19, 2026: Cleaner CLI Output
+
+- Removed `file:line` prefix from `--query` and `--scope` output — tasks now render as plain checkbox lines (e.g. `- [ ] Buy groceries @today`)
+
 ## v1.7.0 — March 18, 2026: File-Scoped Task Queries
 
 - `--scope <file>` flag: filter open tasks to those referencing the given file (by wiki-link, filename, or display name). Composes with `--query`, `--view`, `--json`, `--count`, and `--sort`.
