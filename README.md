@@ -187,6 +187,15 @@ tag_colors:
   talk: "#cba6f7"
   _default: "#94e2d5"       # fallback for unspecified tags
 
+# Custom keybindings — remap actions or bind keys to queries/views
+# keybindings:
+#   toggle: ["space", "x"]
+#   custom:
+#     - key: "o"
+#       view: "Overdue"                     # focus a dashboard view
+#     - key: "d"
+#       query: "open and @due < today+3d"   # run a query with one keypress
+
 # Dashboard sections — each view is a filtered, sorted slice of your tasks
 views:
   - title: "Today"
@@ -217,6 +226,38 @@ views:
 | `sort` | Sort order for results |
 | `color` | Section color (named or hex) |
 | `order` | Display position (ascending) |
+
+### Custom Keybindings
+
+Remap built-in actions or create custom shortcuts that execute queries or focus views with a single keypress. Add a `keybindings:` section to your config:
+
+```yaml
+keybindings:
+  # Remap built-in actions — list ALL keys you want (replaces defaults)
+  toggle: ["space", "x"]
+  quit: ["q", "ctrl+c"]
+
+  # Custom shortcuts (replaces 1-9 focus keys when defined)
+  custom:
+    - key: "o"
+      view: "Overdue"                     # focus a dashboard view by title
+    - key: "d"
+      query: "open and @due < today+3d"   # run an arbitrary query
+    - key: "w"
+      query: "open and @weekly"           # any query DSL expression works
+```
+
+Each custom shortcut binds a single key to **either** a `view` (focus a dashboard section by title) **or** a `query` (switch to all-tasks mode and execute the query DSL expression). You must specify exactly one of `view` or `query`.
+
+| Field | Description |
+|-------|-------------|
+| `key` | Key to bind (e.g. `"o"`, `"ctrl+d"`) |
+| `view` | Focus a dashboard section by its title |
+| `query` | Execute a query DSL expression in all-tasks mode |
+
+**Remappable actions:** `up`, `down`, `top`, `bottom`, `page_down`, `page_up`, `next_section`, `prev_section`, `enter`, `quit`, `summary`, `filter`, `query`, `escape`, `refresh`, `all_tasks`, `tag_search`, `toggle_hidden`, `toggle`, `toggle_hidden_tag`, `recently_completed`
+
+When custom shortcuts are defined, the default `1`-`9` section focus keys are replaced. Custom shortcuts take priority over built-in keys on conflict. The `s` help overlay shows your actual configured bindings including custom shortcuts.
 
 ## Query DSL
 
