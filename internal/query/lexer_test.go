@@ -7,20 +7,20 @@ import (
 func TestLexKeywords(t *testing.T) {
 	tests := []struct {
 		input    string
-		wantType TokenType
+		wantType tokenType
 	}{
-		{"open", TokOpen},
-		{"completed", TokCompleted},
-		{"and", TokAnd},
-		{"or", TokOr},
-		{"not", TokNot},
+		{"open", tokOpen},
+		{"completed", tokCompleted},
+		{"and", tokAnd},
+		{"or", tokOr},
+		{"not", tokNot},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.input, func(t *testing.T) {
-			tokens, err := Lex(tt.input)
+			tokens, err := lex(tt.input)
 			if err != nil {
-				t.Fatalf("Lex(%q) error: %v", tt.input, err)
+				t.Fatalf("lex(%q) error: %v", tt.input, err)
 			}
 			if len(tokens) != 2 { // keyword + EOF
 				t.Fatalf("expected 2 tokens, got %d", len(tokens))
@@ -31,8 +31,8 @@ func TestLexKeywords(t *testing.T) {
 			if tokens[0].Value != tt.input {
 				t.Errorf("token value = %q, want %q", tokens[0].Value, tt.input)
 			}
-			if tokens[1].Type != TokEOF {
-				t.Errorf("last token type = %v, want TokEOF", tokens[1].Type)
+			if tokens[1].Type != tokEOF {
+				t.Errorf("last token type = %v, want tokEOF", tokens[1].Type)
 			}
 		})
 	}
@@ -50,15 +50,15 @@ func TestLexTags(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.input, func(t *testing.T) {
-			tokens, err := Lex(tt.input)
+			tokens, err := lex(tt.input)
 			if err != nil {
-				t.Fatalf("Lex(%q) error: %v", tt.input, err)
+				t.Fatalf("lex(%q) error: %v", tt.input, err)
 			}
 			if len(tokens) != 2 {
 				t.Fatalf("expected 2 tokens, got %d", len(tokens))
 			}
-			if tokens[0].Type != TokTag {
-				t.Errorf("token type = %v, want TokTag", tokens[0].Type)
+			if tokens[0].Type != tokTag {
+				t.Errorf("token type = %v, want tokTag", tokens[0].Type)
 			}
 			if tokens[0].TagName != tt.wantTag {
 				t.Errorf("tag name = %q, want %q", tokens[0].TagName, tt.wantTag)
@@ -70,21 +70,21 @@ func TestLexTags(t *testing.T) {
 func TestLexComparisons(t *testing.T) {
 	tests := []struct {
 		input    string
-		wantType TokenType
+		wantType tokenType
 	}{
-		{"<", TokLT},
-		{">", TokGT},
-		{"<=", TokLTE},
-		{">=", TokGTE},
-		{"=", TokEQ},
-		{"==", TokEQ},
+		{"<", tokLT},
+		{">", tokGT},
+		{"<=", tokLTE},
+		{">=", tokGTE},
+		{"=", tokEQ},
+		{"==", tokEQ},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.input, func(t *testing.T) {
-			tokens, err := Lex(tt.input)
+			tokens, err := lex(tt.input)
 			if err != nil {
-				t.Fatalf("Lex(%q) error: %v", tt.input, err)
+				t.Fatalf("lex(%q) error: %v", tt.input, err)
 			}
 			if len(tokens) != 2 {
 				t.Fatalf("expected 2 tokens, got %d", len(tokens))
@@ -96,36 +96,36 @@ func TestLexComparisons(t *testing.T) {
 	}
 
 	// Ensure <= is lexed as one token, not < then =
-	tokens, err := Lex("<=")
+	tokens, err := lex("<=")
 	if err != nil {
-		t.Fatalf("Lex(\"<=\") error: %v", err)
+		t.Fatalf("lex(\"<=\") error: %v", err)
 	}
 	if len(tokens) != 2 {
 		t.Fatalf("expected 2 tokens for '<=', got %d", len(tokens))
 	}
-	if tokens[0].Type != TokLTE {
-		t.Errorf("'<=' should lex as TokLTE, got %v", tokens[0].Type)
+	if tokens[0].Type != tokLTE {
+		t.Errorf("'<=' should lex as tokLTE, got %v", tokens[0].Type)
 	}
 
-	tokens, err = Lex(">=")
+	tokens, err = lex(">=")
 	if err != nil {
-		t.Fatalf("Lex(\">=\") error: %v", err)
+		t.Fatalf("lex(\">=\") error: %v", err)
 	}
-	if tokens[0].Type != TokGTE {
-		t.Errorf("'>=' should lex as TokGTE, got %v", tokens[0].Type)
+	if tokens[0].Type != tokGTE {
+		t.Errorf("'>=' should lex as tokGTE, got %v", tokens[0].Type)
 	}
 }
 
 func TestLexDates(t *testing.T) {
-	tokens, err := Lex("2026-03-15")
+	tokens, err := lex("2026-03-15")
 	if err != nil {
-		t.Fatalf("Lex error: %v", err)
+		t.Fatalf("lex error: %v", err)
 	}
 	if len(tokens) != 2 {
 		t.Fatalf("expected 2 tokens, got %d", len(tokens))
 	}
-	if tokens[0].Type != TokDate {
-		t.Errorf("token type = %v, want TokDate", tokens[0].Type)
+	if tokens[0].Type != tokDate {
+		t.Errorf("token type = %v, want tokDate", tokens[0].Type)
 	}
 	if tokens[0].Value != "2026-03-15" {
 		t.Errorf("token value = %q, want %q", tokens[0].Value, "2026-03-15")
@@ -143,15 +143,15 @@ func TestLexOffsets(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.input, func(t *testing.T) {
-			tokens, err := Lex(tt.input)
+			tokens, err := lex(tt.input)
 			if err != nil {
-				t.Fatalf("Lex(%q) error: %v", tt.input, err)
+				t.Fatalf("lex(%q) error: %v", tt.input, err)
 			}
 			if len(tokens) != 2 {
 				t.Fatalf("expected 2 tokens, got %d", len(tokens))
 			}
-			if tokens[0].Type != TokOffset {
-				t.Errorf("token type = %v, want TokOffset", tokens[0].Type)
+			if tokens[0].Type != tokOffset {
+				t.Errorf("token type = %v, want tokOffset", tokens[0].Type)
 			}
 			if tokens[0].Offset != tt.wantOffset {
 				t.Errorf("offset = %d, want %d", tokens[0].Offset, tt.wantOffset)
@@ -161,15 +161,15 @@ func TestLexOffsets(t *testing.T) {
 }
 
 func TestLexRegex(t *testing.T) {
-	tokens, err := Lex("/meeting/")
+	tokens, err := lex("/meeting/")
 	if err != nil {
-		t.Fatalf("Lex error: %v", err)
+		t.Fatalf("lex error: %v", err)
 	}
 	if len(tokens) != 2 {
 		t.Fatalf("expected 2 tokens, got %d", len(tokens))
 	}
-	if tokens[0].Type != TokRegex {
-		t.Errorf("token type = %v, want TokRegex", tokens[0].Type)
+	if tokens[0].Type != tokRegex {
+		t.Errorf("token type = %v, want tokRegex", tokens[0].Type)
 	}
 	if tokens[0].TagName != "meeting" {
 		t.Errorf("regex pattern = %q, want %q", tokens[0].TagName, "meeting")
@@ -177,34 +177,34 @@ func TestLexRegex(t *testing.T) {
 }
 
 func TestLexParens(t *testing.T) {
-	tokens, err := Lex("(open)")
+	tokens, err := lex("(open)")
 	if err != nil {
-		t.Fatalf("Lex error: %v", err)
+		t.Fatalf("lex error: %v", err)
 	}
 	if len(tokens) != 4 { // ( open ) EOF
 		t.Fatalf("expected 4 tokens, got %d", len(tokens))
 	}
-	if tokens[0].Type != TokLParen {
-		t.Errorf("token[0] type = %v, want TokLParen", tokens[0].Type)
+	if tokens[0].Type != tokLParen {
+		t.Errorf("token[0] type = %v, want tokLParen", tokens[0].Type)
 	}
-	if tokens[1].Type != TokOpen {
-		t.Errorf("token[1] type = %v, want TokOpen", tokens[1].Type)
+	if tokens[1].Type != tokOpen {
+		t.Errorf("token[1] type = %v, want tokOpen", tokens[1].Type)
 	}
-	if tokens[2].Type != TokRParen {
-		t.Errorf("token[2] type = %v, want TokRParen", tokens[2].Type)
+	if tokens[2].Type != tokRParen {
+		t.Errorf("token[2] type = %v, want tokRParen", tokens[2].Type)
 	}
 }
 
 func TestLexComplex(t *testing.T) {
-	tokens, err := Lex("open and @due < today")
+	tokens, err := lex("open and @due < today")
 	if err != nil {
-		t.Fatalf("Lex error: %v", err)
+		t.Fatalf("lex error: %v", err)
 	}
 	// open, and, @due, <, today, EOF = 6
 	if len(tokens) != 6 {
 		t.Fatalf("expected 6 tokens, got %d: %v", len(tokens), tokens)
 	}
-	expected := []TokenType{TokOpen, TokAnd, TokTag, TokLT, TokToday, TokEOF}
+	expected := []tokenType{tokOpen, tokAnd, tokTag, tokLT, tokToday, tokEOF}
 	for i, want := range expected {
 		if tokens[i].Type != want {
 			t.Errorf("token[%d] type = %v, want %v", i, tokens[i].Type, want)
@@ -213,7 +213,7 @@ func TestLexComplex(t *testing.T) {
 }
 
 func TestLexErrorUnterminatedRegex(t *testing.T) {
-	_, err := Lex("/unterminated")
+	_, err := lex("/unterminated")
 	if err == nil {
 		t.Fatal("expected error for unterminated regex, got nil")
 	}
@@ -222,18 +222,18 @@ func TestLexErrorUnterminatedRegex(t *testing.T) {
 func TestLexTomorrowYesterday(t *testing.T) {
 	tests := []struct {
 		input      string
-		wantType   TokenType
+		wantType   tokenType
 		wantOffset int
 	}{
-		{"tomorrow", TokOffset, 1},
-		{"yesterday", TokOffset, -1},
+		{"tomorrow", tokOffset, 1},
+		{"yesterday", tokOffset, -1},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.input, func(t *testing.T) {
-			tokens, err := Lex(tt.input)
+			tokens, err := lex(tt.input)
 			if err != nil {
-				t.Fatalf("Lex(%q) error: %v", tt.input, err)
+				t.Fatalf("lex(%q) error: %v", tt.input, err)
 			}
 			if len(tokens) != 2 {
 				t.Fatalf("expected 2 tokens, got %d", len(tokens))
@@ -249,14 +249,14 @@ func TestLexTomorrowYesterday(t *testing.T) {
 }
 
 func TestLexToday(t *testing.T) {
-	tokens, err := Lex("today")
+	tokens, err := lex("today")
 	if err != nil {
-		t.Fatalf("Lex error: %v", err)
+		t.Fatalf("lex error: %v", err)
 	}
 	if len(tokens) != 2 {
 		t.Fatalf("expected 2 tokens, got %d", len(tokens))
 	}
-	if tokens[0].Type != TokToday {
-		t.Errorf("token type = %v, want TokToday", tokens[0].Type)
+	if tokens[0].Type != tokToday {
+		t.Errorf("token type = %v, want tokToday", tokens[0].Type)
 	}
 }

@@ -18,17 +18,17 @@ func TestEvalStateMatching(t *testing.T) {
 	openTask := &model.Task{State: model.Open, Text: "Do stuff"}
 	completedTask := &model.Task{State: model.Completed, Text: "Done stuff"}
 
-	if !Eval(&OpenNode{}, openTask, now) {
-		t.Error("OpenNode should match open task")
+	if !Eval(&openNode{}, openTask, now) {
+		t.Error("openNode should match open task")
 	}
-	if Eval(&OpenNode{}, completedTask, now) {
-		t.Error("OpenNode should not match completed task")
+	if Eval(&openNode{}, completedTask, now) {
+		t.Error("openNode should not match completed task")
 	}
-	if Eval(&CompletedNode{}, openTask, now) {
-		t.Error("CompletedNode should not match open task")
+	if Eval(&completedNode{}, openTask, now) {
+		t.Error("completedNode should not match open task")
 	}
-	if !Eval(&CompletedNode{}, completedTask, now) {
-		t.Error("CompletedNode should match completed task")
+	if !Eval(&completedNode{}, completedTask, now) {
+		t.Error("completedNode should match completed task")
 	}
 }
 
@@ -42,14 +42,14 @@ func TestEvalTagMatching(t *testing.T) {
 		TagSet: map[string]bool{"today": true, "risk": true},
 	}
 
-	if !Eval(&TagNode{Name: "today"}, task, now) {
-		t.Error("TagNode should match existing tag")
+	if !Eval(&tagNode{Name: "today"}, task, now) {
+		t.Error("tagNode should match existing tag")
 	}
-	if !Eval(&TagNode{Name: "risk"}, task, now) {
-		t.Error("TagNode should match existing tag")
+	if !Eval(&tagNode{Name: "risk"}, task, now) {
+		t.Error("tagNode should match existing tag")
 	}
-	if Eval(&TagNode{Name: "horizon"}, task, now) {
-		t.Error("TagNode should not match missing tag")
+	if Eval(&tagNode{Name: "horizon"}, task, now) {
+		t.Error("tagNode should not match missing tag")
 	}
 }
 
@@ -62,26 +62,26 @@ func TestEvalAndOrNot(t *testing.T) {
 	}
 
 	// And: both true
-	if !Eval(&AndNode{Left: &OpenNode{}, Right: &TagNode{Name: "today"}}, task, now) {
+	if !Eval(&andNode{Left: &openNode{}, Right: &tagNode{Name: "today"}}, task, now) {
 		t.Error("and(open, @today) should be true")
 	}
 	// And: one false
-	if Eval(&AndNode{Left: &CompletedNode{}, Right: &TagNode{Name: "today"}}, task, now) {
+	if Eval(&andNode{Left: &completedNode{}, Right: &tagNode{Name: "today"}}, task, now) {
 		t.Error("and(completed, @today) should be false")
 	}
 	// Or: one true
-	if !Eval(&OrNode{Left: &CompletedNode{}, Right: &TagNode{Name: "today"}}, task, now) {
+	if !Eval(&orNode{Left: &completedNode{}, Right: &tagNode{Name: "today"}}, task, now) {
 		t.Error("or(completed, @today) should be true")
 	}
 	// Or: both false
-	if Eval(&OrNode{Left: &CompletedNode{}, Right: &TagNode{Name: "horizon"}}, task, now) {
+	if Eval(&orNode{Left: &completedNode{}, Right: &tagNode{Name: "horizon"}}, task, now) {
 		t.Error("or(completed, @horizon) should be false")
 	}
 	// Not
-	if Eval(&NotNode{Expr: &OpenNode{}}, task, now) {
+	if Eval(&notNode{Expr: &openNode{}}, task, now) {
 		t.Error("not(open) should be false for open task")
 	}
-	if !Eval(&NotNode{Expr: &CompletedNode{}}, task, now) {
+	if !Eval(&notNode{Expr: &completedNode{}}, task, now) {
 		t.Error("not(completed) should be true for open task")
 	}
 }
@@ -102,7 +102,7 @@ func TestEvalDateComparisons(t *testing.T) {
 	}
 
 	// @due < today: overdue should match, future should not
-	dueLtToday := &DateCmpNode{Field: "due", Op: "<", Days: 0}
+	dueLtToday := &dateCmpNode{Field: "due", Op: "<", Days: 0}
 	if !Eval(dueLtToday, overdueTask, now) {
 		t.Error("overdue task should match @due < today")
 	}
@@ -111,7 +111,7 @@ func TestEvalDateComparisons(t *testing.T) {
 	}
 
 	// @due > today: future should match, overdue should not
-	dueGtToday := &DateCmpNode{Field: "due", Op: ">", Days: 0}
+	dueGtToday := &dateCmpNode{Field: "due", Op: ">", Days: 0}
 	if !Eval(dueGtToday, futureTask, now) {
 		t.Error("future task should match @due > today")
 	}
@@ -120,13 +120,13 @@ func TestEvalDateComparisons(t *testing.T) {
 	}
 
 	// @due >= today+3d: only future (2026-03-15) matches today+3d (2026-03-16)? No, 15 < 16
-	dueGteToday3 := &DateCmpNode{Field: "due", Op: ">=", Days: 3}
+	dueGteToday3 := &dateCmpNode{Field: "due", Op: ">=", Days: 3}
 	if Eval(dueGteToday3, futureTask, now) {
 		t.Error("task due 2026-03-15 should not match @due >= today+3d (2026-03-16)")
 	}
 
 	// @due <= today+3d: future (2026-03-15) <= 2026-03-16 is true
-	dueLteToday3 := &DateCmpNode{Field: "due", Op: "<=", Days: 3}
+	dueLteToday3 := &dateCmpNode{Field: "due", Op: "<=", Days: 3}
 	if !Eval(dueLteToday3, futureTask, now) {
 		t.Error("task due 2026-03-15 should match @due <= today+3d (2026-03-16)")
 	}
@@ -148,7 +148,7 @@ func TestEvalDateEqualityToday(t *testing.T) {
 		TagSet: map[string]bool{"due": true},
 	}
 
-	dueEqToday := &DateCmpNode{Field: "due", Op: "=", Days: 0}
+	dueEqToday := &dateCmpNode{Field: "due", Op: "=", Days: 0}
 	if !Eval(dueEqToday, todayTask, now) {
 		t.Error("task due today should match @due = today")
 	}
@@ -162,7 +162,7 @@ func TestEvalDateComparisonNilDate(t *testing.T) {
 		State: model.Open,
 		Text:  "No due date",
 	}
-	node := &DateCmpNode{Field: "due", Op: "<", Days: 0}
+	node := &dateCmpNode{Field: "due", Op: "<", Days: 0}
 	if Eval(node, task, now) {
 		t.Error("task without due date should not match date comparison")
 	}
@@ -175,7 +175,7 @@ func TestEvalDateComparisonLiteral(t *testing.T) {
 		Due:   date(2026, time.March, 10),
 	}
 	lit := time.Date(2026, time.March, 15, 0, 0, 0, 0, time.UTC)
-	node := &DateCmpNode{Field: "due", Op: "<", Literal: &lit}
+	node := &dateCmpNode{Field: "due", Op: "<", Literal: &lit}
 	if !Eval(node, task, now) {
 		t.Error("task due 2026-03-10 should match @due < 2026-03-15")
 	}
@@ -185,10 +185,10 @@ func TestEvalRegex(t *testing.T) {
 	task := &model.Task{
 		Text: "Review meeting notes @today",
 	}
-	if !Eval(&RegexNode{Pattern: "meeting", CompiledRe: regexp.MustCompile("meeting")}, task, now) {
+	if !Eval(&regexNode{Pattern: "meeting", CompiledRe: regexp.MustCompile("meeting")}, task, now) {
 		t.Error("regex 'meeting' should match")
 	}
-	if Eval(&RegexNode{Pattern: "budget", CompiledRe: regexp.MustCompile("budget")}, task, now) {
+	if Eval(&regexNode{Pattern: "budget", CompiledRe: regexp.MustCompile("budget")}, task, now) {
 		t.Error("regex 'budget' should not match")
 	}
 }
@@ -304,17 +304,17 @@ func TestEvalWithOptionsPartialTagMatch(t *testing.T) {
 	opts := EvalOptions{PartialTags: true}
 
 	// "du" should match both "due" and "duration"
-	if !EvalWithOptions(&TagNode{Name: "du"}, task, now, opts) {
+	if !EvalWithOptions(&tagNode{Name: "du"}, task, now, opts) {
 		t.Error("partial tag @du should match task with @due")
 	}
 
 	// Exact match still works
-	if !EvalWithOptions(&TagNode{Name: "due"}, task, now, opts) {
+	if !EvalWithOptions(&tagNode{Name: "due"}, task, now, opts) {
 		t.Error("exact tag @due should match")
 	}
 
 	// No match
-	if EvalWithOptions(&TagNode{Name: "risk"}, task, now, opts) {
+	if EvalWithOptions(&tagNode{Name: "risk"}, task, now, opts) {
 		t.Error("@risk should not match")
 	}
 }
@@ -328,27 +328,27 @@ func TestEvalWithOptionsExactByDefault(t *testing.T) {
 
 	// Without PartialTags, "du" should NOT match "due"
 	opts := EvalOptions{PartialTags: false}
-	if EvalWithOptions(&TagNode{Name: "du"}, task, now, opts) {
+	if EvalWithOptions(&tagNode{Name: "du"}, task, now, opts) {
 		t.Error("without PartialTags, @du should not match @due")
 	}
 
 	// Original Eval should still be exact
-	if Eval(&TagNode{Name: "du"}, task, now) {
+	if Eval(&tagNode{Name: "du"}, task, now) {
 		t.Error("Eval should use exact matching")
 	}
 }
 
 func TestEvalTextNode(t *testing.T) {
-	task := &model.Task{Text: "Deploy the service to production"}
+	task := &model.Task{Text: "Deploy the service to production", LowerText: "deploy the service to production"}
 
-	if !Eval(&TextNode{Pattern: "deploy", LowerPattern: "deploy"}, task, now) {
-		t.Error("TextNode should match case-insensitively")
+	if !Eval(&textNode{Pattern: "deploy", LowerPattern: "deploy"}, task, now) {
+		t.Error("textNode should match case-insensitively")
 	}
-	if !Eval(&TextNode{Pattern: "service to", LowerPattern: "service to"}, task, now) {
-		t.Error("TextNode should match multi-word substrings")
+	if !Eval(&textNode{Pattern: "service to", LowerPattern: "service to"}, task, now) {
+		t.Error("textNode should match multi-word substrings")
 	}
-	if Eval(&TextNode{Pattern: "staging", LowerPattern: "staging"}, task, now) {
-		t.Error("TextNode should not match missing text")
+	if Eval(&textNode{Pattern: "staging", LowerPattern: "staging"}, task, now) {
+		t.Error("textNode should not match missing text")
 	}
 }
 
@@ -359,12 +359,12 @@ func TestEvalIntegrationTextSearch(t *testing.T) {
 		t.Fatalf("Parse error: %v", err)
 	}
 
-	task := &model.Task{State: model.Open, Text: "Deploy the service"}
+	task := &model.Task{State: model.Open, Text: "Deploy the service", LowerText: "deploy the service"}
 	if !Eval(node, task, now) {
 		t.Error("'open and deploy' should match open task containing 'deploy'")
 	}
 
-	closedTask := &model.Task{State: model.Completed, Text: "Deploy the service"}
+	closedTask := &model.Task{State: model.Completed, Text: "Deploy the service", LowerText: "deploy the service"}
 	if Eval(node, closedTask, now) {
 		t.Error("'open and deploy' should not match completed task")
 	}
@@ -376,12 +376,12 @@ func TestEvalIntegrationQuotedText(t *testing.T) {
 		t.Fatalf("Parse error: %v", err)
 	}
 
-	task := &model.Task{State: model.Open, Text: "Review meeting notes from Monday"}
+	task := &model.Task{State: model.Open, Text: "Review meeting notes from Monday", LowerText: "review meeting notes from monday"}
 	if !Eval(node, task, now) {
 		t.Error(`'open and "meeting notes"' should match`)
 	}
 
-	task2 := &model.Task{State: model.Open, Text: "Review meeting agenda"}
+	task2 := &model.Task{State: model.Open, Text: "Review meeting agenda", LowerText: "review meeting agenda"}
 	if Eval(node, task2, now) {
 		t.Error(`'open and "meeting notes"' should not match "meeting agenda"`)
 	}

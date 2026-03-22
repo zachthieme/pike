@@ -11,72 +11,72 @@ type Node interface {
 	nodeType() string
 }
 
-// OpenNode matches tasks with State == Open.
-type OpenNode struct{}
+// openNode matches tasks with State == Open.
+type openNode struct{}
 
-func (n *OpenNode) nodeType() string { return "open" }
+func (n *openNode) nodeType() string { return "open" }
 
-// CompletedNode matches tasks with State == Completed.
-type CompletedNode struct{}
+// completedNode matches tasks with State == Completed.
+type completedNode struct{}
 
-func (n *CompletedNode) nodeType() string { return "completed" }
+func (n *completedNode) nodeType() string { return "completed" }
 
-// TagNode matches tasks that have a specific tag.
-type TagNode struct {
+// tagNode matches tasks that have a specific tag.
+type tagNode struct {
 	Name string // tag name without @
 }
 
-func (n *TagNode) nodeType() string { return "tag" }
+func (n *tagNode) nodeType() string { return "tag" }
 
-// DateCmpNode compares a task's date field against a target date.
+// dateCmpNode compares a task's date field against a target date.
 // Field is the tag name ("due" or "completed").
 // Op is one of "<", ">", "<=", ">=", "=".
 // Days is the offset from "now": 0 = today, +3 = today+3d, -7 = today-7d.
 // If Literal is non-nil, it's a literal YYYY-MM-DD date and Days is ignored.
-type DateCmpNode struct {
+type dateCmpNode struct {
 	Field   string     // "due" or "completed"
 	Op      string     // "<", ">", "<=", ">=", "=" (== is normalized to = at parse time)
 	Days    int        // relative to now
 	Literal *time.Time // if non-nil, use this instead of Days
 }
 
-func (n *DateCmpNode) nodeType() string { return "datecmp" }
+func (n *dateCmpNode) nodeType() string { return "datecmp" }
 
-// RegexNode matches tasks whose text matches a regex pattern.
-type RegexNode struct {
+// regexNode matches tasks whose text matches a regex pattern.
+type regexNode struct {
 	Pattern    string
 	CompiledRe *regexp.Regexp
 }
 
-func (n *RegexNode) nodeType() string { return "regex" }
+func (n *regexNode) nodeType() string { return "regex" }
 
-// AndNode is a logical AND of two sub-expressions.
-type AndNode struct {
+// andNode is a logical AND of two sub-expressions.
+type andNode struct {
 	Left  Node
 	Right Node
 }
 
-func (n *AndNode) nodeType() string { return "and" }
+func (n *andNode) nodeType() string { return "and" }
 
-// OrNode is a logical OR of two sub-expressions.
-type OrNode struct {
+// orNode is a logical OR of two sub-expressions.
+type orNode struct {
 	Left  Node
 	Right Node
 }
 
-func (n *OrNode) nodeType() string { return "or" }
+func (n *orNode) nodeType() string { return "or" }
 
-// NotNode is a logical NOT of a sub-expression.
-type NotNode struct {
+// notNode is a logical NOT of a sub-expression.
+type notNode struct {
 	Expr Node
 }
 
-func (n *NotNode) nodeType() string { return "not" }
+func (n *notNode) nodeType() string { return "not" }
 
-// TextNode matches tasks whose text contains a substring (case-insensitive).
-type TextNode struct {
+// textNode matches tasks whose text contains a substring (case-insensitive).
+type textNode struct {
 	Pattern      string // the text to search for
 	LowerPattern string // pre-lowercased for efficient per-task matching
 }
 
-func (n *TextNode) nodeType() string { return "text" }
+func (n *textNode) nodeType() string { return "text" }

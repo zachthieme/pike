@@ -32,9 +32,9 @@ func TestParseSimpleAtoms(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Parse error: %v", err)
 	}
-	tn, ok := node.(*TagNode)
+	tn, ok := node.(*tagNode)
 	if !ok {
-		t.Fatalf("expected *TagNode, got %T", node)
+		t.Fatalf("expected *tagNode, got %T", node)
 	}
 	if tn.Name != "today" {
 		t.Errorf("tag name = %q, want %q", tn.Name, "today")
@@ -46,15 +46,15 @@ func TestParseAndPrecedence(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Parse error: %v", err)
 	}
-	and, ok := node.(*AndNode)
+	and, ok := node.(*andNode)
 	if !ok {
-		t.Fatalf("expected *AndNode, got %T", node)
+		t.Fatalf("expected *andNode, got %T", node)
 	}
-	if _, ok := and.Left.(*OpenNode); !ok {
-		t.Errorf("left = %T, want *OpenNode", and.Left)
+	if _, ok := and.Left.(*openNode); !ok {
+		t.Errorf("left = %T, want *openNode", and.Left)
 	}
-	if tag, ok := and.Right.(*TagNode); !ok {
-		t.Errorf("right = %T, want *TagNode", and.Right)
+	if tag, ok := and.Right.(*tagNode); !ok {
+		t.Errorf("right = %T, want *tagNode", and.Right)
 	} else if tag.Name != "due" {
 		t.Errorf("right tag name = %q, want %q", tag.Name, "due")
 	}
@@ -65,15 +65,15 @@ func TestParseOrPrecedence(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Parse error: %v", err)
 	}
-	or, ok := node.(*OrNode)
+	or, ok := node.(*orNode)
 	if !ok {
-		t.Fatalf("expected *OrNode, got %T", node)
+		t.Fatalf("expected *orNode, got %T", node)
 	}
-	if _, ok := or.Left.(*OpenNode); !ok {
-		t.Errorf("left = %T, want *OpenNode", or.Left)
+	if _, ok := or.Left.(*openNode); !ok {
+		t.Errorf("left = %T, want *openNode", or.Left)
 	}
-	if tag, ok := or.Right.(*TagNode); !ok {
-		t.Errorf("right = %T, want *TagNode", or.Right)
+	if tag, ok := or.Right.(*tagNode); !ok {
+		t.Errorf("right = %T, want *tagNode", or.Right)
 	} else if tag.Name != "due" {
 		t.Errorf("right tag name = %q, want %q", tag.Name, "due")
 	}
@@ -85,22 +85,22 @@ func TestParseAndOrPrecedence(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Parse error: %v", err)
 	}
-	or, ok := node.(*OrNode)
+	or, ok := node.(*orNode)
 	if !ok {
-		t.Fatalf("expected *OrNode at root, got %T", node)
+		t.Fatalf("expected *orNode at root, got %T", node)
 	}
-	if _, ok := or.Left.(*OpenNode); !ok {
-		t.Errorf("left = %T, want *OpenNode", or.Left)
+	if _, ok := or.Left.(*openNode); !ok {
+		t.Errorf("left = %T, want *openNode", or.Left)
 	}
-	and, ok := or.Right.(*AndNode)
+	and, ok := or.Right.(*andNode)
 	if !ok {
-		t.Fatalf("right = %T, want *AndNode", or.Right)
+		t.Fatalf("right = %T, want *andNode", or.Right)
 	}
-	if _, ok := and.Left.(*TagNode); !ok {
-		t.Errorf("and.left = %T, want *TagNode", and.Left)
+	if _, ok := and.Left.(*tagNode); !ok {
+		t.Errorf("and.left = %T, want *tagNode", and.Left)
 	}
-	if _, ok := and.Right.(*CompletedNode); !ok {
-		t.Errorf("and.right = %T, want *CompletedNode", and.Right)
+	if _, ok := and.Right.(*completedNode); !ok {
+		t.Errorf("and.right = %T, want *completedNode", and.Right)
 	}
 }
 
@@ -109,22 +109,22 @@ func TestParseParens(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Parse error: %v", err)
 	}
-	and, ok := node.(*AndNode)
+	and, ok := node.(*andNode)
 	if !ok {
-		t.Fatalf("expected *AndNode, got %T", node)
+		t.Fatalf("expected *andNode, got %T", node)
 	}
-	or, ok := and.Left.(*OrNode)
+	or, ok := and.Left.(*orNode)
 	if !ok {
-		t.Fatalf("left = %T, want *OrNode", and.Left)
+		t.Fatalf("left = %T, want *orNode", and.Left)
 	}
-	if _, ok := or.Left.(*OpenNode); !ok {
-		t.Errorf("or.left = %T, want *OpenNode", or.Left)
+	if _, ok := or.Left.(*openNode); !ok {
+		t.Errorf("or.left = %T, want *openNode", or.Left)
 	}
-	if _, ok := or.Right.(*CompletedNode); !ok {
-		t.Errorf("or.right = %T, want *CompletedNode", or.Right)
+	if _, ok := or.Right.(*completedNode); !ok {
+		t.Errorf("or.right = %T, want *completedNode", or.Right)
 	}
-	if tag, ok := and.Right.(*TagNode); !ok {
-		t.Errorf("right = %T, want *TagNode", and.Right)
+	if tag, ok := and.Right.(*tagNode); !ok {
+		t.Errorf("right = %T, want *tagNode", and.Right)
 	} else if tag.Name != "today" {
 		t.Errorf("tag name = %q, want %q", tag.Name, "today")
 	}
@@ -135,13 +135,13 @@ func TestParseNot(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Parse error: %v", err)
 	}
-	notN, ok := node.(*NotNode)
+	notN, ok := node.(*notNode)
 	if !ok {
-		t.Fatalf("expected *NotNode, got %T", node)
+		t.Fatalf("expected *notNode, got %T", node)
 	}
-	tag, ok := notN.Expr.(*TagNode)
+	tag, ok := notN.Expr.(*tagNode)
 	if !ok {
-		t.Fatalf("expr = %T, want *TagNode", notN.Expr)
+		t.Fatalf("expr = %T, want *tagNode", notN.Expr)
 	}
 	if tag.Name != "horizon" {
 		t.Errorf("tag name = %q, want %q", tag.Name, "horizon")
@@ -175,9 +175,9 @@ func TestParseDateComparisons(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Parse(%q) error: %v", tt.input, err)
 			}
-			dc, ok := node.(*DateCmpNode)
+			dc, ok := node.(*dateCmpNode)
 			if !ok {
-				t.Fatalf("expected *DateCmpNode, got %T", node)
+				t.Fatalf("expected *dateCmpNode, got %T", node)
 			}
 			if dc.Field != tt.field {
 				t.Errorf("field = %q, want %q", dc.Field, tt.field)
@@ -210,9 +210,9 @@ func TestParseRegex(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Parse error: %v", err)
 	}
-	rx, ok := node.(*RegexNode)
+	rx, ok := node.(*regexNode)
 	if !ok {
-		t.Fatalf("expected *RegexNode, got %T", node)
+		t.Fatalf("expected *regexNode, got %T", node)
 	}
 	if rx.Pattern != "meeting" {
 		t.Errorf("pattern = %q, want %q", rx.Pattern, "meeting")

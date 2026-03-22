@@ -9,38 +9,38 @@ import (
 
 // Parse tokenizes the input query and parses it into an AST using recursive descent.
 func Parse(input string) (Node, error) {
-	tokens, err := Lex(input)
+	tokens, err := lex(input)
 	if err != nil {
 		return nil, err
 	}
 	p := &parser{tokens: tokens, pos: 0}
 	// Empty input (just EOF) means "no filter" — return nil, nil.
-	if p.current().Type == TokEOF {
+	if p.current().Type == tokEOF {
 		return nil, nil
 	}
 	node, err := p.parseExpr()
 	if err != nil {
 		return nil, err
 	}
-	if p.current().Type != TokEOF {
+	if p.current().Type != tokEOF {
 		return nil, fmt.Errorf("unexpected token %v at end of input", p.current().Type)
 	}
 	return node, nil
 }
 
 type parser struct {
-	tokens []Token
+	tokens []token
 	pos    int
 }
 
-func (p *parser) current() Token {
+func (p *parser) current() token {
 	if p.pos < len(p.tokens) {
 		return p.tokens[p.pos]
 	}
-	return Token{Type: TokEOF}
+	return token{Type: tokEOF}
 }
 
-func (p *parser) advance() Token {
+func (p *parser) advance() token {
 	tok := p.current()
 	if p.pos < len(p.tokens) {
 		p.pos++
@@ -48,7 +48,7 @@ func (p *parser) advance() Token {
 	return tok
 }
 
-func (p *parser) expect(tt TokenType) (Token, error) {
+func (p *parser) expect(tt tokenType) (token, error) {
 	tok := p.current()
 	if tok.Type != tt {
 		return tok, fmt.Errorf("expected %v, got %v (%q)", tt, tok.Type, tok.Value)
@@ -68,13 +68,13 @@ func (p *parser) parseOrExpr() (Node, error) {
 	if err != nil {
 		return nil, err
 	}
-	for p.current().Type == TokOr {
+	for p.current().Type == tokOr {
 		p.advance() // consume "or"
 		right, err := p.parseAndExpr()
 		if err != nil {
 			return nil, err
 		}
-		left = &OrNode{Left: left, Right: right}
+		left = &orNode{Left: left, Right: right}
 	}
 	return left, nil
 }
@@ -85,26 +85,26 @@ func (p *parser) parseAndExpr() (Node, error) {
 	if err != nil {
 		return nil, err
 	}
-	for p.current().Type == TokAnd {
+	for p.current().Type == tokAnd {
 		p.advance() // consume "and"
 		right, err := p.parseNotExpr()
 		if err != nil {
 			return nil, err
 		}
-		left = &AndNode{Left: left, Right: right}
+		left = &andNode{Left: left, Right: right}
 	}
 	return left, nil
 }
 
 // not_expr = "not" not_expr | atom
 func (p *parser) parseNotExpr() (Node, error) {
-	if p.current().Type == TokNot {
+	if p.current().Type == tokNot {
 		p.advance() // consume "not"
 		expr, err := p.parseNotExpr()
 		if err != nil {
 			return nil, err
 		}
-		return &NotNode{Expr: expr}, nil
+		return &notNode{Expr: expr}, nil
 	}
 	return p.parseAtom()
 }
@@ -114,36 +114,36 @@ func (p *parser) parseAtom() (Node, error) {
 	tok := p.current()
 
 	switch tok.Type {
-	case TokOpen:
+	case tokOpen:
 		p.advance()
-		return &OpenNode{}, nil
+		return &openNode{}, nil
 
-	case TokCompleted:
+	case tokCompleted:
 		p.advance()
-		return &CompletedNode{}, nil
+		return &completedNode{}, nil
 
-	case TokTag:
+	case tokTag:
 		return p.parseTagOrDateCmp()
 
-	case TokRegex:
+	case tokRegex:
 		p.advance()
 		re, err := regexp.Compile(tok.TagName)
 		if err != nil {
 			return nil, fmt.Errorf("invalid regex %q: %w", tok.TagName, err)
 		}
-		return &RegexNode{Pattern: tok.TagName, CompiledRe: re}, nil
+		return &regexNode{Pattern: tok.TagName, CompiledRe: re}, nil
 
-	case TokWord, TokString:
+	case tokWord, tokString:
 		p.advance()
-		return &TextNode{Pattern: tok.Value, LowerPattern: strings.ToLower(tok.Value)}, nil
+		return &textNode{Pattern: tok.Value, LowerPattern: strings.ToLower(tok.Value)}, nil
 
-	case TokLParen:
+	case tokLParen:
 		p.advance() // consume "("
 		expr, err := p.parseExpr()
 		if err != nil {
 			return nil, err
 		}
-		if _, err := p.expect(TokRParen); err != nil {
+		if _, err := p.expect(tokRParen); err != nil {
 			return nil, fmt.Errorf("unclosed parenthesis: %w", err)
 		}
 		return expr, nil
@@ -154,14 +154,14 @@ func (p *parser) parseAtom() (Node, error) {
 }
 
 // parseTagOrDateCmp handles @tag and @tag <op> <date> patterns.
-// If the tag is followed by a comparison operator, it becomes a DateCmpNode.
+// If the tag is followed by a comparison operator, it becomes a dateCmpNode.
 func (p *parser) parseTagOrDateCmp() (Node, error) {
 	tagTok := p.advance() // consume the tag token
 	tagName := tagTok.TagName
 
 	// Check if next token is a comparison operator
 	next := p.current()
-	if next.Type == TokLT || next.Type == TokGT || next.Type == TokLTE || next.Type == TokGTE || next.Type == TokEQ {
+	if next.Type == tokLT || next.Type == tokGT || next.Type == tokLTE || next.Type == tokGTE || next.Type == tokEQ {
 		// Only @due and @completed support date comparisons
 		if tagName != "due" && tagName != "completed" {
 			return nil, fmt.Errorf("unsupported date field @%s; only @due and @completed support date comparisons", tagName)
@@ -175,24 +175,24 @@ func (p *parser) parseTagOrDateCmp() (Node, error) {
 		// Parse the date value: today, today+Nd, today-Nd, or YYYY-MM-DD
 		dateTok := p.current()
 		switch dateTok.Type {
-		case TokToday:
+		case tokToday:
 			p.advance()
-			return &DateCmpNode{Field: tagName, Op: op, Days: 0}, nil
-		case TokOffset:
+			return &dateCmpNode{Field: tagName, Op: op, Days: 0}, nil
+		case tokOffset:
 			p.advance()
-			return &DateCmpNode{Field: tagName, Op: op, Days: dateTok.Offset}, nil
-		case TokDate:
+			return &dateCmpNode{Field: tagName, Op: op, Days: dateTok.Offset}, nil
+		case tokDate:
 			p.advance()
 			t, err := time.Parse("2006-01-02", dateTok.Value)
 			if err != nil {
 				return nil, fmt.Errorf("invalid date %q: %w", dateTok.Value, err)
 			}
-			return &DateCmpNode{Field: tagName, Op: op, Literal: &t}, nil
+			return &dateCmpNode{Field: tagName, Op: op, Literal: &t}, nil
 		default:
 			return nil, fmt.Errorf("expected date value after %q, got %v (%q)", op, dateTok.Type, dateTok.Value)
 		}
 	}
 
 	// Plain tag match
-	return &TagNode{Name: tagName}, nil
+	return &tagNode{Name: tagName}, nil
 }

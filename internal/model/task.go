@@ -1,7 +1,10 @@
 // Package model defines the core data types for tasks, tags, and warnings.
 package model
 
-import "time"
+import (
+	"strings"
+	"time"
+)
 
 type TaskState int
 
@@ -28,6 +31,7 @@ type Tag struct {
 
 type Task struct {
 	Text        string          // Full line text after "- [ ] " / "- [x] " or "- "
+	LowerText   string          // Pre-lowered Text for efficient case-insensitive matching
 	State       TaskState       // Open or Completed
 	File        string          // Relative path from notes_dir
 	Line        int             // 1-based line number
@@ -36,6 +40,12 @@ type Task struct {
 	Due         *time.Time      // Parsed from @due(YYYY-MM-DD), nil if absent
 	Completed   *time.Time      // Parsed from @completed(YYYY-MM-DD), nil if absent
 	HasCheckbox bool            // true if line had - [ ] or - [x], false for plain bullets
+}
+
+// SetText sets Text and pre-computes LowerText.
+func (t *Task) SetText(text string) {
+	t.Text = text
+	t.LowerText = strings.ToLower(text)
 }
 
 // HasTag returns true if the task has a tag with the given name (O(1) lookup).

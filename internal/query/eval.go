@@ -20,26 +20,26 @@ type EvalOptions struct {
 // EvalWithOptions evaluates an AST node against a task with configurable options.
 func EvalWithOptions(node Node, task *model.Task, now time.Time, opts EvalOptions) bool {
 	switch n := node.(type) {
-	case *OpenNode:
+	case *openNode:
 		return task.State == model.Open
-	case *CompletedNode:
+	case *completedNode:
 		return task.State == model.Completed
-	case *TagNode:
+	case *tagNode:
 		if opts.PartialTags {
 			return hasTagPartial(task, strings.ToLower(n.Name))
 		}
 		return task.HasTag(n.Name)
-	case *DateCmpNode:
+	case *dateCmpNode:
 		return evalDateCmp(n, task, now)
-	case *TextNode:
-		return strings.Contains(strings.ToLower(task.Text), n.LowerPattern)
-	case *RegexNode:
+	case *textNode:
+		return strings.Contains(task.LowerText, n.LowerPattern)
+	case *regexNode:
 		return n.CompiledRe.MatchString(task.Text)
-	case *AndNode:
+	case *andNode:
 		return EvalWithOptions(n.Left, task, now, opts) && EvalWithOptions(n.Right, task, now, opts)
-	case *OrNode:
+	case *orNode:
 		return EvalWithOptions(n.Left, task, now, opts) || EvalWithOptions(n.Right, task, now, opts)
-	case *NotNode:
+	case *notNode:
 		return !EvalWithOptions(n.Expr, task, now, opts)
 	default:
 		return false
@@ -58,7 +58,7 @@ func hasTagPartial(task *model.Task, lowerName string) bool {
 }
 
 // evalDateCmp evaluates a date comparison node against a task.
-func evalDateCmp(n *DateCmpNode, task *model.Task, now time.Time) bool {
+func evalDateCmp(n *dateCmpNode, task *model.Task, now time.Time) bool {
 	// Resolve the task's date field
 	var taskDate *time.Time
 	switch n.Field {

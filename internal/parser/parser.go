@@ -62,7 +62,7 @@ func ParseLine(line string, file string, lineNum int) (*model.Task, []model.Warn
 		text = candidate
 	}
 	task := &model.Task{
-		Text: text, File: file, Line: lineNum, HasCheckbox: hasCheckbox,
+		Text: text, LowerText: strings.ToLower(text), File: file, Line: lineNum, HasCheckbox: hasCheckbox,
 	}
 	if checkbox == " " {
 		task.State = model.Open

@@ -6,88 +6,88 @@ import (
 	"unicode"
 )
 
-type TokenType int
+type tokenType int
 
 const (
-	TokOpen      TokenType = iota // "open"
-	TokCompleted                  // "completed"
-	TokAnd                        // "and"
-	TokOr                         // "or"
-	TokNot                        // "not"
-	TokTag                        // @word
-	TokLT                         // <
-	TokGT                         // >
-	TokLTE                        // <=
-	TokGTE                        // >=
-	TokEQ                         // = or ==
-	TokDate                       // YYYY-MM-DD
-	TokToday                      // "today" (standalone, not part of offset)
-	TokOffset                     // today+3d or today-7d
-	TokRegex                      // /pattern/
-	TokString                     // "quoted text"
-	TokWord                       // bare word (not a keyword)
-	TokLParen                     // (
-	TokRParen                     // )
-	TokEOF
+	tokOpen      tokenType = iota // "open"
+	tokCompleted                  // "completed"
+	tokAnd                        // "and"
+	tokOr                         // "or"
+	tokNot                        // "not"
+	tokTag                        // @word
+	tokLT                         // <
+	tokGT                         // >
+	tokLTE                        // <=
+	tokGTE                        // >=
+	tokEQ                         // = or ==
+	tokDate                       // YYYY-MM-DD
+	tokToday                      // "today" (standalone, not part of offset)
+	tokOffset                     // today+3d or today-7d
+	tokRegex                      // /pattern/
+	tokString                     // "quoted text"
+	tokWord                       // bare word (not a keyword)
+	tokLParen                     // (
+	tokRParen                     // )
+	tokEOF
 )
 
-func (t TokenType) String() string {
+func (t tokenType) String() string {
 	switch t {
-	case TokOpen:
-		return "TokOpen"
-	case TokCompleted:
-		return "TokCompleted"
-	case TokAnd:
-		return "TokAnd"
-	case TokOr:
-		return "TokOr"
-	case TokNot:
-		return "TokNot"
-	case TokTag:
-		return "TokTag"
-	case TokLT:
-		return "TokLT"
-	case TokGT:
-		return "TokGT"
-	case TokLTE:
-		return "TokLTE"
-	case TokGTE:
-		return "TokGTE"
-	case TokEQ:
-		return "TokEQ"
-	case TokDate:
-		return "TokDate"
-	case TokToday:
-		return "TokToday"
-	case TokOffset:
-		return "TokOffset"
-	case TokRegex:
-		return "TokRegex"
-	case TokString:
-		return "TokString"
-	case TokWord:
-		return "TokWord"
-	case TokLParen:
-		return "TokLParen"
-	case TokRParen:
-		return "TokRParen"
-	case TokEOF:
-		return "TokEOF"
+	case tokOpen:
+		return "tokOpen"
+	case tokCompleted:
+		return "tokCompleted"
+	case tokAnd:
+		return "tokAnd"
+	case tokOr:
+		return "tokOr"
+	case tokNot:
+		return "tokNot"
+	case tokTag:
+		return "tokTag"
+	case tokLT:
+		return "tokLT"
+	case tokGT:
+		return "tokGT"
+	case tokLTE:
+		return "tokLTE"
+	case tokGTE:
+		return "tokGTE"
+	case tokEQ:
+		return "tokEQ"
+	case tokDate:
+		return "tokDate"
+	case tokToday:
+		return "tokToday"
+	case tokOffset:
+		return "tokOffset"
+	case tokRegex:
+		return "tokRegex"
+	case tokString:
+		return "tokString"
+	case tokWord:
+		return "tokWord"
+	case tokLParen:
+		return "tokLParen"
+	case tokRParen:
+		return "tokRParen"
+	case tokEOF:
+		return "tokEOF"
 	default:
 		return fmt.Sprintf("TokUnknown(%d)", t)
 	}
 }
 
-type Token struct {
-	Type    TokenType
+type token struct {
+	Type    tokenType
 	Value   string // raw text of the token
-	TagName string // for TokTag: the tag name without @
-	Offset  int    // for TokOffset: days offset (positive or negative)
+	TagName string // for tokTag: the tag name without @
+	Offset  int    // for tokOffset: days offset (positive or negative)
 }
 
-// Lex tokenizes the input query string into a slice of tokens.
-func Lex(input string) ([]Token, error) {
-	var tokens []Token
+// lex tokenizes the input query string into a slice of tokens.
+func lex(input string) ([]token, error) {
+	var tokens []token
 	runes := []rune(input)
 	i := 0
 
@@ -102,12 +102,12 @@ func Lex(input string) ([]Token, error) {
 
 		// Parentheses
 		if ch == '(' {
-			tokens = append(tokens, Token{Type: TokLParen, Value: "("})
+			tokens = append(tokens, token{Type: tokLParen, Value: "("})
 			i++
 			continue
 		}
 		if ch == ')' {
-			tokens = append(tokens, Token{Type: TokRParen, Value: ")"})
+			tokens = append(tokens, token{Type: tokRParen, Value: ")"})
 			i++
 			continue
 		}
@@ -115,30 +115,30 @@ func Lex(input string) ([]Token, error) {
 		// Comparison operators: <=, >=, <, >, =, ==
 		if ch == '<' {
 			if i+1 < len(runes) && runes[i+1] == '=' {
-				tokens = append(tokens, Token{Type: TokLTE, Value: "<="})
+				tokens = append(tokens, token{Type: tokLTE, Value: "<="})
 				i += 2
 			} else {
-				tokens = append(tokens, Token{Type: TokLT, Value: "<"})
+				tokens = append(tokens, token{Type: tokLT, Value: "<"})
 				i++
 			}
 			continue
 		}
 		if ch == '>' {
 			if i+1 < len(runes) && runes[i+1] == '=' {
-				tokens = append(tokens, Token{Type: TokGTE, Value: ">="})
+				tokens = append(tokens, token{Type: tokGTE, Value: ">="})
 				i += 2
 			} else {
-				tokens = append(tokens, Token{Type: TokGT, Value: ">"})
+				tokens = append(tokens, token{Type: tokGT, Value: ">"})
 				i++
 			}
 			continue
 		}
 		if ch == '=' {
 			if i+1 < len(runes) && runes[i+1] == '=' {
-				tokens = append(tokens, Token{Type: TokEQ, Value: "=="})
+				tokens = append(tokens, token{Type: tokEQ, Value: "=="})
 				i += 2
 			} else {
-				tokens = append(tokens, Token{Type: TokEQ, Value: "="})
+				tokens = append(tokens, token{Type: tokEQ, Value: "="})
 				i++
 			}
 			continue
@@ -156,7 +156,7 @@ func Lex(input string) ([]Token, error) {
 			}
 			text := string(runes[start:i])
 			i++ // skip closing quote
-			tokens = append(tokens, Token{Type: TokString, Value: text})
+			tokens = append(tokens, token{Type: tokString, Value: text})
 			continue
 		}
 
@@ -171,7 +171,7 @@ func Lex(input string) ([]Token, error) {
 				return nil, fmt.Errorf("expected tag name after '@' at position %d", start)
 			}
 			name := string(runes[start:i])
-			tokens = append(tokens, Token{Type: TokTag, Value: "@" + name, TagName: name})
+			tokens = append(tokens, token{Type: tokTag, Value: "@" + name, TagName: name})
 			continue
 		}
 
@@ -195,7 +195,7 @@ func Lex(input string) ([]Token, error) {
 			patternStr := string(pattern)
 			raw := string(runes[start:i])
 			i++ // skip closing /
-			tokens = append(tokens, Token{Type: TokRegex, Value: "/" + raw + "/", TagName: patternStr})
+			tokens = append(tokens, token{Type: tokRegex, Value: "/" + raw + "/", TagName: patternStr})
 			continue
 		}
 
@@ -209,19 +209,19 @@ func Lex(input string) ([]Token, error) {
 
 			switch word {
 			case "open":
-				tokens = append(tokens, Token{Type: TokOpen, Value: word})
+				tokens = append(tokens, token{Type: tokOpen, Value: word})
 			case "completed":
-				tokens = append(tokens, Token{Type: TokCompleted, Value: word})
+				tokens = append(tokens, token{Type: tokCompleted, Value: word})
 			case "and":
-				tokens = append(tokens, Token{Type: TokAnd, Value: word})
+				tokens = append(tokens, token{Type: tokAnd, Value: word})
 			case "or":
-				tokens = append(tokens, Token{Type: TokOr, Value: word})
+				tokens = append(tokens, token{Type: tokOr, Value: word})
 			case "not":
-				tokens = append(tokens, Token{Type: TokNot, Value: word})
+				tokens = append(tokens, token{Type: tokNot, Value: word})
 			case "tomorrow":
-				tokens = append(tokens, Token{Type: TokOffset, Value: "tomorrow", Offset: 1})
+				tokens = append(tokens, token{Type: tokOffset, Value: "tomorrow", Offset: 1})
 			case "yesterday":
-				tokens = append(tokens, Token{Type: TokOffset, Value: "yesterday", Offset: -1})
+				tokens = append(tokens, token{Type: tokOffset, Value: "yesterday", Offset: -1})
 			case "today":
 				// Check for today+Nd or today-Nd
 				if i < len(runes) && (runes[i] == '+' || runes[i] == '-') {
@@ -247,12 +247,12 @@ func Lex(input string) ([]Token, error) {
 						days = -days
 					}
 					fullValue := string(runes[start:i])
-					tokens = append(tokens, Token{Type: TokOffset, Value: fullValue, Offset: days})
+					tokens = append(tokens, token{Type: tokOffset, Value: fullValue, Offset: days})
 				} else {
-					tokens = append(tokens, Token{Type: TokToday, Value: word})
+					tokens = append(tokens, token{Type: tokToday, Value: word})
 				}
 			default:
-				tokens = append(tokens, Token{Type: TokWord, Value: word})
+				tokens = append(tokens, token{Type: tokWord, Value: word})
 			}
 			continue
 		}
@@ -269,13 +269,13 @@ func Lex(input string) ([]Token, error) {
 			if len(dateStr) != 10 || dateStr[4] != '-' || dateStr[7] != '-' {
 				return nil, fmt.Errorf("invalid date literal %q at position %d", dateStr, start)
 			}
-			tokens = append(tokens, Token{Type: TokDate, Value: dateStr})
+			tokens = append(tokens, token{Type: tokDate, Value: dateStr})
 			continue
 		}
 
 		return nil, fmt.Errorf("unexpected character %q at position %d", ch, i)
 	}
 
-	tokens = append(tokens, Token{Type: TokEOF, Value: ""})
+	tokens = append(tokens, token{Type: tokEOF, Value: ""})
 	return tokens, nil
 }
