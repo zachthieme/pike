@@ -9,6 +9,12 @@ import (
 	"time"
 )
 
+// ValidOrders is the set of recognized sort order names.
+var ValidOrders = map[string]bool{
+	"file": true, "alpha": true, "due_asc": true, "due_desc": true,
+	"completed_asc": true, "completed_desc": true,
+}
+
 // Sort sorts tasks in place according to the given sort order.
 // Returns an error for unknown sort orders.
 func Sort(tasks []model.Task, order string) error {

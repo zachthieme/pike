@@ -640,6 +640,47 @@ views:
 	}
 }
 
+func TestLoadBytes_DueDatesPathNotSetByDefault(t *testing.T) {
+	yaml := `notes_dir: ~/Notes`
+	cfg, err := LoadBytes([]byte(yaml))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.DueDatesPath != "" {
+		t.Errorf("DueDatesPath = %q, want empty (disabled by default)", cfg.DueDatesPath)
+	}
+}
+
+func TestLoadBytes_DueDatesPathExplicit(t *testing.T) {
+	yaml := `
+notes_dir: ~/Notes
+due_dates_path: ~/custom/due.json
+`
+	cfg, err := LoadBytes([]byte(yaml))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	home, _ := os.UserHomeDir()
+	want := filepath.Join(home, "custom", "due.json")
+	if cfg.DueDatesPath != want {
+		t.Errorf("DueDatesPath = %q, want %q", cfg.DueDatesPath, want)
+	}
+}
+
+func TestLoadBytes_DueDatesPathAbsolute(t *testing.T) {
+	yaml := `
+notes_dir: ~/Notes
+due_dates_path: /tmp/pike/due.json
+`
+	cfg, err := LoadBytes([]byte(yaml))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.DueDatesPath != "/tmp/pike/due.json" {
+		t.Errorf("DueDatesPath = %q, want %q", cfg.DueDatesPath, "/tmp/pike/due.json")
+	}
+}
+
 func TestLoadBytes_NoKeybindingsBackwardCompatible(t *testing.T) {
 	input := `
 views:

@@ -12,6 +12,8 @@ import (
 	"time"
 
 	"gopkg.in/yaml.v3"
+
+	tasksort "pike/internal/sort"
 )
 
 // Config holds all application configuration.
@@ -27,6 +29,7 @@ type Config struct {
 	VisibleColor           string            `yaml:"-"` // color for ◉ icon (hidden tasks revealed)
 	WeekStartDay           int               `yaml:"-"` // 0=Sunday, 1=Monday, ..., 6=Saturday
 	RecentlyCompletedDays  int               `yaml:"-"`
+	DueDatesPath           string            `yaml:"-"` // path to write due dates JSON for wen integration
 	Views                  []ViewConfig      `yaml:"-"`
 	Keybindings            map[string][]string `yaml:"-"`
 	CustomBindings         []CustomBinding     `yaml:"-"`
@@ -74,6 +77,7 @@ type rawConfig struct {
 	VisibleColor           string            `yaml:"visible_color"`
 	WeekStartDay           *int              `yaml:"week_start_day"`
 	RecentlyCompletedDays  *int              `yaml:"recently_completed_days"`
+	DueDatesPath           string            `yaml:"due_dates_path"`
 	Views                  []ViewConfig      `yaml:"views"`
 	Keybindings            *rawKeybindings   `yaml:"keybindings"`
 }
@@ -194,11 +198,7 @@ func parseKeybindings(raw *rawKeybindings) (map[string][]string, []CustomBinding
 		if sort == "" {
 			sort = "file"
 		}
-		validSorts := map[string]bool{
-			"file": true, "alpha": true, "due_asc": true, "due_desc": true,
-			"completed_asc": true, "completed_desc": true,
-		}
-		if !validSorts[sort] {
+		if !tasksort.ValidOrders[sort] {
 			return nil, nil, fmt.Errorf("custom binding for key %q: unknown sort order %q", rc.Key, sort)
 		}
 		custom = append(custom, CustomBinding{Key: rc.Key, View: rc.View, Query: rc.Query, Sort: sort})
@@ -288,6 +288,11 @@ func applyDefaults(raw *rawConfig) (*Config, error) {
 		cfg.RecentlyCompletedDays = 7
 	}
 
+	// DueDatesPath: write due dates JSON for wen integration (opt-in)
+	if raw.DueDatesPath != "" {
+		cfg.DueDatesPath = expandTilde(raw.DueDatesPath)
+	}
+
 	// Views: default to a single "All Open" view
 	if len(raw.Views) > 0 {
 		cfg.Views = raw.Views
@@ -357,6 +362,9 @@ const defaultConfigYAML = `# Pike configuration
 
 # Day the week starts on: 0=Sunday, 1=Monday, ..., 6=Saturday (default: 0)
 # week_start_day: 0
+
+# Write due dates JSON for wen calendar integration (disabled by default)
+# due_dates_path: ~/.local/share/pike/due.json
 
 # Color theme (Catppuccin Mocha)
 link_color: "#89b4fa"
