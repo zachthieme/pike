@@ -9,6 +9,37 @@ import (
 	"time"
 )
 
+func TestUncompleteUppercaseX(t *testing.T) {
+	dir := t.TempDir()
+	p := writeFile(t, dir, "test.md", "- [X] Finished task @completed(2026-03-15)\n")
+	ctx := context.Background()
+
+	err := Uncomplete(ctx, p, 1)
+	if err != nil {
+		t.Fatalf("Uncomplete: %v", err)
+	}
+	got := readFile(t, p)
+	if got != "- [ ] Finished task\n" {
+		t.Errorf("unexpected result:\n%s", got)
+	}
+}
+
+func TestVerifyUnmodifiedDetectsExternalChange(t *testing.T) {
+	dir := t.TempDir()
+	p := writeFile(t, dir, "test.md", "- [ ] Original task\n")
+
+	// Simulate: read the file, then externally modify it, then verify.
+	originalLine := "- [ ] Original task"
+	if err := os.WriteFile(p, []byte("- [ ] Changed by someone else\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	err := verifyUnmodified(p, 1, originalLine)
+	if !errors.Is(err, ErrStaleData) {
+		t.Fatalf("expected ErrStaleData, got: %v", err)
+	}
+}
+
 func writeFile(t *testing.T, dir, name, content string) string {
 	t.Helper()
 	p := filepath.Join(dir, name)
