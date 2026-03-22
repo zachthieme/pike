@@ -2,11 +2,15 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
+
+	"pike/internal/config"
+	"pike/internal/model"
 )
 
 func TestVersionFlag(t *testing.T) {
@@ -307,6 +311,181 @@ func TestInvalidQueryError(t *testing.T) {
 	err := run([]string{"--dir", dir, "--query", "((("}, &stdout, &stderr)
 	if err == nil {
 		t.Fatal("expected error for invalid query")
+	}
+}
+
+func TestWriteDueDates_WritesCorrectJSON(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "due.json")
+
+	d1 := time.Date(2026, 3, 20, 0, 0, 0, 0, time.UTC)
+	d2 := time.Date(2026, 3, 15, 0, 0, 0, 0, time.UTC)
+	d3 := time.Date(2026, 3, 20, 0, 0, 0, 0, time.UTC) // duplicate of d1
+	tasks := []model.Task{
+		{Due: &d1},
+		{Due: &d2},
+		{Due: &d3},
+		{Due: nil}, // no due date
+	}
+
+	writeDueDates(path, tasks)
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("failed to read due.json: %v", err)
+	}
+
+	var dates []string
+	if err := json.Unmarshal(data, &dates); err != nil {
+		t.Fatalf("invalid JSON: %v", err)
+	}
+
+	if len(dates) != 2 {
+		t.Fatalf("expected 2 unique dates, got %d: %v", len(dates), dates)
+	}
+	// Should be sorted
+	if dates[0] != "2026-03-15" || dates[1] != "2026-03-20" {
+		t.Errorf("dates = %v, want [2026-03-15 2026-03-20]", dates)
+	}
+}
+
+func TestWriteDueDates_EmptyPathIsNoop(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "should-not-exist.json")
+
+	d := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	tasks := []model.Task{{Due: &d}}
+
+	writeDueDates("", tasks)
+
+	if _, err := os.Stat(path); err == nil {
+		t.Error("expected no file when path is empty")
+	}
+}
+
+func TestWriteDueDates_NoTasksWritesEmptyArray(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "due.json")
+
+	writeDueDates(path, nil)
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("failed to read due.json: %v", err)
+	}
+	if string(data) != "[]" {
+		t.Errorf("expected empty JSON array, got %q", string(data))
+	}
+}
+
+func TestWriteDueDates_CreatesParentDirs(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "nested", "deep", "due.json")
+
+	d := time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)
+	writeDueDates(path, []model.Task{{Due: &d}})
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("failed to read due.json: %v", err)
+	}
+
+	var dates []string
+	if err := json.Unmarshal(data, &dates); err != nil {
+		t.Fatalf("invalid JSON: %v", err)
+	}
+	if len(dates) != 1 || dates[0] != "2026-05-01" {
+		t.Errorf("dates = %v, want [2026-05-01]", dates)
+	}
+}
+
+func TestWriteDueDates_AtomicWrite(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "due.json")
+
+	// Write initial content
+	d1 := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	writeDueDates(path, []model.Task{{Due: &d1}})
+
+	// Overwrite with new content
+	d2 := time.Date(2026, 6, 15, 0, 0, 0, 0, time.UTC)
+	writeDueDates(path, []model.Task{{Due: &d2}})
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("failed to read due.json: %v", err)
+	}
+
+	var dates []string
+	if err := json.Unmarshal(data, &dates); err != nil {
+		t.Fatalf("invalid JSON after overwrite: %v", err)
+	}
+	if len(dates) != 1 || dates[0] != "2026-06-15" {
+		t.Errorf("dates = %v, want [2026-06-15]", dates)
+	}
+
+	// No temp files should remain
+	entries, _ := os.ReadDir(dir)
+	for _, e := range entries {
+		if strings.HasPrefix(e.Name(), ".due-") {
+			t.Errorf("temp file left behind: %s", e.Name())
+		}
+	}
+}
+
+func TestQueryMode_DoesNotWriteDueDates(t *testing.T) {
+	notesDir := t.TempDir()
+	content := "- [ ] Task @due(2026-03-20)\n"
+	if err := os.WriteFile(filepath.Join(notesDir, "test.md"), []byte(content), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	dueDir := t.TempDir()
+	duePath := filepath.Join(dueDir, "due.json")
+
+	cfgDir := t.TempDir()
+	cfgPath := filepath.Join(cfgDir, "config.yaml")
+	cfgContent := "notes_dir: " + notesDir + "\ndue_dates_path: " + duePath + "\n"
+	if err := os.WriteFile(cfgPath, []byte(cfgContent), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	err := run([]string{"--config", cfgPath, "--query", "open", "--no-color"}, &stdout, &stderr)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if _, err := os.Stat(duePath); err == nil {
+		t.Error("due.json should not be written in --query mode")
+	}
+}
+
+func TestNotesEnvFallback(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "test.md"), []byte("- [ ] hello\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("NOTES", dir)
+
+	var stdout, stderr bytes.Buffer
+	err := run([]string{"-q", "open", "--no-color"}, &stdout, &stderr)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(stdout.String(), "hello") {
+		t.Errorf("expected output to contain 'hello', got %q", stdout.String())
+	}
+}
+
+func TestEditorDefaultFallback(t *testing.T) {
+	t.Setenv("EDITOR", "")
+	cfg, err := config.LoadBytes([]byte("notes_dir: ~/Notes"))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.Editor != "hx" {
+		t.Errorf("Editor = %q, want %q when $EDITOR is empty", cfg.Editor, "hx")
 	}
 }
 

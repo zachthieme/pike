@@ -3,11 +3,15 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
+	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/mattn/go-isatty"
@@ -354,16 +358,84 @@ func findView(views []config.ViewConfig, title string) (*config.ViewConfig, erro
 	return nil, fmt.Errorf("unknown view %q", title)
 }
 
+// writeDueDates extracts unique due dates from tasks and writes them as a JSON
+// array of "yyyy-mm-dd" strings for wen calendar integration. The write is
+// atomic (write-to-temp-then-rename) so readers never see partial content.
+// Errors are silently ignored (best-effort) to avoid disrupting the main workflow.
+func writeDueDates(path string, tasks []model.Task) {
+	if path == "" {
+		return
+	}
+
+	seen := make(map[string]bool)
+	for _, t := range tasks {
+		if t.Due != nil {
+			seen[t.Due.Format("2006-01-02")] = true
+		}
+	}
+
+	dates := make([]string, 0, len(seen))
+	for d := range seen {
+		dates = append(dates, d)
+	}
+	slices.Sort(dates)
+
+	data, err := json.Marshal(dates)
+	if err != nil {
+		return
+	}
+
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return
+	}
+
+	// Atomic write: temp file + rename so readers never see partial content.
+	tmp, err := os.CreateTemp(dir, ".due-*.json")
+	if err != nil {
+		return
+	}
+	tmpPath := tmp.Name()
+	if _, err := tmp.Write(data); err != nil {
+		tmp.Close()           //nolint:errcheck // cleaning up on error
+		os.Remove(tmpPath)    //nolint:errcheck // cleaning up on error
+		return
+	}
+	if err := tmp.Close(); err != nil {
+		os.Remove(tmpPath) //nolint:errcheck // cleaning up on error
+		return
+	}
+	_ = os.Rename(tmpPath, path) //nolint:errcheck // best-effort; errors are intentionally ignored
+}
+
 func runTUI(_ io.Writer, cfg *config.Config, tasks []model.Task, sc *scanner.Scanner, viewFlag string, configPath string) error {
 	// Create a cancellable context so in-flight scan goroutines stop when the TUI exits.
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	// Write due dates on initial launch.
+	writeDueDates(cfg.DueDatesPath, tasks)
+
+	var dueMu sync.Mutex
+	dueDatesPath := cfg.DueDatesPath
 	configReload := func() (*config.Config, error) {
-		return config.Load(configPath)
+		c, err := config.Load(configPath)
+		if err == nil {
+			dueMu.Lock()
+			dueDatesPath = c.DueDatesPath
+			dueMu.Unlock()
+		}
+		return c, err
 	}
 	scanRefresh := func() ([]model.Task, error) {
-		return sc.Refresh(ctx)
+		tasks, err := sc.Refresh(ctx)
+		if err == nil {
+			dueMu.Lock()
+			path := dueDatesPath
+			dueMu.Unlock()
+			writeDueDates(path, tasks)
+		}
+		return tasks, err
 	}
 	warningsGetter := func() []model.Warning {
 		return sc.Warnings
