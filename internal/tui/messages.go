@@ -26,6 +26,7 @@ type viewMode int
 
 const (
 	modeDashboard viewMode = iota
+	modeFocused   // single section focus; Model.focusedView holds title
 	modeAllTasks
 	modeTagSearch
 	modeRecentlyCompleted
@@ -49,6 +50,8 @@ func (v viewMode) String() string {
 	switch v {
 	case modeDashboard:
 		return "dashboard"
+	case modeFocused:
+		return "focused"
 	case modeAllTasks:
 		return "all-tasks"
 	case modeTagSearch:

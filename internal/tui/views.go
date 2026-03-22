@@ -22,19 +22,17 @@ func (m Model) View() string {
 	}
 
 	switch m.mode {
+	case modeFocused:
+		return errLine + m.viewFocused()
 	case modeAllTasks:
 		return errLine + m.viewAllTasks()
 	case modeTagSearch:
 		return errLine + m.tagSearch.View(m.tagColors, m.width)
 	case modeRecentlyCompleted:
 		return errLine + m.viewAllTasks()
+	default:
+		return errLine + m.viewDashboard()
 	}
-
-	if m.focusedView != "" {
-		return errLine + m.viewFocused()
-	}
-
-	return errLine + m.viewDashboard()
 }
 
 func (m Model) viewDashboard() string {
@@ -90,9 +88,9 @@ func (m Model) viewSummary() string {
 	return RenderSummary(m.version, m.width, m.keys, m.customBindings)
 }
 
-// displaySections returns the sections to display based on focus mode.
+// displaySections returns the sections to display based on the current mode.
 func (m Model) displaySections() []filter.ViewResult {
-	if m.focusedView != "" {
+	if m.mode == modeFocused {
 		// Find the matching section in m.sections (which may be filtered) by title.
 		for _, sec := range m.sections {
 			if sec.Title == m.focusedView {
@@ -112,10 +110,29 @@ func (m Model) displaySections() []filter.ViewResult {
 
 // Layout constants for viewAllTasks windowing calculations.
 const (
-	allTasksChrome  = 3  // search bar + footer + bubbletea chrome
-	sectionChrome   = 4  // section header + newline + top/bottom borders
+	allTasksChrome     = 3 // search bar + footer + bubbletea chrome
+	sectionChrome      = 4 // section header + newline + top/bottom borders
 	minAvailableHeight = 5
 )
+
+// taskViewport computes the windowing parameters for a task list:
+// how many rows are available and how many tasks can be displayed.
+type taskViewport struct {
+	available int // total available height after chrome
+	maxTasks  int // maximum number of tasks that fit
+}
+
+func (m Model) computeTaskViewport(taskCount int) taskViewport {
+	available := m.height - allTasksChrome
+	if available < minAvailableHeight {
+		available = minAvailableHeight
+	}
+	maxTasks := min(taskCount, available-sectionChrome)
+	if maxTasks < 1 {
+		maxTasks = 1
+	}
+	return taskViewport{available: available, maxTasks: maxTasks}
+}
 
 // viewAllTasks renders a single-section task list with filter bar.
 // Used for both all-tasks and recently-completed modes.
@@ -139,33 +156,24 @@ func (m Model) viewAllTasks() string {
 	sec := sections[0]
 	tasks := sec.Tasks
 	hiddenCount := m.hiddenCountFor(sec.Title)
+	vp := m.computeTaskViewport(len(tasks))
 
-	available := m.height - allTasksChrome
-	if available < minAvailableHeight {
-		available = minAvailableHeight
-	}
-
-	maxTasks := min(len(tasks), available-sectionChrome)
-	if maxTasks < 1 {
-		maxTasks = 1
-	}
-
-	for maxTasks > 1 {
-		start, end := scrollWindow(m.nav.Cursor(), len(tasks), maxTasks)
+	for vp.maxTasks > 1 {
+		start, end := scrollWindow(m.nav.Cursor(), len(tasks), vp.maxTasks)
 		rendered := m.renderSection(sec.Title, tasks[start:end], sec.Color, start, hiddenCount, len(tasks))
 		renderedHeight := lipgloss.Height(rendered)
 		needsFooter := end-start < len(tasks)
 		if needsFooter {
 			renderedHeight++ // footer line
 		}
-		if renderedHeight <= available {
+		if renderedHeight <= vp.available {
 			parts = append(parts, rendered)
 			if needsFooter {
 				parts = append(parts, FooterStyle().Render(fmt.Sprintf("  %d–%d of %d results", start+1, end, len(tasks))))
 			}
 			return strings.Join(parts, "\n")
 		}
-		maxTasks--
+		vp.maxTasks--
 	}
 
 	// Minimal case: 1 task.

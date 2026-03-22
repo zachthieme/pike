@@ -1,5 +1,20 @@
 # Changelog
 
+## v1.7.3 — March 22, 2026: Explicit TUI State Machine
+
+**TUI state machine:**
+- Added `modeFocused` to `viewMode` enum — section focus is now an explicit mode instead of an implicit `focusedView != ""` check alongside `modeDashboard`
+- `View()` dispatch is now a single exhaustive `switch m.mode` with no fallthrough conditionals
+- Escape priority chain uses explicit mode matching instead of checking multiple boolean/string fields
+- `exitToDashboard()` now resets all state including `focusedView`, making it a complete state reset
+- Documented the full state transition diagram in the `Model` doc comment
+
+**Toggle type safety:**
+- Replaced `sync.Map` with type assertion (`v.(*sync.Mutex)`) with a typed `fileMutexMap` struct backed by a regular `map[string]*sync.Mutex` — no type assertions, proper Go types throughout
+
+**View rendering clarity:**
+- Extracted `taskViewport` struct and `computeTaskViewport()` method to name the windowing parameters (`available`, `maxTasks`) instead of computing them inline
+
 ## v1.7.2 — March 22, 2026: Code Quality & Refactoring
 
 **Model invariants:**

@@ -12,6 +12,25 @@ import (
 )
 
 // Model is the main Bubbletea model for the tasks TUI.
+//
+// State machine — the primary display state is Model.mode (viewMode):
+//
+//	modeDashboard ←────── Escape ─────── modeAllTasks
+//	    │                                     ↑
+//	    ├─ 1-9/custom → modeFocused           │
+//	    │                   │          'a' or tag select
+//	    ├─ 'a' ─────→ modeAllTasks            │
+//	    ├─ 't' ─────→ modeTagSearch ── select ┘
+//	    ├─ 'c' ─────→ modeRecentlyCompleted
+//	    └─ Escape ──→ modeDashboard (from modeFocused, if !viewLocked)
+//
+// Orthogonal modifiers (independent of mode):
+//   - showSummary: overlay toggled with 's', dismissed with Escape
+//   - showHidden:  whether @hidden tasks are visible, toggled with 'h'
+//   - filterBar:   sub-model text input (active/inactive, focused/blurred)
+//
+// focusedView holds the section title only when mode == modeFocused.
+// showAll is true only when modeAllTasks was entered from tag search.
 type Model struct {
 	// Data — task source and config.
 	config   *config.Config
@@ -26,7 +45,7 @@ type Model struct {
 
 	// Navigation and view state.
 	nav          Navigator // cursor + section navigation
-	focusedView  string    // "" = dashboard, otherwise title of focused section
+	focusedView  string    // section title when mode == modeFocused; empty otherwise
 	viewLocked   bool      // when true, block mode-switching keys (set via --view flag)
 	mode         viewMode
 	sortOverride string // per-query sort order from custom bindings; "" uses default
@@ -111,6 +130,7 @@ func (m *Model) SetWarningsFunc(f func() []model.Warning) {
 // SetFocusedView sets the focused view by section title, locks the view so
 // mode-switching keys (a/t/s/c/1-9) are disabled, and rebuilds sections.
 func (m *Model) SetFocusedView(title string) {
+	m.mode = modeFocused
 	m.focusedView = title
 	m.viewLocked = true
 	m.keys.Summary.SetEnabled(false)

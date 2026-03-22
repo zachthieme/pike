@@ -252,9 +252,10 @@ func (m *Model) enterRecentlyCompletedMode() tea.Cmd {
 	return cmd
 }
 
-// exitToDashboard resets the mode, clears any active filter, and rebuilds.
+// exitToDashboard resets all mode state back to the base dashboard view.
 func (m *Model) exitToDashboard() {
 	m.mode = modeDashboard
+	m.focusedView = ""
 	m.filterBar, _ = m.filterBar.Update(FilterDeactivateMsg{})
 	m.showAll = false
 	m.sortOverride = ""

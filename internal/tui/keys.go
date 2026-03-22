@@ -104,6 +104,7 @@ func (m Model) handleKeyCustomBinding(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool)
 	if cb.View != "" {
 		for _, sec := range m.visibleSections() {
 			if sec.Title == cb.View {
+				m.mode = modeFocused
 				m.focusedView = cb.View
 				m.rebuildSections()
 				m.nav.JumpToTop()
@@ -126,16 +127,17 @@ func (m Model) handleKeyDashboard(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, tea.Quit
 
 	case key.Matches(msg, m.keys.Escape):
-		// Escape priority: dismiss summary → exit mode → exit focus → do nothing.
+		// Escape priority: dismiss summary → unfocus section → exit mode → do nothing.
 		switch {
 		case m.showSummary:
 			m.showSummary = false
-		case m.mode != modeDashboard:
-			m.exitToDashboard()
-		case m.focusedView != "" && !m.viewLocked:
+		case m.mode == modeFocused && !m.viewLocked:
+			m.mode = modeDashboard
 			m.focusedView = ""
 			m.rebuildSections()
 			m.nav.ClampCursor(m.displaySections())
+		case m.mode != modeDashboard && m.mode != modeFocused:
+			m.exitToDashboard()
 		}
 		return m, nil
 
@@ -197,6 +199,7 @@ func (m Model) handleKeyDashboard(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			if key.Matches(msg, m.keys.FocusSection[i]) {
 				sections := m.visibleSections()
 				if i < len(sections) {
+					m.mode = modeFocused
 					m.focusedView = sections[i].Title
 					m.rebuildSections()
 					m.nav.JumpToTop()

@@ -185,6 +185,9 @@ func TestFocusSectionByNumber(t *testing.T) {
 	updated, _ := sendKey(m, "1")
 	m2 := updated.(Model)
 	// The first visible section title is "Overdue".
+	if m2.mode != modeFocused {
+		t.Errorf("expected modeFocused after pressing '1', got %v", m2.mode)
+	}
 	if m2.focusedView != "Overdue" {
 		t.Errorf("expected focusedView %q after pressing '1', got %q", "Overdue", m2.focusedView)
 	}
@@ -377,10 +380,14 @@ func TestEscapeDismissesSummary(t *testing.T) {
 
 func TestEscapeExitsFocus(t *testing.T) {
 	m := testModel(testTasks(), testViews())
+	m.mode = modeFocused
 	m.focusedView = "Overdue"
 
 	updated, _ := sendSpecialKey(m, tea.KeyEscape)
 	m2 := updated.(Model)
+	if m2.mode != modeDashboard {
+		t.Errorf("expected modeDashboard after Esc, got %v", m2.mode)
+	}
 	if m2.focusedView != "" {
 		t.Errorf("expected focusedView %q after Esc, got %q", "", m2.focusedView)
 	}
@@ -1163,6 +1170,9 @@ func TestToggleResultMsgSuccess(t *testing.T) {
 func TestSetFocusedViewLocksKeys(t *testing.T) {
 	m := testModel(testTasks(), testViews())
 	m.SetFocusedView("Open")
+	if m.mode != modeFocused {
+		t.Errorf("mode = %v, want modeFocused", m.mode)
+	}
 	if !m.viewLocked {
 		t.Error("viewLocked should be true")
 	}
@@ -1177,6 +1187,9 @@ func TestSetFocusedViewLocksKeys(t *testing.T) {
 	}
 	updated, _ := sendSpecialKey(m, tea.KeyEscape)
 	m2 := updated.(Model)
+	if m2.mode != modeFocused {
+		t.Errorf("mode = %v, want modeFocused (locked)", m2.mode)
+	}
 	if m2.focusedView != "Open" {
 		t.Errorf("focusedView = %q, want 'Open' (locked)", m2.focusedView)
 	}
@@ -1298,10 +1311,14 @@ func TestEscapePriorityChain(t *testing.T) {
 	if m3.mode != modeDashboard {
 		t.Errorf("mode = %v, want modeDashboard after escape", m3.mode)
 	}
+	m3.mode = modeFocused
 	m3.focusedView = "Open"
 	m3.viewLocked = false
 	updated, _ = sendSpecialKey(m3, tea.KeyEscape)
 	m4 := updated.(Model)
+	if m4.mode != modeDashboard {
+		t.Errorf("mode = %v, want modeDashboard after escape from focused", m4.mode)
+	}
 	if m4.focusedView != "" {
 		t.Errorf("focusedView = %q, want empty after escape", m4.focusedView)
 	}

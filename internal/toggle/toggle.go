@@ -21,15 +21,27 @@ var (
 var completedTagRe = regexp.MustCompile(`\s*@completed(\([^)]*\))?(?:\s|$)`)
 var hiddenTagRe = regexp.MustCompile(`\s*@hidden(?:\s|$)`)
 
-// fileMu provides per-file locking to prevent concurrent mutations from racing.
-var fileMu sync.Map // map[string]*sync.Mutex
-
-func lockFile(path string) *sync.Mutex {
-	v, _ := fileMu.LoadOrStore(path, &sync.Mutex{})
-	mu := v.(*sync.Mutex)
-	mu.Lock()
-	return mu
+// fileMutexMap provides type-safe per-file locking to prevent concurrent
+// mutations from racing. Each file path gets its own mutex so that operations
+// on different files proceed in parallel.
+type fileMutexMap struct {
+	mu sync.Mutex
+	m  map[string]*sync.Mutex
 }
+
+func (fm *fileMutexMap) lock(path string) *sync.Mutex {
+	fm.mu.Lock()
+	fileMu, ok := fm.m[path]
+	if !ok {
+		fileMu = &sync.Mutex{}
+		fm.m[path] = fileMu
+	}
+	fm.mu.Unlock()
+	fileMu.Lock()
+	return fileMu
+}
+
+var fileLocks = fileMutexMap{m: make(map[string]*sync.Mutex)}
 
 // mutateFile reads a file, calls mutate on the target line, verifies the file
 // wasn't modified externally, and atomically writes the result. This is the
@@ -38,7 +50,7 @@ func mutateFile(ctx context.Context, filePath string, line int, mutate func(stri
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	mu := lockFile(filePath)
+	mu := fileLocks.lock(filePath)
 	defer mu.Unlock()
 
 	lines, err := readLines(filePath)
