@@ -49,7 +49,7 @@ type CustomBinding struct {
 	Key   string
 	View  string // non-empty = focus this view by title
 	Query string // non-empty = run this query in all-tasks mode
-	Sort  string // sort order for query mode (default "file", not yet applied)
+	Sort  string // sort order for query mode (default "file")
 }
 
 type rawKeybindings struct {
@@ -391,7 +391,6 @@ tag_colors:
 #   quit: ["q", "ctrl+c"]
 #
 #   # Custom shortcuts (replaces 1-9 focus keys when defined)
-#   # Note: custom sort is not yet applied (uses default file sort)
 #   custom:
 #     - key: "o"
 #       view: "Overdue"          # focus a dashboard view by title

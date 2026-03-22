@@ -35,19 +35,26 @@
 ## v1.7.2 — March 22, 2026: Code Quality & Refactoring
 
 **Model invariants:**
-- `NewTask()` constructor and `AddTag()` method enforce `LowerText` and `TagSet` invariants at construction time
+- `NewTask()` constructor and `AddTag()` method enforce `LowerText` and `tagSet` invariants at construction time
+- Unexported `tagSet` field — callers can no longer mutate the tag index directly, preventing `Tags`/`tagSet` drift
+- Added `TaskWith()` constructor for struct-literal style construction with automatic `tagSet` initialization
 - Parser uses `NewTask`/`AddTag` instead of manual struct assembly
 
 **CLI refactoring:**
 - Extracted `cliFlags` struct with `parseFlags()` and `validate()` methods — `run()` drops from ~170 to ~60 lines
 - Extracted `applyScope()` and `runScopedQuery()` helpers for clearer separation of concerns
 
+**Toggle improvements:**
+- Encapsulated per-file locks in a `Toggler` struct — `NewToggler()` creates isolated instances for parallel test cases; package-level functions delegate to a default instance
+- `writeLines` now uses `os.CreateTemp` for atomic writes instead of a fixed temp filename, preventing clobber between concurrent processes
+
 **TUI improvements:**
+- Extracted task actions (`openEditor`, `toggleTask`, `toggleHiddenTag`) from `keys.go` into `actions.go` — `keys.go` is now purely key dispatch
 - Deduplicated navigation and task-action keys into shared `handleCursorMovement()` and `handleTaskAction()` helpers
 - Extracted `filterTasks()` helper to deduplicate the filter application pattern between single-section and dashboard rebuilds
 - `applySubstringFilter` now uses pre-computed `task.LowerText` instead of recomputing `strings.ToLower` on every keypress
 - Custom key bindings now use O(1) map lookup instead of O(n) loop per keypress
-- Custom binding `sort` field now applies the requested sort order (was a TODO)
+- Custom binding `sort` field now applies the requested sort order
 - Model struct fields organized into documented logical groups
 
 **Query DSL:**

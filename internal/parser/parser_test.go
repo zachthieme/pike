@@ -1,9 +1,10 @@
 package parser
 
 import (
-	"github.com/zachthieme/pike/internal/model"
 	"testing"
 	"time"
+
+	"github.com/zachthieme/pike/internal/model"
 )
 
 func TestNormalizeDate(t *testing.T) {

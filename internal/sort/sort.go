@@ -5,8 +5,9 @@ import (
 	"cmp"
 	"fmt"
 	"slices"
-	"github.com/zachthieme/pike/internal/model"
 	"time"
+
+	"github.com/zachthieme/pike/internal/model"
 )
 
 // ValidOrders is the set of recognized sort order names.

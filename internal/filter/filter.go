@@ -2,11 +2,12 @@
 package filter
 
 import (
+	"time"
+
 	"github.com/zachthieme/pike/internal/config"
 	"github.com/zachthieme/pike/internal/model"
 	"github.com/zachthieme/pike/internal/query"
 	tasksort "github.com/zachthieme/pike/internal/sort"
-	"time"
 )
 
 // ViewResult holds the filtered and sorted tasks for a single view.

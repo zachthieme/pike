@@ -1,9 +1,10 @@
 package query
 
 import (
-	"github.com/zachthieme/pike/internal/model"
 	"strings"
 	"time"
+
+	"github.com/zachthieme/pike/internal/model"
 )
 
 // Eval evaluates an AST node against a task, returning true if the task matches.

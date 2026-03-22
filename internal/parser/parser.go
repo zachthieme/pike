@@ -3,10 +3,11 @@ package parser
 
 import (
 	"fmt"
-	"github.com/zachthieme/pike/internal/model"
 	"regexp"
 	"strings"
 	"time"
+
+	"github.com/zachthieme/pike/internal/model"
 )
 
 var (
