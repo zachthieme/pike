@@ -14,10 +14,10 @@
         pikeVersion = "1.7.2";
 
         hashes = {
-          x86_64-linux = "sha256-aGFpF1eIlJ44tu8UR/hRKotHTOs2ssiy/jVXEJZO+o4=";
-          aarch64-linux = "sha256-s0QdLiDjGLkFVMDZD3U3xAmW5Mb/b17naFn03FsCVrk=";
-          x86_64-darwin = "sha256-YBh3PNEh4+/HT6VaBaMCU6i2UITeMtv4NfdF/5PFkpU=";
-          aarch64-darwin = "sha256-JdzbZgu7UNW37bLzu3hV45FV5TUQ936zXvhAnKPzIuA=";
+          x86_64-linux = "sha256-VLZvVTNWXadPhK+aj5hrHSng7zR0aDU4VpplsM9bokw=";
+          aarch64-linux = "sha256-PTQ+AJ7zcYXPyovzIImOvTdk46HT3KIrggunSHOwLeY=";
+          x86_64-darwin = "sha256-3Q3oVvPlNt0I4zevWGXwxStaGEUS7aVm49zH7xy/T2g=";
+          aarch64-darwin = "sha256-LVsaXNuBXcfK75/bTwzbhifUj1JDtGWxYNF94hLktUo=";
         };
 
         archMap = {
