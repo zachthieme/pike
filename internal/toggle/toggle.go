@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"sync"
@@ -29,6 +30,10 @@ type fileMutexMap struct {
 	m  map[string]*sync.Mutex
 }
 
+func newFileMutexMap() fileMutexMap {
+	return fileMutexMap{m: make(map[string]*sync.Mutex)}
+}
+
 func (fm *fileMutexMap) lock(path string) *sync.Mutex {
 	fm.mu.Lock()
 	fileMu, ok := fm.m[path]
@@ -41,16 +46,31 @@ func (fm *fileMutexMap) lock(path string) *sync.Mutex {
 	return fileMu
 }
 
-var fileLocks = fileMutexMap{m: make(map[string]*sync.Mutex)}
+// Toggler performs atomic file mutations with its own per-file lock map.
+// Use [NewToggler] to create an isolated instance (useful for testing),
+// or use the package-level [Complete], [Uncomplete], and [ToggleHidden]
+// functions which share a default instance.
+type Toggler struct {
+	locks fileMutexMap
+}
+
+// NewToggler creates a Toggler with its own lock state, enabling isolated
+// concurrent usage (e.g. parallel test cases).
+func NewToggler() *Toggler {
+	return &Toggler{locks: newFileMutexMap()}
+}
+
+// defaultToggler is the package-level instance used by the convenience functions.
+var defaultToggler = NewToggler()
 
 // mutateFile reads a file, calls mutate on the target line, verifies the file
 // wasn't modified externally, and atomically writes the result. This is the
 // shared plumbing for Complete, Uncomplete, and ToggleHidden.
-func mutateFile(ctx context.Context, filePath string, line int, mutate func(string) (string, error)) error {
+func (t *Toggler) mutateFile(ctx context.Context, filePath string, line int, mutate func(string) (string, error)) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	mu := fileLocks.lock(filePath)
+	mu := t.locks.lock(filePath)
 	defer mu.Unlock()
 
 	lines, err := readLines(filePath)
@@ -85,8 +105,8 @@ func mutateFile(ctx context.Context, filePath string, line int, mutate func(stri
 // Complete marks an open checkbox task as completed by modifying the source file.
 // Replaces - [ ] with - [x] and appends @completed(YYYY-MM-DD).
 // Returns an error if the line doesn't contain - [ ] (stale data).
-func Complete(ctx context.Context, filePath string, line int, date time.Time) error {
-	return mutateFile(ctx, filePath, line, func(l string) (string, error) {
+func (t *Toggler) Complete(ctx context.Context, filePath string, line int, date time.Time) error {
+	return t.mutateFile(ctx, filePath, line, func(l string) (string, error) {
 		if !strings.Contains(l, "- [ ]") {
 			return "", fmt.Errorf("%w: line %d does not contain '- [ ]'", ErrStaleData, line)
 		}
@@ -99,8 +119,8 @@ func Complete(ctx context.Context, filePath string, line int, date time.Time) er
 // Uncomplete marks a completed checkbox task as open by modifying the source file.
 // Replaces - [x]/- [X] with - [ ] and removes @completed(...) tag.
 // Returns an error if the line doesn't contain - [x] or - [X] (stale data).
-func Uncomplete(ctx context.Context, filePath string, line int) error {
-	return mutateFile(ctx, filePath, line, func(l string) (string, error) {
+func (t *Toggler) Uncomplete(ctx context.Context, filePath string, line int) error {
+	return t.mutateFile(ctx, filePath, line, func(l string) (string, error) {
 		if !strings.Contains(l, "- [x]") && !strings.Contains(l, "- [X]") {
 			return "", fmt.Errorf("%w: line %d does not contain '- [x]'", ErrStaleData, line)
 		}
@@ -118,8 +138,8 @@ func Uncomplete(ctx context.Context, filePath string, line int) error {
 }
 
 // ToggleHidden adds @hidden to a task line if absent, or removes it if present.
-func ToggleHidden(ctx context.Context, filePath string, line int) error {
-	return mutateFile(ctx, filePath, line, func(l string) (string, error) {
+func (t *Toggler) ToggleHidden(ctx context.Context, filePath string, line int) error {
+	return t.mutateFile(ctx, filePath, line, func(l string) (string, error) {
 		if strings.Contains(l, "@hidden") {
 			l = hiddenTagRe.ReplaceAllStringFunc(l, func(match string) string {
 				if strings.HasSuffix(match, " ") || strings.HasSuffix(match, "\t") {
@@ -133,6 +153,21 @@ func ToggleHidden(ctx context.Context, filePath string, line int) error {
 		}
 		return l, nil
 	})
+}
+
+// Complete marks an open checkbox task as completed using the default Toggler.
+func Complete(ctx context.Context, filePath string, line int, date time.Time) error {
+	return defaultToggler.Complete(ctx, filePath, line, date)
+}
+
+// Uncomplete marks a completed checkbox task as open using the default Toggler.
+func Uncomplete(ctx context.Context, filePath string, line int) error {
+	return defaultToggler.Uncomplete(ctx, filePath, line)
+}
+
+// ToggleHidden toggles @hidden on a task using the default Toggler.
+func ToggleHidden(ctx context.Context, filePath string, line int) error {
+	return defaultToggler.ToggleHidden(ctx, filePath, line)
 }
 
 // verifyUnmodified re-reads the file and checks that the target line hasn't
@@ -164,12 +199,28 @@ func readLines(path string) ([]string, error) {
 // writeLines writes lines atomically using write-to-temp + rename.
 func writeLines(path string, lines []string, perm os.FileMode) error {
 	content := strings.Join(lines, "\n") + "\n"
-	tmp := path + ".pike-tmp"
-	if err := os.WriteFile(tmp, []byte(content), perm); err != nil {
+	dir := filepath.Dir(path)
+	tmp, err := os.CreateTemp(dir, ".pike-tmp-*")
+	if err != nil {
 		return err
 	}
-	if err := os.Rename(tmp, path); err != nil {
-		_ = os.Remove(tmp) // best-effort cleanup; rename error takes precedence
+	tmpPath := tmp.Name()
+	if _, err := tmp.Write([]byte(content)); err != nil {
+		tmp.Close()        //nolint:errcheck // cleaning up on error
+		os.Remove(tmpPath) //nolint:errcheck // cleaning up on error
+		return err
+	}
+	if err := tmp.Chmod(perm); err != nil {
+		tmp.Close()        //nolint:errcheck // cleaning up on error
+		os.Remove(tmpPath) //nolint:errcheck // cleaning up on error
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		os.Remove(tmpPath) //nolint:errcheck // cleaning up on error
+		return err
+	}
+	if err := os.Rename(tmpPath, path); err != nil {
+		os.Remove(tmpPath) //nolint:errcheck // cleaning up on error; rename error takes precedence
 		return err
 	}
 	return nil
