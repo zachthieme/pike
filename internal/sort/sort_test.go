@@ -1,7 +1,7 @@
 package sort
 
 import (
-	"pike/internal/model"
+	"github.com/zachthieme/pike/internal/model"
 	"testing"
 	"time"
 )

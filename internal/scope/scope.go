@@ -7,7 +7,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"pike/internal/model"
+	"github.com/zachthieme/pike/internal/model"
 )
 
 // Identity returns match targets derived from a markdown filename.

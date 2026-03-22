@@ -7,8 +7,8 @@ import (
 	"io"
 	"strings"
 
-	"pike/internal/model"
-	"pike/internal/style"
+	"github.com/zachthieme/pike/internal/model"
+	"github.com/zachthieme/pike/internal/style"
 )
 
 // FormatTask formats a single task for non-interactive output.

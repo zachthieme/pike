@@ -2,10 +2,10 @@
 package filter
 
 import (
-	"pike/internal/config"
-	"pike/internal/model"
-	"pike/internal/query"
-	tasksort "pike/internal/sort"
+	"github.com/zachthieme/pike/internal/config"
+	"github.com/zachthieme/pike/internal/model"
+	"github.com/zachthieme/pike/internal/query"
+	tasksort "github.com/zachthieme/pike/internal/sort"
 	"time"
 )
 

@@ -11,7 +11,7 @@ import (
 	"strconv"
 	"strings"
 
-	"pike/internal/model"
+	"github.com/zachthieme/pike/internal/model"
 )
 
 // StyleFunc applies a color to a string. Callers provide the implementation

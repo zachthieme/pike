@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	"pike/internal/filter"
-	"pike/internal/model"
+	"github.com/zachthieme/pike/internal/filter"
+	"github.com/zachthieme/pike/internal/model"
 
 	"github.com/charmbracelet/lipgloss"
 )

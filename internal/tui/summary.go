@@ -6,7 +6,7 @@ import (
 
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/lipgloss"
-	"pike/internal/config"
+	"github.com/zachthieme/pike/internal/config"
 )
 
 // RenderSummary renders a full-screen summary with version, description, and keybindings.

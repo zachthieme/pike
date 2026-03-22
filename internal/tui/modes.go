@@ -5,10 +5,10 @@ import (
 	"strings"
 	"time"
 
-	"pike/internal/filter"
-	"pike/internal/model"
-	"pike/internal/query"
-	tasksort "pike/internal/sort"
+	"github.com/zachthieme/pike/internal/filter"
+	"github.com/zachthieme/pike/internal/model"
+	"github.com/zachthieme/pike/internal/query"
+	tasksort "github.com/zachthieme/pike/internal/sort"
 
 	tea "github.com/charmbracelet/bubbletea"
 )

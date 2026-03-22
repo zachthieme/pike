@@ -1,8 +1,8 @@
 package tui
 
 import (
-	"pike/internal/config"
-	"pike/internal/model"
+	"github.com/zachthieme/pike/internal/config"
+	"github.com/zachthieme/pike/internal/model"
 )
 
 // RefreshMsg triggers a re-scan of task files.

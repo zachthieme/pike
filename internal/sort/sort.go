@@ -5,7 +5,7 @@ import (
 	"cmp"
 	"fmt"
 	"slices"
-	"pike/internal/model"
+	"github.com/zachthieme/pike/internal/model"
 	"time"
 )
 

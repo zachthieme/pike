@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"pike/internal/model"
+	"github.com/zachthieme/pike/internal/model"
 )
 
 var ctx = context.Background()

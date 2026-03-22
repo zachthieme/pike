@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"pike/internal/config"
-	"pike/internal/model"
+	"github.com/zachthieme/pike/internal/config"
+	"github.com/zachthieme/pike/internal/model"
 )
 
 // makeBenchTasks generates n tasks with varying tags and states.

@@ -1,8 +1,8 @@
 package tui
 
 import (
-	"pike/internal/filter"
-	"pike/internal/model"
+	"github.com/zachthieme/pike/internal/filter"
+	"github.com/zachthieme/pike/internal/model"
 )
 
 // pageScrollChrome is the approximate number of non-task lines on screen:

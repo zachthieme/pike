@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"pike/internal/model"
+	"github.com/zachthieme/pike/internal/model"
 )
 
 func writeBenchFiles(b *testing.B, dir string, count int) {

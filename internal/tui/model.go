@@ -4,9 +4,9 @@ package tui
 import (
 	"time"
 
-	"pike/internal/config"
-	"pike/internal/filter"
-	"pike/internal/model"
+	"github.com/zachthieme/pike/internal/config"
+	"github.com/zachthieme/pike/internal/filter"
+	"github.com/zachthieme/pike/internal/model"
 
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"

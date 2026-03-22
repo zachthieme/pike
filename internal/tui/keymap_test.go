@@ -1,7 +1,7 @@
 package tui
 
 import (
-	"pike/internal/config"
+	"github.com/zachthieme/pike/internal/config"
 	"slices"
 	"testing"
 )

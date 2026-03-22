@@ -3,8 +3,8 @@ package tui
 import (
 	"time"
 
-	"pike/internal/filter"
-	"pike/internal/model"
+	"github.com/zachthieme/pike/internal/filter"
+	"github.com/zachthieme/pike/internal/model"
 )
 
 // startOfWeek returns midnight of the most recent occurrence of the given weekday.

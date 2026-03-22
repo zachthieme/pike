@@ -18,13 +18,13 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"pike/internal/config"
-	"pike/internal/filter"
-	"pike/internal/model"
-	"pike/internal/render"
-	"pike/internal/scanner"
-	"pike/internal/scope"
-	"pike/internal/tui"
+	"github.com/zachthieme/pike/internal/config"
+	"github.com/zachthieme/pike/internal/filter"
+	"github.com/zachthieme/pike/internal/model"
+	"github.com/zachthieme/pike/internal/render"
+	"github.com/zachthieme/pike/internal/scanner"
+	"github.com/zachthieme/pike/internal/scope"
+	"github.com/zachthieme/pike/internal/tui"
 )
 
 var version = "dev"

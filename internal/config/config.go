@@ -13,7 +13,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	tasksort "pike/internal/sort"
+	tasksort "github.com/zachthieme/pike/internal/sort"
 )
 
 // Config holds all application configuration.

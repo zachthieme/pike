@@ -9,9 +9,9 @@ import (
 	"testing"
 	"time"
 
-	"pike/internal/filter"
-	"pike/internal/render"
-	"pike/internal/scanner"
+	"github.com/zachthieme/pike/internal/filter"
+	"github.com/zachthieme/pike/internal/render"
+	"github.com/zachthieme/pike/internal/scanner"
 )
 
 // runPipeline executes the scan→filter→render pipeline and returns the output.

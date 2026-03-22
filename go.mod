@@ -1,4 +1,4 @@
-module pike
+module github.com/zachthieme/pike
 
 go 1.25.5
 

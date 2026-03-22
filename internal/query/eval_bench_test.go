@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"pike/internal/model"
+	"github.com/zachthieme/pike/internal/model"
 )
 
 var benchNow = time.Date(2026, 3, 16, 0, 0, 0, 0, time.UTC)

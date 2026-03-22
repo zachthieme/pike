@@ -3,7 +3,7 @@ package style
 import (
 	"testing"
 
-	"pike/internal/model"
+	"github.com/zachthieme/pike/internal/model"
 )
 
 func noopStyleFunc(text, color string) string {

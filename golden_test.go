@@ -11,12 +11,12 @@ import (
 	"testing"
 	"time"
 
-	"pike/internal/config"
-	"pike/internal/filter"
-	"pike/internal/model"
-	"pike/internal/parser"
-	"pike/internal/render"
-	"pike/internal/style"
+	"github.com/zachthieme/pike/internal/config"
+	"github.com/zachthieme/pike/internal/filter"
+	"github.com/zachthieme/pike/internal/model"
+	"github.com/zachthieme/pike/internal/parser"
+	"github.com/zachthieme/pike/internal/render"
+	"github.com/zachthieme/pike/internal/style"
 )
 
 var update = flag.Bool("update", false, "update golden files")

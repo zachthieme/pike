@@ -4,7 +4,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/bubbles/key"
-	"pike/internal/config"
+	"github.com/zachthieme/pike/internal/config"
 )
 
 // KeyMap defines the key bindings for the TUI.

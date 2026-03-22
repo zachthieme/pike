@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"pike/internal/model"
+	"github.com/zachthieme/pike/internal/model"
 )
 
 func BenchmarkFilter(b *testing.B) {

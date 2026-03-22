@@ -13,8 +13,8 @@ import (
 
 	"github.com/bmatcuk/doublestar/v4"
 
-	"pike/internal/model"
-	"pike/internal/parser"
+	"github.com/zachthieme/pike/internal/model"
+	"github.com/zachthieme/pike/internal/parser"
 )
 
 // maxLineSize is the maximum length of a single markdown line the scanner will

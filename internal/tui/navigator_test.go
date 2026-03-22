@@ -3,8 +3,8 @@ package tui
 import (
 	"testing"
 
-	"pike/internal/filter"
-	"pike/internal/model"
+	"github.com/zachthieme/pike/internal/filter"
+	"github.com/zachthieme/pike/internal/model"
 )
 
 func makeSections(counts ...int) []filter.ViewResult {

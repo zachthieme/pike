@@ -3,7 +3,7 @@ package parser
 
 import (
 	"fmt"
-	"pike/internal/model"
+	"github.com/zachthieme/pike/internal/model"
 	"regexp"
 	"strings"
 	"time"

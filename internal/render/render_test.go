@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"pike/internal/model"
+	"github.com/zachthieme/pike/internal/model"
 )
 
 const (
