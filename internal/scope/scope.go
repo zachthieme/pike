@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"strings"
+	"unicode/utf8"
 
 	"pike/internal/model"
 )
@@ -41,8 +42,8 @@ func Identity(filename string) []string {
 	if strings.Contains(base, "-") {
 		words := strings.Split(base, "-")
 		for i, w := range words {
-			if len(w) > 0 {
-				words[i] = strings.ToUpper(w[:1]) + w[1:]
+			if r, size := utf8.DecodeRuneInString(w); size > 0 {
+				words[i] = strings.ToUpper(string(r)) + w[size:]
 			}
 		}
 		add(strings.Join(words, " "))
@@ -54,8 +55,8 @@ func Identity(filename string) []string {
 
 	// Title case for single words (capitalize first letter).
 	if !strings.Contains(base, " ") && !strings.Contains(base, "-") {
-		if len(base) > 0 {
-			add(strings.ToUpper(base[:1]) + base[1:])
+		if r, size := utf8.DecodeRuneInString(base); size > 0 {
+			add(strings.ToUpper(string(r)) + base[size:])
 		}
 	}
 
@@ -99,9 +100,9 @@ func Filter(tasks []model.Task, identities []string, excludeRelPath string) []mo
 	return result
 }
 
-// Match returns true if any identity variant appears in task.Text
+// matchIdentities returns true if any identity variant appears in task.Text
 // (case-insensitive substring match).
-func Match(task *model.Task, identities []string) bool {
+func matchIdentities(task *model.Task, identities []string) bool {
 	lowered := make([]string, len(identities))
 	for i, id := range identities {
 		lowered[i] = strings.ToLower(id)
@@ -111,7 +112,7 @@ func Match(task *model.Task, identities []string) bool {
 
 // match is the inner matching function that expects pre-lowered identities.
 func match(task *model.Task, loweredIdentities []string) bool {
-	lower := strings.ToLower(task.Text)
+	lower := task.LowerText
 	for _, id := range loweredIdentities {
 		if strings.Contains(lower, id) {
 			return true

@@ -1,6 +1,7 @@
 package scope
 
 import (
+	"strings"
 	"testing"
 
 	"pike/internal/model"
@@ -78,7 +79,7 @@ func TestIdentity(t *testing.T) {
 	}
 }
 
-func TestMatch(t *testing.T) {
+func TestMatchIdentities(t *testing.T) {
 	bobIDs := Identity("Bob Smith.md")
 
 	tests := []struct {
@@ -124,10 +125,10 @@ func TestMatch(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			task := &model.Task{Text: tt.text}
-			got := Match(task, bobIDs)
+			task := &model.Task{Text: tt.text, LowerText: strings.ToLower(tt.text)}
+			got := matchIdentities(task, bobIDs)
 			if got != tt.want {
-				t.Errorf("Match(%q, bobIDs) = %v, want %v", tt.text, got, tt.want)
+				t.Errorf("matchIdentities(%q, bobIDs) = %v, want %v", tt.text, got, tt.want)
 			}
 		})
 	}
@@ -137,8 +138,8 @@ func TestMatch(t *testing.T) {
 // short filenames will substring-match longer words.
 func TestMatchShortNameFalsePositive(t *testing.T) {
 	alIDs := Identity("Al.md")
-	task := &model.Task{Text: "talk to Albert about the project"}
-	if !Match(task, alIDs) {
+	task := &model.Task{Text: "talk to Albert about the project", LowerText: "talk to albert about the project"}
+	if !matchIdentities(task, alIDs) {
 		t.Error("expected short name 'Al' to match 'Albert' (known substring trade-off)")
 	}
 }
@@ -185,10 +186,10 @@ func TestRelPath(t *testing.T) {
 
 func TestFilter(t *testing.T) {
 	tasks := []model.Task{
-		{Text: "talk to [[Bob Smith]] @talk", File: "projects/alpha.md", State: model.Open},
-		{Text: "unrelated task @today", File: "projects/beta.md", State: model.Open},
-		{Text: "@delegated([[bob-smith]]) do thing", File: "projects/gamma.md", State: model.Open},
-		{Text: "Bob Smith's own task", File: "people/Bob Smith.md", State: model.Open},
+		{Text: "talk to [[Bob Smith]] @talk", LowerText: "talk to [[bob smith]] @talk", File: "projects/alpha.md", State: model.Open},
+		{Text: "unrelated task @today", LowerText: "unrelated task @today", File: "projects/beta.md", State: model.Open},
+		{Text: "@delegated([[bob-smith]]) do thing", LowerText: "@delegated([[bob-smith]]) do thing", File: "projects/gamma.md", State: model.Open},
+		{Text: "Bob Smith's own task", LowerText: "bob smith's own task", File: "people/Bob Smith.md", State: model.Open},
 	}
 
 	ids := Identity("Bob Smith.md")
@@ -208,7 +209,7 @@ func TestFilter(t *testing.T) {
 
 func TestFilterEmpty(t *testing.T) {
 	tasks := []model.Task{
-		{Text: "unrelated task", File: "foo.md", State: model.Open},
+		{Text: "unrelated task", LowerText: "unrelated task", File: "foo.md", State: model.Open},
 	}
 	ids := Identity("Bob Smith.md")
 	got := Filter(tasks, ids, "people/Bob Smith.md")
