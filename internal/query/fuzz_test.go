@@ -6,11 +6,12 @@ import (
 	"time"
 )
 
-var fuzzTasks = []*model.Task{
-	{Text: "open task @due(2026-03-16) @today", State: model.Open, Tags: []model.Tag{{Name: "due", Value: "2026-03-16"}, {Name: "today"}}, TagSet: map[string]bool{"due": true, "today": true}, Due: timePtr(time.Date(2026, 3, 16, 0, 0, 0, 0, time.UTC))},
-	{Text: "completed task @completed(2026-03-10)", State: model.Completed, Tags: []model.Tag{{Name: "completed", Value: "2026-03-10"}}, TagSet: map[string]bool{"completed": true}, Completed: timePtr(time.Date(2026, 3, 10, 0, 0, 0, 0, time.UTC))},
-	{Text: "plain task @risk", State: model.Open, Tags: []model.Tag{{Name: "risk"}}, TagSet: map[string]bool{"risk": true}},
-}
+var fuzzTasks = func() []*model.Task {
+	t1 := model.TaskWith(model.Task{Text: "open task @due(2026-03-16) @today", State: model.Open, Tags: []model.Tag{{Name: "due", Value: "2026-03-16"}, {Name: "today"}}, Due: timePtr(time.Date(2026, 3, 16, 0, 0, 0, 0, time.UTC))})
+	t2 := model.TaskWith(model.Task{Text: "completed task @completed(2026-03-10)", State: model.Completed, Tags: []model.Tag{{Name: "completed", Value: "2026-03-10"}}, Completed: timePtr(time.Date(2026, 3, 10, 0, 0, 0, 0, time.UTC))})
+	t3 := model.TaskWith(model.Task{Text: "plain task @risk", State: model.Open, Tags: []model.Tag{{Name: "risk"}}})
+	return []*model.Task{&t1, &t2, &t3}
+}()
 
 func timePtr(t time.Time) *time.Time { return &t }
 

@@ -18,19 +18,9 @@ func timePtr(t time.Time) *time.Time {
 
 var testNow = time.Date(2026, 3, 13, 0, 0, 0, 0, time.UTC)
 
-// taskWithTagSet creates a Task and populates TagSet from Tags.
-func taskWithTagSet(t model.Task) model.Task {
-	t.LowerText = strings.ToLower(t.Text)
-	t.TagSet = make(map[string]bool, len(t.Tags))
-	for _, tag := range t.Tags {
-		t.TagSet[tag.Name] = true
-	}
-	return t
-}
-
 func testTasks() []model.Task {
 	return []model.Task{
-		taskWithTagSet(model.Task{
+		model.TaskWith(model.Task{
 			Text:  "Overdue task @due(2026-03-10)",
 			State: model.Open,
 			File:  "notes/todo.md",
@@ -38,14 +28,14 @@ func testTasks() []model.Task {
 			Tags:  []model.Tag{{Name: "due", Value: "2026-03-10"}},
 			Due:   timePtr(time.Date(2026, 3, 10, 0, 0, 0, 0, time.UTC)),
 		}),
-		taskWithTagSet(model.Task{
+		model.TaskWith(model.Task{
 			Text:  "Today task @today",
 			State: model.Open,
 			File:  "notes/todo.md",
 			Line:  2,
 			Tags:  []model.Tag{{Name: "today"}},
 		}),
-		taskWithTagSet(model.Task{
+		model.TaskWith(model.Task{
 			Text:  "Future task @due(2026-03-20)",
 			State: model.Open,
 			File:  "notes/todo.md",
@@ -53,7 +43,7 @@ func testTasks() []model.Task {
 			Tags:  []model.Tag{{Name: "due", Value: "2026-03-20"}},
 			Due:   timePtr(time.Date(2026, 3, 20, 0, 0, 0, 0, time.UTC)),
 		}),
-		taskWithTagSet(model.Task{
+		model.TaskWith(model.Task{
 			Text:      "Done task @completed(2026-03-12)",
 			State:     model.Completed,
 			File:      "notes/todo.md",
@@ -251,9 +241,9 @@ func TestRecentlyCompletedUsesQueryMode(t *testing.T) {
 
 func TestSubstringFilterWithTags(t *testing.T) {
 	tasks := []model.Task{
-		taskWithTagSet(model.Task{Text: "Fix bug @delegated to bob", State: model.Open, File: "t.md", Line: 1,
+		model.TaskWith(model.Task{Text: "Fix bug @delegated to bob", State: model.Open, File: "t.md", Line: 1,
 			Tags: []model.Tag{{Name: "delegated"}}, HasCheckbox: true}),
-		taskWithTagSet(model.Task{Text: "Write docs", State: model.Open, File: "t.md", Line: 2, HasCheckbox: true}),
+		model.TaskWith(model.Task{Text: "Write docs", State: model.Open, File: "t.md", Line: 2, HasCheckbox: true}),
 	}
 	views := []config.ViewConfig{
 		{Title: "All", Query: "open", Sort: "file", Color: "green"},
@@ -1113,7 +1103,7 @@ func TestScanResultMsgError(t *testing.T) {
 func TestScanResultMsgInTagSearchMode(t *testing.T) {
 	m := testModel(testTasks(), testViews())
 	m.mode = modeTagSearch
-	newTasks := append(testTasks(), taskWithTagSet(model.Task{
+	newTasks := append(testTasks(), model.TaskWith(model.Task{
 		Text: "new @newtag", State: model.Open, File: "new.md", Line: 1,
 		Tags: []model.Tag{{Name: "newtag"}},
 	}))
@@ -1246,8 +1236,8 @@ func TestEmptySectionsSkipped(t *testing.T) {
 func TestKeyPressesInAllTasksMode(t *testing.T) {
 	// Use tasks with HasCheckbox=true so they appear in modeAllTasks.
 	tasks := []model.Task{
-		taskWithTagSet(model.Task{Text: "Task A", State: model.Open, File: "t.md", Line: 1, HasCheckbox: true}),
-		taskWithTagSet(model.Task{Text: "Task B", State: model.Open, File: "t.md", Line: 2, HasCheckbox: true}),
+		model.TaskWith(model.Task{Text: "Task A", State: model.Open, File: "t.md", Line: 1, HasCheckbox: true}),
+		model.TaskWith(model.Task{Text: "Task B", State: model.Open, File: "t.md", Line: 2, HasCheckbox: true}),
 	}
 	m := testModel(tasks, testViews())
 	updated, _ := sendKey(m, "a")
@@ -1264,7 +1254,7 @@ func TestKeyPressesInAllTasksMode(t *testing.T) {
 
 func TestToggleNoCheckboxNoop(t *testing.T) {
 	tasks := []model.Task{
-		taskWithTagSet(model.Task{
+		model.TaskWith(model.Task{
 			Text: "plain bullet @today", State: model.Open,
 			File: "test.md", Line: 1, HasCheckbox: false,
 			Tags: []model.Tag{{Name: "today"}},

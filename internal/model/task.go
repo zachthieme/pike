@@ -32,8 +32,8 @@ type Tag struct {
 }
 
 // Task is a single item parsed from a markdown checkbox or tagged bullet line.
-// Use [NewTask] to construct and [AddTag] to append tags so that derived fields
-// (LowerText, TagSet) stay consistent.
+// Use [NewTask] or [TaskWith] to construct and [AddTag] to append tags so that
+// derived fields (LowerText, tagSet) stay consistent.
 type Task struct {
 	Text        string          // Full line text after "- [ ] " / "- [x] " or "- "
 	LowerText   string          // Pre-lowered Text for efficient case-insensitive matching
@@ -41,13 +41,13 @@ type Task struct {
 	File        string          // Relative path from notes_dir
 	Line        int             // 1-based line number
 	Tags        []Tag           // Parsed @tag tokens
-	TagSet      map[string]bool // O(1) tag lookup by name; use NewTask+AddTag to maintain
+	tagSet      map[string]bool // O(1) tag lookup by name; use NewTask+AddTag to maintain
 	Due         *time.Time      // Parsed from @due(YYYY-MM-DD), nil if absent
 	Completed   *time.Time      // Parsed from @completed(YYYY-MM-DD), nil if absent
 	HasCheckbox bool            // true if line had - [ ] or - [x], false for plain bullets
 }
 
-// NewTask creates a Task with pre-computed LowerText and an initialized TagSet.
+// NewTask creates a Task with pre-computed LowerText and an initialized tagSet.
 // Use this instead of struct literals to ensure invariants are maintained.
 func NewTask(text, file string, line int, state TaskState, hasCheckbox bool) *Task {
 	return &Task{
@@ -57,14 +57,29 @@ func NewTask(text, file string, line int, state TaskState, hasCheckbox bool) *Ta
 		File:        file,
 		Line:        line,
 		HasCheckbox: hasCheckbox,
-		TagSet:      make(map[string]bool),
+		tagSet:      make(map[string]bool),
 	}
 }
 
-// AddTag appends a tag and updates the TagSet for O(1) lookup.
+// TaskWith constructs a Task from the given partial struct literal, ensuring
+// the tagSet is properly initialized from Tags. This allows struct-literal style
+// construction while maintaining invariants. Fields that are set on the input
+// (Text, File, Line, State, HasCheckbox, Tags, Due, Completed) are copied;
+// LowerText and tagSet are derived automatically.
+func TaskWith(partial Task) Task {
+	t := NewTask(partial.Text, partial.File, partial.Line, partial.State, partial.HasCheckbox)
+	for _, tag := range partial.Tags {
+		t.AddTag(tag)
+	}
+	t.Due = partial.Due
+	t.Completed = partial.Completed
+	return *t
+}
+
+// AddTag appends a tag and updates the tagSet for O(1) lookup.
 func (t *Task) AddTag(tag Tag) {
 	t.Tags = append(t.Tags, tag)
-	t.TagSet[tag.Name] = true
+	t.tagSet[tag.Name] = true
 }
 
 // SetText sets Text and pre-computes LowerText.
@@ -75,7 +90,7 @@ func (t *Task) SetText(text string) {
 
 // HasTag returns true if the task has a tag with the given name (O(1) lookup).
 func (t *Task) HasTag(name string) bool {
-	return t.TagSet[name]
+	return t.tagSet[name]
 }
 
 // Warning represents a non-fatal issue found during parsing.

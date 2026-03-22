@@ -10,20 +10,16 @@ import (
 var benchNow = time.Date(2026, 3, 16, 0, 0, 0, 0, time.UTC)
 
 func makeTask(text string, state model.TaskState, tags []model.Tag, due *time.Time) model.Task {
-	tagSet := make(map[string]bool)
-	for _, t := range tags {
-		tagSet[t.Name] = true
-	}
-	return model.Task{
+	t := model.TaskWith(model.Task{
 		Text:        text,
 		State:       state,
 		Tags:        tags,
-		TagSet:      tagSet,
 		Due:         due,
 		HasCheckbox: true,
 		File:        "bench.md",
 		Line:        1,
-	}
+	})
+	return t
 }
 
 var benchQueries = []struct {

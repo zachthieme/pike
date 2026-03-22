@@ -1,9 +1,10 @@
 package sort
 
 import (
-	"github.com/zachthieme/pike/internal/model"
 	"testing"
 	"time"
+
+	"github.com/zachthieme/pike/internal/model"
 )
 
 func date(y, m, d int) *time.Time {
@@ -223,11 +224,11 @@ func TestSort(t *testing.T) {
 
 func TestStablePartitionPinned(t *testing.T) {
 	tasks := []model.Task{
-		{Text: "unpinned-a", TagSet: map[string]bool{}},
-		{Text: "pinned-b", Tags: []model.Tag{{Name: "pin"}}, TagSet: map[string]bool{"pin": true}},
-		{Text: "unpinned-c", TagSet: map[string]bool{}},
-		{Text: "pinned-d", Tags: []model.Tag{{Name: "pin"}}, TagSet: map[string]bool{"pin": true}},
-		{Text: "unpinned-e", TagSet: map[string]bool{}},
+		model.TaskWith(model.Task{Text: "unpinned-a"}),
+		model.TaskWith(model.Task{Text: "pinned-b", Tags: []model.Tag{{Name: "pin"}}}),
+		model.TaskWith(model.Task{Text: "unpinned-c"}),
+		model.TaskWith(model.Task{Text: "pinned-d", Tags: []model.Tag{{Name: "pin"}}}),
+		model.TaskWith(model.Task{Text: "unpinned-e"}),
 	}
 
 	result := StablePartitionPinned(tasks)
@@ -245,8 +246,8 @@ func TestStablePartitionPinned(t *testing.T) {
 
 func TestStablePartitionPinnedNoPins(t *testing.T) {
 	tasks := []model.Task{
-		{Text: "a", TagSet: map[string]bool{}},
-		{Text: "b", TagSet: map[string]bool{}},
+		model.TaskWith(model.Task{Text: "a"}),
+		model.TaskWith(model.Task{Text: "b"}),
 	}
 
 	result := StablePartitionPinned(tasks)

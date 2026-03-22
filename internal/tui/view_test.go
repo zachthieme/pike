@@ -14,7 +14,7 @@ import (
 // viewTestTasks returns tasks with HasCheckbox set so all-tasks mode includes them.
 func viewTestTasks() []model.Task {
 	return []model.Task{
-		taskWithTagSet(model.Task{
+		model.TaskWith(model.Task{
 			Text:        "Overdue task @due(2026-03-10)",
 			State:       model.Open,
 			File:        "notes/todo.md",
@@ -23,7 +23,7 @@ func viewTestTasks() []model.Task {
 			Due:         timePtr(time.Date(2026, 3, 10, 0, 0, 0, 0, time.UTC)),
 			HasCheckbox: true,
 		}),
-		taskWithTagSet(model.Task{
+		model.TaskWith(model.Task{
 			Text:        "Today task @today",
 			State:       model.Open,
 			File:        "notes/todo.md",
@@ -31,7 +31,7 @@ func viewTestTasks() []model.Task {
 			Tags:        []model.Tag{{Name: "today"}},
 			HasCheckbox: true,
 		}),
-		taskWithTagSet(model.Task{
+		model.TaskWith(model.Task{
 			Text:        "Future task @due(2026-03-20)",
 			State:       model.Open,
 			File:        "notes/todo.md",
@@ -40,7 +40,7 @@ func viewTestTasks() []model.Task {
 			Due:         timePtr(time.Date(2026, 3, 20, 0, 0, 0, 0, time.UTC)),
 			HasCheckbox: true,
 		}),
-		taskWithTagSet(model.Task{
+		model.TaskWith(model.Task{
 			Text:        "Done task @completed(2026-03-12)",
 			State:       model.Completed,
 			File:        "notes/todo.md",

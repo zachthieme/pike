@@ -23,26 +23,23 @@ func makeBenchTasks(n int) []model.Task {
 		}
 
 		taskTags := []model.Tag{{Name: tags[i%len(tags)]}}
-		tagSet := map[string]bool{tags[i%len(tags)]: true}
 
 		var due *time.Time
 		if i%3 == 0 {
 			d := now.AddDate(0, 0, i%14-7)
 			due = &d
 			taskTags = append(taskTags, model.Tag{Name: "due", Value: d.Format("2006-01-02")})
-			tagSet["due"] = true
 		}
 
-		tasks[i] = model.Task{
+		tasks[i] = model.TaskWith(model.Task{
 			Text:        fmt.Sprintf("task %d do something important @%s", i, tags[i%len(tags)]),
 			State:       state,
 			File:        fmt.Sprintf("notes/file%d.md", i%10),
 			Line:        i + 1,
 			Tags:        taskTags,
-			TagSet:      tagSet,
 			Due:         due,
 			HasCheckbox: true,
-		}
+		})
 	}
 	return tasks
 }

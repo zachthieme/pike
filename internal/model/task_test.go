@@ -58,8 +58,8 @@ func TestNewTask(t *testing.T) {
 			if task.HasCheckbox != tt.hasCheckbox {
 				t.Errorf("HasCheckbox = %v, want %v", task.HasCheckbox, tt.hasCheckbox)
 			}
-			if task.TagSet == nil {
-				t.Error("TagSet should be initialized, got nil")
+			if task.tagSet == nil {
+				t.Error("tagSet should be initialized, got nil")
 			}
 		})
 	}
