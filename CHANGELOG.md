@@ -1,5 +1,22 @@
 # Changelog
 
+## v1.7.4 — March 22, 2026: Code Quality & API Surface
+
+**Doc comments:**
+- Added Go doc comments to exported types `TaskState`, `Tag`, and `Task` in the model package
+
+**Parser decomposition:**
+- Broke `ParseLine` into `matchLine` (regex matching, checkbox detection) and `extractTags` (tag parsing, date normalization, warning generation) — `ParseLine` is now a slim orchestrator
+
+**Interface abstraction:**
+- Added `TaskSource` interface to the scanner package (`Scan` + `Refresh`) — enables test doubles and alternative backends without coupling to filesystem scanning
+
+**TUI key handling:**
+- Extracted `handleFocusSectionKey` from `handleKeyDashboard` for the 1-9 section focus keys, following the same `(Model, Cmd, bool)` pattern as sibling handlers
+
+**TUI integration tests:**
+- Added 11 `View()` integration tests covering dashboard rendering (section headers, task text, markers, footer counts), focused mode, all-tasks mode, summary overlay, recently-completed mode, empty task sets, viewport sizing, and error display
+
 ## v1.7.3 — March 22, 2026: Explicit TUI State Machine
 
 **TUI state machine:**

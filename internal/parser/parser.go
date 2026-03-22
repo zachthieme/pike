@@ -36,42 +36,44 @@ func normalizeDate(s string) (string, bool) {
 	return normalized, true
 }
 
-// ParseLine parses a single line of text and returns a Task if the line
-// matches the task format, or nil if it does not.
-// Matches checkbox lines (- [ ] / - [x]) and plain bullet lines (- text)
-// that contain at least one @tag.
-// Also returns any non-fatal warnings encountered during parsing.
-func ParseLine(line string, file string, lineNum int) (*model.Task, []model.Warning) {
-	m := taskLineRe.FindStringSubmatch(line)
-	var checkbox string
-	var text string
-	hasCheckbox := m != nil
-	if hasCheckbox {
-		checkbox = m[1]
-		text = strings.TrimRight(m[2], " ")
-	} else {
-		pm := plainLineRe.FindStringSubmatch(line)
-		if pm == nil {
-			return nil, nil
+// lineMatch holds the result of matching a markdown line against task patterns.
+type lineMatch struct {
+	text        string
+	checkbox    string // " " for open, "x"/"X" for completed
+	hasCheckbox bool
+}
+
+// matchLine attempts to match a line as a checkbox item or a tagged plain bullet.
+// Returns nil if the line is not a task.
+func matchLine(line string) *lineMatch {
+	if m := taskLineRe.FindStringSubmatch(line); m != nil {
+		return &lineMatch{
+			text:        strings.TrimRight(m[2], " "),
+			checkbox:    m[1],
+			hasCheckbox: true,
 		}
-		candidate := strings.TrimRight(pm[1], " ")
-		if !tagRe.MatchString(candidate) {
-			return nil, nil
-		}
-		checkbox = " "
-		text = candidate
 	}
-	state := model.Open
-	if checkbox != " " {
-		state = model.Completed
+	pm := plainLineRe.FindStringSubmatch(line)
+	if pm == nil {
+		return nil
 	}
-	task := model.NewTask(text, file, lineNum, state, hasCheckbox)
+	candidate := strings.TrimRight(pm[1], " ")
+	if !tagRe.MatchString(candidate) {
+		return nil
+	}
+	return &lineMatch{text: candidate, checkbox: " ", hasCheckbox: false}
+}
+
+// extractTags parses @tag tokens from the task text, normalizes date values
+// for @due and @completed, and populates the task's tag list, Due, Completed,
+// and State fields. Returns any warnings from invalid date values.
+func extractTags(task *model.Task, file string, lineNum int) []model.Warning {
 	var warnings []model.Warning
-	tagMatches := tagRe.FindAllStringSubmatch(text, -1)
-	for _, tm := range tagMatches {
+	for _, tm := range tagRe.FindAllStringSubmatch(task.Text, -1) {
 		tagName := tm[1]
 		tagValue := tm[2]
 		tag := model.Tag{Name: tagName, Value: tagValue}
+
 		if tagValue != "" && (tagName == "due" || tagName == "completed") {
 			normalized, ok := normalizeDate(tagValue)
 			if ok {
@@ -84,7 +86,9 @@ func ParseLine(line string, file string, lineNum int) (*model.Task, []model.Warn
 				tag.Value = ""
 			}
 		}
+
 		task.AddTag(tag)
+
 		if tagName == "due" && tag.Value != "" {
 			t, _ := time.Parse("2006-01-02", tag.Value) //nolint:errcheck // validated by normalizeDate
 			task.Due = &t
@@ -99,5 +103,26 @@ func ParseLine(line string, file string, lineNum int) (*model.Task, []model.Warn
 			}
 		}
 	}
+	return warnings
+}
+
+// ParseLine parses a single line of text and returns a Task if the line
+// matches the task format, or nil if it does not.
+// Matches checkbox lines (- [ ] / - [x]) and plain bullet lines (- text)
+// that contain at least one @tag.
+// Also returns any non-fatal warnings encountered during parsing.
+func ParseLine(line string, file string, lineNum int) (*model.Task, []model.Warning) {
+	lm := matchLine(line)
+	if lm == nil {
+		return nil, nil
+	}
+
+	state := model.Open
+	if lm.checkbox != " " {
+		state = model.Completed
+	}
+
+	task := model.NewTask(lm.text, file, lineNum, state, lm.hasCheckbox)
+	warnings := extractTags(task, file, lineNum)
 	return task, warnings
 }

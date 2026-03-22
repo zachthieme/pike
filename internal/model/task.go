@@ -6,6 +6,7 @@ import (
 	"time"
 )
 
+// TaskState represents whether a task is open or completed.
 type TaskState int
 
 const (
@@ -24,11 +25,15 @@ func (s TaskState) String() string {
 	}
 }
 
+// Tag is a parsed @name or @name(value) token attached to a task.
 type Tag struct {
 	Name  string // e.g., "today", "due", "risk"
 	Value string // e.g., "2026-03-15" for @due(2026-03-15), empty for bare tags
 }
 
+// Task is a single item parsed from a markdown checkbox or tagged bullet line.
+// Use [NewTask] to construct and [AddTag] to append tags so that derived fields
+// (LowerText, TagSet) stay consistent.
 type Task struct {
 	Text        string          // Full line text after "- [ ] " / "- [x] " or "- "
 	LowerText   string          // Pre-lowered Text for efficient case-insensitive matching

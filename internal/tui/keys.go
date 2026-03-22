@@ -192,24 +192,33 @@ func (m Model) handleKeyDashboard(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if mdl, cmd, handled := m.handleCursorMovement(msg); handled {
 		return mdl, cmd
 	}
-
-	// Check focus section keys 1-9.
-	if !m.viewLocked && len(m.customBindings) == 0 {
-		for i := range 9 {
-			if key.Matches(msg, m.keys.FocusSection[i]) {
-				sections := m.visibleSections()
-				if i < len(sections) {
-					m.mode = modeFocused
-					m.focusedView = sections[i].Title
-					m.rebuildSections()
-					m.nav.JumpToTop()
-				}
-				return m, nil
-			}
-		}
+	if mdl, cmd, handled := m.handleFocusSectionKey(msg); handled {
+		return mdl, cmd
 	}
 
 	return m, nil
+}
+
+// handleFocusSectionKey checks keys 1-9 for focusing a dashboard section.
+// Disabled when the view is locked or custom bindings are defined (custom
+// bindings replace the 1-9 shortcuts). Returns handled=true if matched.
+func (m Model) handleFocusSectionKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
+	if m.viewLocked || len(m.customBindings) > 0 {
+		return m, nil, false
+	}
+	for i := range 9 {
+		if key.Matches(msg, m.keys.FocusSection[i]) {
+			sections := m.visibleSections()
+			if i < len(sections) {
+				m.mode = modeFocused
+				m.focusedView = sections[i].Title
+				m.rebuildSections()
+				m.nav.JumpToTop()
+			}
+			return m, nil, true
+		}
+	}
+	return m, nil, false
 }
 
 // handleCursorMovement handles cursor movement keys shared across modes.

@@ -17,6 +17,15 @@ import (
 	"github.com/zachthieme/pike/internal/parser"
 )
 
+// TaskSource is the interface for anything that can provide tasks via an
+// initial scan and incremental refresh. [Scanner] satisfies this interface.
+// Consumers that only need task data (e.g. the TUI) should accept a
+// TaskSource to decouple from filesystem details and enable test doubles.
+type TaskSource interface {
+	Scan(ctx context.Context) ([]model.Task, error)
+	Refresh(ctx context.Context) ([]model.Task, error)
+}
+
 // maxLineSize is the maximum length of a single markdown line the scanner will
 // read. Lines longer than this are split by bufio.Scanner, which may cause
 // missed tasks — but 1MB is well beyond any reasonable markdown line.
