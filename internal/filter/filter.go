@@ -23,10 +23,10 @@ func Apply(tasks []model.Task, queryStr string, sortOrder string, now time.Time)
 		return nil, err
 	}
 
-	// Filter tasks that match the query.
+	// A nil node (empty query) matches all tasks.
 	var matched []model.Task
 	for i := range tasks {
-		if query.Eval(node, &tasks[i], now) {
+		if node == nil || query.Eval(node, &tasks[i], now) {
 			matched = append(matched, tasks[i])
 		}
 	}
