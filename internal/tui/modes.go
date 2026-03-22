@@ -62,19 +62,17 @@ func (m *Model) rebuildSections() {
 // applying the active filter (substring or DSL) and pin partitioning.
 func (m *Model) rebuildSingleSection(title, color string, tasks []model.Task, now time.Time) {
 	m.unfilteredSections = nil
-	if m.filterBar.Text() != "" {
-		if m.filterBar.Mode() == filterQuery {
-			filtered, err := applyDSLFilter(tasks, m.filterBar.Text(), now)
-			if err != nil {
-				m.filterBar, _ = m.filterBar.Update(FilterSetErrorMsg{Err: err})
-				return
-			}
-			tasks = filtered
-		} else {
-			tasks = applySubstringFilter(tasks, m.filterBar.Text())
+	filtered, ok := m.filterTasks(tasks, now)
+	if !ok {
+		return
+	}
+	if m.sortOverride != "" {
+		if err := tasksort.Sort(filtered, m.sortOverride); err != nil {
+			m.err = err
+			return
 		}
 	}
-	tasks = tasksort.StablePartitionPinned(tasks)
+	tasks = tasksort.StablePartitionPinned(filtered)
 	m.sections = []filter.ViewResult{{Title: title, Color: color, Tasks: tasks}}
 	m.applyHiddenFilter()
 }
@@ -92,16 +90,9 @@ func (m *Model) rebuildDashboard(now time.Time) {
 
 	if m.filterBar.Text() != "" {
 		for i := range results {
-			var filtered []model.Task
-			if m.filterBar.Mode() == filterQuery {
-				var qErr error
-				filtered, qErr = applyDSLFilter(results[i].Tasks, m.filterBar.Text(), now)
-				if qErr != nil {
-					m.filterBar, _ = m.filterBar.Update(FilterSetErrorMsg{Err: qErr})
-					return
-				}
-			} else {
-				filtered = applySubstringFilter(results[i].Tasks, m.filterBar.Text())
+			filtered, ok := m.filterTasks(results[i].Tasks, now)
+			if !ok {
+				return
 			}
 			if filtered == nil {
 				filtered = []model.Task{}
@@ -112,6 +103,24 @@ func (m *Model) rebuildDashboard(now time.Time) {
 
 	m.sections = results
 	m.applyHiddenFilter()
+}
+
+// filterTasks applies the active filter (substring or DSL) to a task slice.
+// Returns the filtered tasks and true, or nil and false if a DSL parse error
+// occurred (the error is set on the filter bar).
+func (m *Model) filterTasks(tasks []model.Task, now time.Time) ([]model.Task, bool) {
+	if m.filterBar.Text() == "" {
+		return tasks, true
+	}
+	if m.filterBar.Mode() == filterQuery {
+		filtered, err := applyDSLFilter(tasks, m.filterBar.Text(), now)
+		if err != nil {
+			m.filterBar, _ = m.filterBar.Update(FilterSetErrorMsg{Err: err})
+			return nil, false
+		}
+		return filtered, true
+	}
+	return applySubstringFilter(tasks, m.filterBar.Text()), true
 }
 
 // applyHiddenFilter counts @hidden tasks per section and, when showHidden is
@@ -147,10 +156,9 @@ func applySubstringFilter(tasks []model.Task, filterText string) []model.Task {
 	}
 	var filtered []model.Task
 	for _, t := range tasks {
-		lower := strings.ToLower(t.Text)
 		match := true
 		for _, tok := range tokens {
-			if !strings.Contains(lower, tok) {
+			if !strings.Contains(t.LowerText, tok) {
 				match = false
 				break
 			}
@@ -187,6 +195,7 @@ func applyDSLFilter(tasks []model.Task, filterText string, now time.Time) ([]mod
 func (m *Model) enterAllTasksMode(showAll bool, initialFilter string) tea.Cmd {
 	m.mode = modeAllTasks
 	m.showAll = showAll
+	m.sortOverride = ""
 	m.nav.JumpToTop()
 	var cmd tea.Cmd
 	m.filterBar, cmd = m.filterBar.Update(FilterActivateMsg{
@@ -199,16 +208,13 @@ func (m *Model) enterAllTasksMode(showAll bool, initialFilter string) tea.Cmd {
 	return cmd
 }
 
-// enterQueryMode switches to all-tasks mode with a pre-filled DSL query.
-// sortOrder is accepted for future use but not yet applied (uses default file sort).
+// enterQueryMode switches to all-tasks mode with a pre-filled DSL query
+// and an optional sort override from custom bindings.
 func (m *Model) enterQueryMode(query string, sortOrder string) tea.Cmd {
 	m.mode = modeAllTasks
 	m.showAll = true
+	m.sortOverride = sortOrder
 	m.nav.JumpToTop()
-	if sortOrder == "" {
-		sortOrder = "file"
-	}
-	_ = sortOrder // TODO: wire sort override into rebuildSingleSection
 	var cmd tea.Cmd
 	m.filterBar, cmd = m.filterBar.Update(FilterActivateMsg{
 		Mode:         filterQuery,
@@ -251,6 +257,7 @@ func (m *Model) exitToDashboard() {
 	m.mode = modeDashboard
 	m.filterBar, _ = m.filterBar.Update(FilterDeactivateMsg{})
 	m.showAll = false
+	m.sortOverride = ""
 	m.rebuildSections()
 	m.nav.ClampCursor(m.displaySections())
 }

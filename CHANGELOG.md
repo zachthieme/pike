@@ -1,5 +1,29 @@
 # Changelog
 
+## v1.7.2 — March 22, 2026: Code Quality & Refactoring
+
+**Model invariants:**
+- `NewTask()` constructor and `AddTag()` method enforce `LowerText` and `TagSet` invariants at construction time
+- Parser uses `NewTask`/`AddTag` instead of manual struct assembly
+
+**CLI refactoring:**
+- Extracted `cliFlags` struct with `parseFlags()` and `validate()` methods — `run()` drops from ~170 to ~60 lines
+- Extracted `applyScope()` and `runScopedQuery()` helpers for clearer separation of concerns
+
+**TUI improvements:**
+- Deduplicated navigation and task-action keys into shared `handleCursorMovement()` and `handleTaskAction()` helpers
+- Extracted `filterTasks()` helper to deduplicate the filter application pattern between single-section and dashboard rebuilds
+- `applySubstringFilter` now uses pre-computed `task.LowerText` instead of recomputing `strings.ToLower` on every keypress
+- Custom key bindings now use O(1) map lookup instead of O(n) loop per keypress
+- Custom binding `sort` field now applies the requested sort order (was a TODO)
+- Model struct fields organized into documented logical groups
+
+**Query DSL:**
+- Improved lexer error messages: unterminated strings/regexes mention the missing delimiter, date errors include expected format, offset errors show examples
+
+**Documentation:**
+- Tag names are case-sensitive — documented in README and query DSL reference
+
 ## v1.7.1 — March 19, 2026: Cleaner CLI Output
 
 - Removed `file:line` prefix from `--query` and `--scope` output — tasks now render as plain checkbox lines (e.g. `- [ ] Buy groceries @today`)

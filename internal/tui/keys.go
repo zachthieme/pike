@@ -4,9 +4,9 @@ import (
 	"context"
 	"path/filepath"
 
-	"pike/internal/editor"
-	"pike/internal/model"
-	"pike/internal/toggle"
+	"github.com/zachthieme/pike/internal/editor"
+	"github.com/zachthieme/pike/internal/model"
+	"github.com/zachthieme/pike/internal/toggle"
 
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
@@ -26,61 +26,35 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	// FilterBar active + input focused: rune keys (j, k, q, etc.) go to
-	// FilterBar for typing. Only arrow keys and ctrl shortcuts navigate.
-	if m.filterBar.Active() && m.filterBar.InputFocused() {
-		if msg.Type != tea.KeyRunes {
-			switch {
-			case key.Matches(msg, m.keys.Down):
-				m.nav.CursorDown(m.displaySections())
-				return m, nil
-			case key.Matches(msg, m.keys.Up):
-				m.nav.CursorUp()
-				return m, nil
-			case key.Matches(msg, m.keys.PageDown):
-				m.nav.PageScroll(1, m.displaySections())
-				return m, tea.ClearScreen
-			case key.Matches(msg, m.keys.PageUp):
-				m.nav.PageScroll(-1, m.displaySections())
-				return m, tea.ClearScreen
-			}
+	// FilterBar active: delegate to specialized handlers.
+	if m.filterBar.Active() {
+		if m.filterBar.InputFocused() {
+			return m.handleKeyFilterInput(msg)
 		}
-		var cmd tea.Cmd
-		m.filterBar, cmd = m.filterBar.Update(msg)
-		return m.processFilterOutput(cmd)
+		return m.handleKeyFilterResults(msg)
 	}
 
-	// FilterBar active + results focused: only certain keys to FilterBar.
-	if m.filterBar.Active() {
+	// Custom bindings — checked before built-in keys so custom wins on conflict.
+	if !m.viewLocked {
+		if model, cmd, handled := m.handleKeyCustomBinding(msg); handled {
+			return model, cmd
+		}
+	}
+
+	return m.handleKeyDashboard(msg)
+}
+
+// handleKeyFilterInput handles keys when the FilterBar is active and the text
+// input is focused. Rune keys go to FilterBar for typing; only arrow keys and
+// ctrl shortcuts navigate.
+func (m Model) handleKeyFilterInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if msg.Type != tea.KeyRunes {
 		switch {
-		case key.Matches(msg, m.keys.Escape), key.Matches(msg, m.keys.NextSection),
-			key.Matches(msg, m.keys.Filter), key.Matches(msg, m.keys.Query):
-			var cmd tea.Cmd
-			m.filterBar, cmd = m.filterBar.Update(msg)
-			return m.processFilterOutput(cmd)
-		case key.Matches(msg, m.keys.Quit):
-			m.exitToDashboard()
-			return m, nil
-		case key.Matches(msg, m.keys.Toggle):
-			return m.toggleTask()
-		case key.Matches(msg, m.keys.ToggleHiddenTag):
-			return m.toggleHiddenTag()
-		case key.Matches(msg, m.keys.ToggleHidden):
-			m.showHidden = !m.showHidden
-			m.rebuildSections()
-			m.nav.ClampCursor(m.displaySections())
-			return m, nil
 		case key.Matches(msg, m.keys.Down):
 			m.nav.CursorDown(m.displaySections())
 			return m, nil
 		case key.Matches(msg, m.keys.Up):
 			m.nav.CursorUp()
-			return m, nil
-		case key.Matches(msg, m.keys.Top):
-			m.nav.JumpToTop()
-			return m, nil
-		case key.Matches(msg, m.keys.Bottom):
-			m.nav.JumpToBottom(m.displaySections())
 			return m, nil
 		case key.Matches(msg, m.keys.PageDown):
 			m.nav.PageScroll(1, m.displaySections())
@@ -88,47 +62,71 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		case key.Matches(msg, m.keys.PageUp):
 			m.nav.PageScroll(-1, m.displaySections())
 			return m, tea.ClearScreen
-		case key.Matches(msg, m.keys.PrevSection):
-			m.nav.JumpToPrevSection(m.displaySections())
-			return m, nil
-		case key.Matches(msg, m.keys.Enter):
-			return m.openEditor()
 		}
+	}
+	var cmd tea.Cmd
+	m.filterBar, cmd = m.filterBar.Update(msg)
+	return m.processFilterOutput(cmd)
+}
+
+// handleKeyFilterResults handles keys when the FilterBar is active but the
+// text input is not focused (user is navigating filtered results).
+func (m Model) handleKeyFilterResults(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	// Filter bar keys (escape, tab, /, ?) — must be checked before general
+	// navigation because NextSection (tab) drives mode cycling in the filter bar.
+	switch {
+	case key.Matches(msg, m.keys.Escape), key.Matches(msg, m.keys.NextSection),
+		key.Matches(msg, m.keys.Filter), key.Matches(msg, m.keys.Query):
+		var cmd tea.Cmd
+		m.filterBar, cmd = m.filterBar.Update(msg)
+		return m.processFilterOutput(cmd)
+	case key.Matches(msg, m.keys.Quit):
+		m.exitToDashboard()
 		return m, nil
 	}
+	if mdl, cmd, handled := m.handleTaskAction(msg); handled {
+		return mdl, cmd
+	}
+	if mdl, cmd, handled := m.handleCursorMovement(msg); handled {
+		return mdl, cmd
+	}
+	return m, nil
+}
 
-	// Custom bindings — checked before built-in keys so custom wins on conflict.
-	// Suppressed when viewLocked (--view flag) to match the behavior of 1-9 focus keys.
-	if !m.viewLocked {
-		for i, cb := range m.customBindings {
-			if key.Matches(msg, m.customKeys[i]) {
-				if cb.View != "" {
-					for _, sec := range m.visibleSections() {
-						if sec.Title == cb.View {
-							m.focusedView = cb.View
-							m.rebuildSections()
-							m.nav.JumpToTop()
-							break
-						}
-					}
-					return m, nil
-				}
-				if cb.Query != "" {
-					cmd := m.enterQueryMode(cb.Query, cb.Sort)
-					return m, cmd
-				}
-				return m, nil
+// handleKeyCustomBinding checks user-configured custom key bindings via O(1) map lookup.
+// Returns handled=true if a binding matched.
+func (m Model) handleKeyCustomBinding(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
+	i, ok := m.customKeyIndex[msg.String()]
+	if !ok {
+		return m, nil, false
+	}
+	cb := m.customBindings[i]
+	if cb.View != "" {
+		for _, sec := range m.visibleSections() {
+			if sec.Title == cb.View {
+				m.focusedView = cb.View
+				m.rebuildSections()
+				m.nav.JumpToTop()
+				break
 			}
 		}
+		return m, nil, true
 	}
+	if cb.Query != "" {
+		cmd := m.enterQueryMode(cb.Query, cb.Sort)
+		return m, cmd, true
+	}
+	return m, nil, true
+}
 
-	// Dashboard/navigation keys.
+// handleKeyDashboard handles keys in the default dashboard/navigation mode.
+func (m Model) handleKeyDashboard(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch {
 	case key.Matches(msg, m.keys.Quit):
 		return m, tea.Quit
 
 	case key.Matches(msg, m.keys.Escape):
-		// Escape priority: dismiss summary -> exit mode -> exit focus -> do nothing
+		// Escape priority: dismiss summary → exit mode → exit focus → do nothing.
 		switch {
 		case m.showSummary:
 			m.showSummary = false
@@ -139,38 +137,6 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.rebuildSections()
 			m.nav.ClampCursor(m.displaySections())
 		}
-		return m, nil
-
-	case key.Matches(msg, m.keys.Down):
-		m.nav.CursorDown(m.displaySections())
-		return m, nil
-
-	case key.Matches(msg, m.keys.Up):
-		m.nav.CursorUp()
-		return m, nil
-
-	case key.Matches(msg, m.keys.Top):
-		m.nav.JumpToTop()
-		return m, nil
-
-	case key.Matches(msg, m.keys.Bottom):
-		m.nav.JumpToBottom(m.displaySections())
-		return m, nil
-
-	case key.Matches(msg, m.keys.PageDown):
-		m.nav.PageScroll(1, m.displaySections())
-		return m, tea.ClearScreen
-
-	case key.Matches(msg, m.keys.PageUp):
-		m.nav.PageScroll(-1, m.displaySections())
-		return m, tea.ClearScreen
-
-	case key.Matches(msg, m.keys.NextSection):
-		m.nav.JumpToNextSection(m.displaySections())
-		return m, nil
-
-	case key.Matches(msg, m.keys.PrevSection):
-		m.nav.JumpToPrevSection(m.displaySections())
 		return m, nil
 
 	case key.Matches(msg, m.keys.Summary):
@@ -210,23 +176,19 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		focusCmd := m.enterRecentlyCompletedMode()
 		return m, tea.Batch(focusCmd, tea.ClearScreen)
 
-	case key.Matches(msg, m.keys.ToggleHidden):
-		m.showHidden = !m.showHidden
-		m.rebuildSections()
-		m.nav.ClampCursor(m.displaySections())
+	case key.Matches(msg, m.keys.NextSection):
+		m.nav.JumpToNextSection(m.displaySections())
 		return m, nil
 
 	case key.Matches(msg, m.keys.Refresh):
 		return m, func() tea.Msg { return RefreshMsg{} }
+	}
 
-	case key.Matches(msg, m.keys.Enter):
-		return m.openEditor()
-
-	case key.Matches(msg, m.keys.Toggle):
-		return m.toggleTask()
-
-	case key.Matches(msg, m.keys.ToggleHiddenTag):
-		return m.toggleHiddenTag()
+	if mdl, cmd, handled := m.handleTaskAction(msg); handled {
+		return mdl, cmd
+	}
+	if mdl, cmd, handled := m.handleCursorMovement(msg); handled {
+		return mdl, cmd
 	}
 
 	// Check focus section keys 1-9.
@@ -245,6 +207,60 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 
 	return m, nil
+}
+
+// handleCursorMovement handles cursor movement keys shared across modes.
+// NextSection is intentionally excluded: it has mode-specific behavior
+// (section jump in dashboard, filter-bar mode cycling in filter results)
+// and is handled by each caller's own switch block.
+// Returns handled=true if a movement key was matched.
+func (m Model) handleCursorMovement(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
+	switch {
+	case key.Matches(msg, m.keys.Down):
+		m.nav.CursorDown(m.displaySections())
+		return m, nil, true
+	case key.Matches(msg, m.keys.Up):
+		m.nav.CursorUp()
+		return m, nil, true
+	case key.Matches(msg, m.keys.Top):
+		m.nav.JumpToTop()
+		return m, nil, true
+	case key.Matches(msg, m.keys.Bottom):
+		m.nav.JumpToBottom(m.displaySections())
+		return m, nil, true
+	case key.Matches(msg, m.keys.PageDown):
+		m.nav.PageScroll(1, m.displaySections())
+		return m, tea.ClearScreen, true
+	case key.Matches(msg, m.keys.PageUp):
+		m.nav.PageScroll(-1, m.displaySections())
+		return m, tea.ClearScreen, true
+	case key.Matches(msg, m.keys.PrevSection):
+		m.nav.JumpToPrevSection(m.displaySections())
+		return m, nil, true
+	}
+	return m, nil, false
+}
+
+// handleTaskAction handles task-level action keys shared across modes.
+// Returns handled=true if an action key was matched.
+func (m Model) handleTaskAction(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
+	switch {
+	case key.Matches(msg, m.keys.Toggle):
+		mdl, cmd := m.toggleTask()
+		return mdl, cmd, true
+	case key.Matches(msg, m.keys.ToggleHiddenTag):
+		mdl, cmd := m.toggleHiddenTag()
+		return mdl, cmd, true
+	case key.Matches(msg, m.keys.ToggleHidden):
+		m.showHidden = !m.showHidden
+		m.rebuildSections()
+		m.nav.ClampCursor(m.displaySections())
+		return m, nil, true
+	case key.Matches(msg, m.keys.Enter):
+		mdl, cmd := m.openEditor()
+		return mdl, cmd, true
+	}
+	return m, nil, false
 }
 
 // processFilterOutput checks FilterBar.Output() for a pending action message

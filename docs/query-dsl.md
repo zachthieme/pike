@@ -66,6 +66,8 @@ Used in view configs (`sort` field) and the `--sort` CLI flag.
 
 Tags follow the format `@name` or `@name(value)`. See [README](../README.md#special-tags) for the full list of special tags (`@due`, `@completed`, `@hidden`, `@pin`).
 
+**Case sensitivity:** The `@tag` atom matches tag names exactly as written — `@Today` and `@today` are different queries. Use lowercase by convention. Bare words and quoted strings are matched case-insensitively against task text. In the TUI filter bar's query mode (`?`), partial tag matching is case-insensitive.
+
 ## Examples
 
 ```

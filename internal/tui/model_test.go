@@ -20,6 +20,7 @@ var testNow = time.Date(2026, 3, 13, 0, 0, 0, 0, time.UTC)
 
 // taskWithTagSet creates a Task and populates TagSet from Tags.
 func taskWithTagSet(t model.Task) model.Task {
+	t.LowerText = strings.ToLower(t.Text)
 	t.TagSet = make(map[string]bool, len(t.Tags))
 	for _, tag := range t.Tags {
 		t.TagSet[tag.Name] = true

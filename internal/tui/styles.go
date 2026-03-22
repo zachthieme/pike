@@ -44,7 +44,9 @@ var (
 	headerStyle   = lipgloss.NewStyle().Bold(true).Underline(true)
 )
 
-// Parameterized style caches.
+// Parameterized style caches. These maps are safe without synchronization because
+// Bubble Tea calls Update() and View() from a single goroutine — all reads and
+// writes happen sequentially within the TUI event loop.
 var (
 	boldColorCache = make(map[string]lipgloss.Style) // color string → lipgloss.Style (bold + foreground)
 	tagStyleCache  = make(map[string]lipgloss.Style) // color string → lipgloss.Style (foreground only)

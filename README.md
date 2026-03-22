@@ -65,7 +65,7 @@ Tasks are extracted from markdown files. Two formats are recognized:
 - Ship metrics endpoint @risk @due(2026-04-01)
 ```
 
-Tags follow the format `@name` or `@name(value)`.
+Tags follow the format `@name` or `@name(value)`. Tag names are **case-sensitive** — `@Today` and `@today` are distinct tags. Use lowercase by convention.
 
 ### Special Tags
 

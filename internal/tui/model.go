@@ -8,59 +8,71 @@ import (
 	"github.com/zachthieme/pike/internal/filter"
 	"github.com/zachthieme/pike/internal/model"
 
-	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
 // Model is the main Bubbletea model for the tasks TUI.
 type Model struct {
-	config      *config.Config
-	allTasks    []model.Task
-	sections    []filter.ViewResult
-	// unfilteredSections caches the full (pre-filter) view results so
-	// visibleSections() doesn't have to recompute every query on each keypress.
-	unfilteredSections []filter.ViewResult
-	hiddenCounts       []int        // per-section count of @hidden tasks that were removed
-	openCount          int          // cached count of open checkbox tasks, updated on rebuild
-	completedThisWeek  int          // cached count of tasks completed since start of week
-	nav                Navigator    // cursor + navigation state
-	focusedView        string       // "" = dashboard, otherwise title of focused section
-	viewLocked         bool         // when true, block mode-switching keys and prevent unfocusing (set via --view flag)
-	showSummary        bool
-	filterBar          FilterBar
-	tagSearch          TagSearch
-	mode               viewMode
-	showHidden         bool     // whether to show @hidden tasks
-	showAll            bool     // when true, all-tasks includes completed (e.g. from tag search)
-	width              int
-	height             int
-	err                error
-	scanFunc           func() ([]model.Task, error)  // injected for refresh
-	configFunc         func() (*config.Config, error) // injected for config reload
-	editorCmd          string
-	tagColors          map[string]string
-	keys               KeyMap
-	customBindings     []config.CustomBinding
-	customKeys         []key.Binding
-	version            string
-	now                func() time.Time // injectable for testing
-	warnings           []model.Warning          // parse warnings from last scan
-	warningsFunc       func() []model.Warning   // returns latest parse warnings
+	// Data — task source and config.
+	config   *config.Config
+	allTasks []model.Task
+
+	// Section cache — rebuilt together in rebuildSections/rebuildDashboard.
+	sections           []filter.ViewResult // current filtered/sorted sections
+	unfilteredSections []filter.ViewResult // pre-filter cache for visibleSections()
+	hiddenCounts       []int              // per-section count of @hidden tasks removed
+	openCount          int                // cached open checkbox count, updated on rebuild
+	completedThisWeek  int                // cached completed-this-week count
+
+	// Navigation and view state.
+	nav          Navigator // cursor + section navigation
+	focusedView  string    // "" = dashboard, otherwise title of focused section
+	viewLocked   bool      // when true, block mode-switching keys (set via --view flag)
+	mode         viewMode
+	sortOverride string // per-query sort order from custom bindings; "" uses default
+	showSummary  bool
+	showHidden   bool // whether to show @hidden tasks
+	showAll      bool // when true, all-tasks includes completed (e.g. from tag search)
+
+	// Sub-models.
+	filterBar FilterBar
+	tagSearch TagSearch
+
+	// Viewport.
+	width  int
+	height int
+	err    error
+
+	// Key bindings.
+	keys           KeyMap
+	customBindings []config.CustomBinding
+	customKeyIndex map[string]int // key string → index in customBindings for O(1) lookup
+
+	// Injected dependencies.
+	scanFunc   func() ([]model.Task, error)  // refresh callback
+	configFunc func() (*config.Config, error) // config reload callback
+	editorCmd  string
+	tagColors  map[string]string
+	version    string
+	now        func() time.Time          // injectable for testing
+	warnings   []model.Warning           // parse warnings from last scan
+	warningsFunc func() []model.Warning  // returns latest parse warnings
 }
 
 // NewModel creates a new TUI model with the given configuration and initial tasks.
 func NewModel(cfg *config.Config, tasks []model.Task, scanFunc func() ([]model.Task, error), configFunc func() (*config.Config, error)) Model {
 	m := Model{
-		config:      cfg,
-		allTasks:    tasks,
-		focusedView: "",
-		filterBar:   NewFilterBar(),
-		tagSearch:   NewTagSearch(),
+		config:         cfg,
+		allTasks:       tasks,
+		focusedView:    "",
+		filterBar:      NewFilterBar(),
+		tagSearch:      NewTagSearch(),
 		scanFunc:       scanFunc,
 		editorCmd:      cfg.Editor,
 		tagColors:      cfg.TagColors,
 		keys:           BuildKeyMap(cfg.Keybindings, cfg.CustomBindings),
 		customBindings: cfg.CustomBindings,
+		customKeyIndex: buildCustomKeyIndex(cfg.CustomBindings),
 		now:            time.Now,
 	}
 	m.configFunc = configFunc
@@ -68,12 +80,17 @@ func NewModel(cfg *config.Config, tasks []model.Task, scanFunc func() ([]model.T
 	m.rebuildSections()
 	m.nav.ClampCursor(m.displaySections())
 
-	m.customKeys = make([]key.Binding, len(cfg.CustomBindings))
-	for i, cb := range cfg.CustomBindings {
-		m.customKeys[i] = key.NewBinding(key.WithKeys(cb.Key))
-	}
-
 	return m
+}
+
+// buildCustomKeyIndex creates a map from key string to custom binding index
+// for O(1) lookup in handleKeyCustomBinding.
+func buildCustomKeyIndex(bindings []config.CustomBinding) map[string]int {
+	idx := make(map[string]int, len(bindings))
+	for i, cb := range bindings {
+		idx[cb.Key] = i
+	}
+	return idx
 }
 
 // SetVersion sets the version string for display in the summary overlay.
@@ -171,10 +188,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.editorCmd = msg.Config.Editor
 			m.keys = BuildKeyMap(msg.Config.Keybindings, msg.Config.CustomBindings)
 			m.customBindings = msg.Config.CustomBindings
-			m.customKeys = make([]key.Binding, len(msg.Config.CustomBindings))
-			for i, cb := range msg.Config.CustomBindings {
-				m.customKeys[i] = key.NewBinding(key.WithKeys(cb.Key))
-			}
+			m.customKeyIndex = buildCustomKeyIndex(msg.Config.CustomBindings)
 		}
 		if msg.Tasks != nil {
 			m.allTasks = msg.Tasks

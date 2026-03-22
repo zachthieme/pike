@@ -57,98 +57,107 @@ func main() {
 	}
 }
 
-func run(args []string, stdout, stderr io.Writer) error {
-	// Expand short flags to long forms before parsing.
+// cliFlags holds all parsed command-line flags.
+type cliFlags struct {
+	dir     string
+	config  string
+	view    string
+	summary bool
+	query   string
+	sort    string
+	scope   string
+	count   bool
+	json    bool
+	color   bool
+	noColor bool
+	help    bool
+	version bool
+}
+
+// parseFlags expands short flags and parses command-line arguments into a cliFlags struct.
+func parseFlags(args []string, stderr io.Writer) (*cliFlags, error) {
 	expanded := expandShortFlags(args)
 
 	fs := flag.NewFlagSet("pike", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 
-	var (
-		dirFlag     string
-		configFlag  string
-		viewFlag    string
-		summaryFlag bool
-		queryFlag   string
-		sortFlag    string
-		scopeFlag   string
-		countFlag   bool
-		jsonFlag    bool
-		colorFlag   bool
-		noColorFlag bool
-		helpFlag    bool
-		versionFlag bool
-	)
-
-	fs.StringVar(&dirFlag, "dir", "", "Notes directory")
-	fs.StringVar(&configFlag, "config", "", "Config file path")
-	fs.StringVar(&viewFlag, "view", "", "Start focused on a specific section")
-	fs.BoolVar(&summaryFlag, "summary", false, "Print summary counts")
-	fs.StringVar(&queryFlag, "query", "", "Run a one-shot query")
-	fs.StringVar(&sortFlag, "sort", "file", "Sort order for --query/--scope mode")
-	fs.StringVar(&scopeFlag, "scope", "", "Scope to tasks referencing this file")
-	fs.BoolVar(&countFlag, "count", false, "Print result count only")
-	fs.BoolVar(&jsonFlag, "json", false, "Output results as JSON")
-	fs.BoolVar(&colorFlag, "color", false, "Force color output")
-	fs.BoolVar(&noColorFlag, "no-color", false, "Disable color output")
-	fs.BoolVar(&helpFlag, "help", false, "Show help")
-	fs.BoolVar(&versionFlag, "version", false, "Show version")
+	f := &cliFlags{}
+	fs.StringVar(&f.dir, "dir", "", "Notes directory")
+	fs.StringVar(&f.config, "config", "", "Config file path")
+	fs.StringVar(&f.view, "view", "", "Start focused on a specific section")
+	fs.BoolVar(&f.summary, "summary", false, "Print summary counts")
+	fs.StringVar(&f.query, "query", "", "Run a one-shot query")
+	fs.StringVar(&f.sort, "sort", "file", "Sort order for --query/--scope mode")
+	fs.StringVar(&f.scope, "scope", "", "Scope to tasks referencing this file")
+	fs.BoolVar(&f.count, "count", false, "Print result count only")
+	fs.BoolVar(&f.json, "json", false, "Output results as JSON")
+	fs.BoolVar(&f.color, "color", false, "Force color output")
+	fs.BoolVar(&f.noColor, "no-color", false, "Disable color output")
+	fs.BoolVar(&f.help, "help", false, "Show help")
+	fs.BoolVar(&f.version, "version", false, "Show version")
 
 	if err := fs.Parse(expanded); err != nil {
+		return nil, err
+	}
+	return f, nil
+}
+
+// validate checks for conflicting flag combinations, emitting warnings for
+// dubious-but-allowed combinations and returning an error for invalid ones.
+func (f *cliFlags) validate(stderr io.Writer) error {
+	if f.color && f.noColor {
+		_, _ = fmt.Fprintf(stderr, "warning: both --color and --no-color specified; using --no-color\n")
+	}
+	if f.sort != "file" && f.query == "" && f.scope == "" {
+		_, _ = fmt.Fprintf(stderr, "warning: --sort is only used with --query or --scope\n")
+	}
+	if f.count && f.query == "" && f.scope == "" {
+		_, _ = fmt.Fprintf(stderr, "warning: --count is only used with --query or --scope\n")
+	}
+	if f.json && f.query == "" && f.scope == "" {
+		_, _ = fmt.Fprintf(stderr, "warning: --json is only used with --query or --scope\n")
+	}
+	if f.scope != "" && f.summary {
+		return fmt.Errorf("--scope and --summary cannot be combined")
+	}
+	if f.scope != "" && f.view != "" && f.query != "" {
+		return fmt.Errorf("--view and --query cannot both be used with --scope")
+	}
+	return nil
+}
+
+func run(args []string, stdout, stderr io.Writer) error {
+	f, err := parseFlags(args, stderr)
+	if err != nil {
 		return err
 	}
 
-	// Handle --help and --version first (no config/scan needed).
-	if helpFlag {
+	if f.help {
 		_, _ = fmt.Fprint(stdout, usageText)
 		return nil
 	}
-	if versionFlag {
+	if f.version {
 		_, _ = fmt.Fprintln(stdout, "pike "+version)
 		return nil
 	}
 
-	// Warn if both --color and --no-color are specified.
-	if colorFlag && noColorFlag {
-		_, _ = fmt.Fprintf(stderr, "warning: both --color and --no-color specified; using --no-color\n")
+	if err := f.validate(stderr); err != nil {
+		return err
 	}
 
-	// Warn if query-only flags are provided without --query.
-	if sortFlag != "file" && queryFlag == "" && scopeFlag == "" {
-		_, _ = fmt.Fprintf(stderr, "warning: --sort is only used with --query or --scope\n")
-	}
-	if countFlag && queryFlag == "" && scopeFlag == "" {
-		_, _ = fmt.Fprintf(stderr, "warning: --count is only used with --query or --scope\n")
-	}
-	if jsonFlag && queryFlag == "" && scopeFlag == "" {
-		_, _ = fmt.Fprintf(stderr, "warning: --json is only used with --query or --scope\n")
-	}
+	noColor := resolveColorMode(f.color, f.noColor, stdout)
 
-	// Validate --scope flag.
-	if scopeFlag != "" && summaryFlag {
-		return fmt.Errorf("--scope and --summary cannot be combined")
-	}
-	if scopeFlag != "" && viewFlag != "" && queryFlag != "" {
-		return fmt.Errorf("--view and --query cannot both be used with --scope")
-	}
-
-	// Determine color mode.
-	noColor := resolveColorMode(colorFlag, noColorFlag, stdout)
-
-	// Load config.
-	cfg, err := config.Load(configFlag)
+	cfg, err := config.Load(f.config)
 	if err != nil {
 		return fmt.Errorf("loading config: %w", err)
 	}
 
-	// Resolve notes directory: --dir flag > $NOTES env > config.
-	notesDir := resolveNotesDir(dirFlag, cfg.NotesDir)
+	notesDir := resolveNotesDir(f.dir, cfg.NotesDir)
 	if notesDir == "" {
 		return fmt.Errorf("notes directory not set (use --dir, $NOTES, or notes_dir in config)")
 	}
 	cfg.NotesDir = notesDir
 
-	// Scan files.
 	ctx := context.Background()
 	sc, err := scanner.New(cfg.NotesDir, cfg.Include, cfg.Exclude)
 	if err != nil {
@@ -162,69 +171,38 @@ func run(args []string, stdout, stderr io.Writer) error {
 		_, _ = fmt.Fprintf(stderr, "warning: %s:%d: %s\n", w.File, w.Line, w.Message)
 	}
 
-	// Apply scope filter if --scope is set.
-	if scopeFlag != "" {
-		info, err := os.Stat(scopeFlag)
+	if f.scope != "" {
+		tasks, err = applyScope(tasks, f.scope, cfg.NotesDir)
 		if err != nil {
-			if os.IsNotExist(err) {
-				return fmt.Errorf("scope: file not found: %s", scopeFlag)
-			}
-			return fmt.Errorf("scope: %w", err)
+			return err
 		}
-		if info.IsDir() {
-			return fmt.Errorf("scope: expected a file, got directory: %s", scopeFlag)
-		}
-
-		identities := scope.Identity(scopeFlag)
-		excludePath, err := scope.RelPath(scopeFlag, cfg.NotesDir)
-		if err != nil {
-			return fmt.Errorf("scope: %w", err)
-		}
-		tasks = scope.Filter(tasks, identities, excludePath)
 	}
 
 	now := time.Now()
 
-	// Branch on mode.
 	switch {
-	case summaryFlag:
+	case f.summary:
 		return runSummary(stdout, tasks, now, noColor)
-	case scopeFlag != "":
-		// Resolve scope query: --view extracts the view's query+sort,
-		// --query uses the given query, otherwise default to "open".
-		scopeQuery := "open"
-		scopeSort := sortFlag
-		if viewFlag != "" {
-			v, err := findView(cfg.Views, viewFlag)
-			if err != nil {
-				return err
-			}
-			scopeQuery = v.Query
-			if v.Sort != "" {
-				scopeSort = v.Sort
-			}
-		} else if queryFlag != "" {
-			scopeQuery = queryFlag
-		}
-		return runQuery(stdout, tasks, scopeQuery, queryOpts{
-			sortOrder:  scopeSort,
+	case f.scope != "":
+		return runScopedQuery(stdout, cfg.Views, tasks, f.view, f.query, queryOpts{
+			sortOrder:  f.sort,
 			tagColors:  cfg.TagColors,
 			now:        now,
 			noColor:    noColor,
-			count:      countFlag,
-			jsonOutput: jsonFlag,
+			count:      f.count,
+			jsonOutput: f.json,
 		})
-	case queryFlag != "":
-		return runQuery(stdout, tasks, queryFlag, queryOpts{
-			sortOrder:  sortFlag,
+	case f.query != "":
+		return runQuery(stdout, tasks, f.query, queryOpts{
+			sortOrder:  f.sort,
 			tagColors:  cfg.TagColors,
 			now:        now,
 			noColor:    noColor,
-			count:      countFlag,
-			jsonOutput: jsonFlag,
+			count:      f.count,
+			jsonOutput: f.json,
 		})
 	default:
-		return runTUI(stdout, cfg, tasks, sc, viewFlag, configFlag)
+		return runTUI(stdout, cfg, tasks, sc, f.view, f.config)
 	}
 }
 
@@ -346,6 +324,50 @@ func runQuery(w io.Writer, tasks []model.Task, queryStr string, opts queryOpts) 
 		return err
 	}
 	return nil
+}
+
+// applyScope validates the scope flag and filters tasks to those referencing
+// the given file.
+func applyScope(tasks []model.Task, scopeFlag, notesDir string) ([]model.Task, error) {
+	info, err := os.Stat(scopeFlag)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, fmt.Errorf("scope: file not found: %s", scopeFlag)
+		}
+		return nil, fmt.Errorf("scope: %w", err)
+	}
+	if info.IsDir() {
+		return nil, fmt.Errorf("scope: expected a file, got directory: %s", scopeFlag)
+	}
+
+	identities := scope.Identity(scopeFlag)
+	excludePath, err := scope.RelPath(scopeFlag, notesDir)
+	if err != nil {
+		return nil, fmt.Errorf("scope: %w", err)
+	}
+	return scope.Filter(tasks, identities, excludePath), nil
+}
+
+// runScopedQuery resolves the query and sort order for --scope mode, then
+// delegates to runQuery. --view extracts the view's query+sort, --query
+// uses the literal query, otherwise defaults to "open".
+func runScopedQuery(w io.Writer, views []config.ViewConfig, tasks []model.Task, viewName, queryStr string, opts queryOpts) error {
+	scopeQuery := "open"
+	scopeSort := opts.sortOrder
+	if viewName != "" {
+		v, err := findView(views, viewName)
+		if err != nil {
+			return fmt.Errorf("scoped query: %w", err)
+		}
+		scopeQuery = v.Query
+		if v.Sort != "" {
+			scopeSort = v.Sort
+		}
+	} else if queryStr != "" {
+		scopeQuery = queryStr
+	}
+	opts.sortOrder = scopeSort
+	return runQuery(w, tasks, scopeQuery, opts)
 }
 
 // findView returns the ViewConfig matching the given title (case-insensitive).
