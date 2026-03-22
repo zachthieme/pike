@@ -28,7 +28,7 @@ nix build github:zachthieme/pike#pike-src
 ### Go
 
 ```bash
-go install github:zachthieme/pike/cmd/pike@latest
+go install github.com/zachthieme/pike/cmd/pike@latest
 ```
 
 Or build locally:
@@ -93,8 +93,10 @@ pike [flags]
 | `--config <path>` | `-c` | Config file path |
 | `--view <name>` | `-w` | Start focused on a named section |
 | `--query <query>` | `-q` | Run a query, print results to stdout, and exit |
-| `--scope <file>` | | Filter to tasks referencing the given file's subject |
-| `--sort <order>` | | Sort order for `--query` mode (default: `file`) |
+| `--scope <file>` | `-s` | Filter to tasks referencing the given file's subject |
+| `--sort <order>` | | Sort order for `--query`/`--scope` mode (default: `file`) |
+| `--count` | | Print result count only (use with `--query` or `--scope`) |
+| `--json` | | Output results as JSON (use with `--query` or `--scope`) |
 | `--summary` | | Print task summary counts and exit |
 | `--color` | | Force color output |
 | `--no-color` | | Disable color output |
@@ -441,7 +443,8 @@ internal/
   style/style.go               Tag coloring, link prettification, task markers
   tui/
     model.go                   Bubbletea Model struct, Init, Update
-    keys.go                    Key handlers and input dispatch
+    keys.go                    Key dispatch and input routing
+    actions.go                 Task actions (toggle, editor, hidden tag)
     modes.go                   Mode transitions, section rebuilding, filtering
     navigator.go               Cursor and section navigation
     filterbar.go               Filter bar sub-model (substring/DSL input)
