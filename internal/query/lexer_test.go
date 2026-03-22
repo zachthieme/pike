@@ -1,6 +1,7 @@
 package query
 
 import (
+	"strings"
 	"testing"
 )
 
@@ -212,10 +213,29 @@ func TestLexComplex(t *testing.T) {
 	}
 }
 
-func TestLexErrorUnterminatedRegex(t *testing.T) {
-	_, err := lex("/unterminated")
-	if err == nil {
-		t.Fatal("expected error for unterminated regex, got nil")
+func TestLexErrors(t *testing.T) {
+	tests := []struct {
+		name        string
+		input       string
+		wantContain string
+	}{
+		{"unterminated string", `"hello`, `missing closing '"'`},
+		{"unterminated regex", "/unterminated", "missing closing '/'"},
+		{"offset missing d suffix", "today+3x", `expected 'd' suffix`},
+		{"offset missing number", "today+d", "expected number after"},
+		{"invalid date", "2026-1-1", "expected YYYY-MM-DD"},
+		{"unexpected character", "~", "unexpected character"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := lex(tt.input)
+			if err == nil {
+				t.Fatalf("lex(%q): expected error, got nil", tt.input)
+			}
+			if !strings.Contains(err.Error(), tt.wantContain) {
+				t.Errorf("lex(%q) error = %q, want substring %q", tt.input, err.Error(), tt.wantContain)
+			}
+		})
 	}
 }
 

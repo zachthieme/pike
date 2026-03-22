@@ -61,16 +61,12 @@ func ParseLine(line string, file string, lineNum int) (*model.Task, []model.Warn
 		checkbox = " "
 		text = candidate
 	}
-	task := &model.Task{
-		Text: text, LowerText: strings.ToLower(text), File: file, Line: lineNum, HasCheckbox: hasCheckbox,
+	state := model.Open
+	if checkbox != " " {
+		state = model.Completed
 	}
-	if checkbox == " " {
-		task.State = model.Open
-	} else {
-		task.State = model.Completed
-	}
+	task := model.NewTask(text, file, lineNum, state, hasCheckbox)
 	var warnings []model.Warning
-	task.TagSet = make(map[string]bool)
 	tagMatches := tagRe.FindAllStringSubmatch(text, -1)
 	for _, tm := range tagMatches {
 		tagName := tm[1]
@@ -88,8 +84,7 @@ func ParseLine(line string, file string, lineNum int) (*model.Task, []model.Warn
 				tag.Value = ""
 			}
 		}
-		task.Tags = append(task.Tags, tag)
-		task.TagSet[tagName] = true
+		task.AddTag(tag)
 		if tagName == "due" && tag.Value != "" {
 			t, _ := time.Parse("2006-01-02", tag.Value) //nolint:errcheck // validated by normalizeDate
 			task.Due = &t

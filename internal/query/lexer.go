@@ -152,7 +152,7 @@ func lex(input string) ([]token, error) {
 				i++
 			}
 			if i >= len(runes) {
-				return nil, fmt.Errorf("unterminated string starting at position %d", start-1)
+				return nil, fmt.Errorf("unterminated string at position %d: missing closing '\"'", start-1)
 			}
 			text := string(runes[start:i])
 			i++ // skip closing quote
@@ -190,7 +190,7 @@ func lex(input string) ([]token, error) {
 				}
 			}
 			if i >= len(runes) {
-				return nil, fmt.Errorf("unterminated regex starting at position %d", start-1)
+				return nil, fmt.Errorf("unterminated regex at position %d: missing closing '/'", start-1)
 			}
 			patternStr := string(pattern)
 			raw := string(runes[start:i])
@@ -234,8 +234,11 @@ func lex(input string) ([]token, error) {
 					if i == numStart {
 						return nil, fmt.Errorf("expected number after 'today%c' at position %d", sign, numStart)
 					}
-					if i >= len(runes) || runes[i] != 'd' {
-						return nil, fmt.Errorf("expected 'd' suffix in offset at position %d", i)
+					if i >= len(runes) {
+						return nil, fmt.Errorf("expected 'd' suffix in offset at position %d (e.g. today+3d)", i)
+					}
+					if runes[i] != 'd' {
+						return nil, fmt.Errorf("expected 'd' suffix in offset at position %d, got %q (e.g. today+3d)", i, string(runes[i]))
 					}
 					numStr := string(runes[numStart:i])
 					i++ // skip 'd'
@@ -267,7 +270,7 @@ func lex(input string) ([]token, error) {
 			dateStr := string(runes[start:i])
 			// Validate format
 			if len(dateStr) != 10 || dateStr[4] != '-' || dateStr[7] != '-' {
-				return nil, fmt.Errorf("invalid date literal %q at position %d", dateStr, start)
+				return nil, fmt.Errorf("invalid date literal %q at position %d (expected YYYY-MM-DD)", dateStr, start)
 			}
 			tokens = append(tokens, token{Type: tokDate, Value: dateStr})
 			continue
