@@ -700,3 +700,58 @@ views:
 		t.Errorf("CustomBindings should be nil when not specified, got %v", cfg.CustomBindings)
 	}
 }
+
+func TestLoadBytes_ViewDueDatesAndHidden(t *testing.T) {
+	yaml := `
+views:
+  - title: "Open"
+    query: "open"
+    sort: file
+    order: 1
+  - title: "Due Export"
+    query: "open and @due"
+    sort: due_asc
+    due_dates: true
+    hidden: true
+    order: 2
+`
+	cfg, err := LoadBytes([]byte(yaml))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(cfg.Views) != 2 {
+		t.Fatalf("Views len = %d, want 2", len(cfg.Views))
+	}
+	if cfg.Views[0].DueDates {
+		t.Error("Views[0].DueDates should be false")
+	}
+	if cfg.Views[0].Hidden {
+		t.Error("Views[0].Hidden should be false")
+	}
+	if !cfg.Views[1].DueDates {
+		t.Error("Views[1].DueDates should be true")
+	}
+	if !cfg.Views[1].Hidden {
+		t.Error("Views[1].Hidden should be true")
+	}
+}
+
+func TestLoadBytes_MultipleDueDatesViewsError(t *testing.T) {
+	yaml := `
+views:
+  - title: "A"
+    query: "open"
+    sort: file
+    due_dates: true
+    order: 1
+  - title: "B"
+    query: "open and @due"
+    sort: file
+    due_dates: true
+    order: 2
+`
+	_, err := LoadBytes([]byte(yaml))
+	if err == nil {
+		t.Fatal("expected error for multiple due_dates views")
+	}
+}

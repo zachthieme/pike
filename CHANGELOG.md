@@ -1,5 +1,16 @@
 # Changelog
 
+## v1.8.0 — March 30, 2026: Configurable Due Dates Export
+
+**Due dates query:**
+- `writeDueDates` now filters tasks through `filter.Apply` with a configurable query instead of dumping all tasks with a `@due` tag
+- Default query is `"open and @due"` when no view is tagged — only open tasks with due dates are exported
+
+**View config:**
+- Added `due_dates: true` field to `ViewConfig` — marks a view as the source query for the `due.json` export (at most one view)
+- Added `hidden: true` field to `ViewConfig` — excludes a view from the TUI dashboard while keeping it available for due-dates export, keybinding targets, and `--view` CLI usage
+- Config validation rejects multiple views with `due_dates: true`
+
 ## v1.7.4 — March 22, 2026: Code Quality & API Surface
 
 **Doc comments:**

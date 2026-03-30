@@ -380,17 +380,35 @@ func findView(views []config.ViewConfig, title string) (*config.ViewConfig, erro
 	return nil, fmt.Errorf("unknown view %q", title)
 }
 
-// writeDueDates extracts unique due dates from tasks and writes them as a JSON
-// array of "yyyy-mm-dd" strings for wen calendar integration. The write is
-// atomic (write-to-temp-then-rename) so readers never see partial content.
-// Errors are silently ignored (best-effort) to avoid disrupting the main workflow.
-func writeDueDates(path string, tasks []model.Task) {
+// dueDatesQuery returns the query string for the due-dates export. If a view
+// is tagged with DueDates: true, its query is used; otherwise the default
+// "open and @due" is returned.
+func dueDatesQuery(views []config.ViewConfig) string {
+	for _, v := range views {
+		if v.DueDates {
+			return v.Query
+		}
+	}
+	return "open and @due"
+}
+
+// writeDueDates filters tasks through the given query, extracts unique due
+// dates, and writes them as a JSON array of "yyyy-mm-dd" strings for calendar
+// integration. The write is atomic (write-to-temp-then-rename) so readers
+// never see partial content. Errors are silently ignored (best-effort) to
+// avoid disrupting the main workflow.
+func writeDueDates(path string, tasks []model.Task, query string, now time.Time) {
 	if path == "" {
 		return
 	}
 
+	filtered, err := filter.Apply(tasks, query, "", now)
+	if err != nil {
+		return
+	}
+
 	seen := make(map[string]bool)
-	for _, t := range tasks {
+	for _, t := range filtered {
 		if t.Due != nil {
 			seen[t.Due.Format("2006-01-02")] = true
 		}
@@ -435,16 +453,21 @@ func runTUI(_ io.Writer, cfg *config.Config, tasks []model.Task, sc *scanner.Sca
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	// Resolve the due-dates query from config views.
+	dueQuery := dueDatesQuery(cfg.Views)
+
 	// Write due dates on initial launch.
-	writeDueDates(cfg.DueDatesPath, tasks)
+	writeDueDates(cfg.DueDatesPath, tasks, dueQuery, time.Now())
 
 	var dueMu sync.Mutex
 	dueDatesPath := cfg.DueDatesPath
+	currentDueQuery := dueQuery
 	configReload := func() (*config.Config, error) {
 		c, err := config.Load(configPath)
 		if err == nil {
 			dueMu.Lock()
 			dueDatesPath = c.DueDatesPath
+			currentDueQuery = dueDatesQuery(c.Views)
 			dueMu.Unlock()
 		}
 		return c, err
@@ -454,8 +477,9 @@ func runTUI(_ io.Writer, cfg *config.Config, tasks []model.Task, sc *scanner.Sca
 		if err == nil {
 			dueMu.Lock()
 			path := dueDatesPath
+			q := currentDueQuery
 			dueMu.Unlock()
-			writeDueDates(path, tasks)
+			writeDueDates(path, tasks, q, time.Now())
 		}
 		return tasks, err
 	}

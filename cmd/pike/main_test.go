@@ -328,7 +328,7 @@ func TestWriteDueDates_WritesCorrectJSON(t *testing.T) {
 		{Due: nil}, // no due date
 	}
 
-	writeDueDates(path, tasks)
+	writeDueDates(path, tasks, "", time.Now())
 
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -356,7 +356,7 @@ func TestWriteDueDates_EmptyPathIsNoop(t *testing.T) {
 	d := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 	tasks := []model.Task{{Due: &d}}
 
-	writeDueDates("", tasks)
+	writeDueDates("", tasks, "", time.Now())
 
 	if _, err := os.Stat(path); err == nil {
 		t.Error("expected no file when path is empty")
@@ -367,7 +367,7 @@ func TestWriteDueDates_NoTasksWritesEmptyArray(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "due.json")
 
-	writeDueDates(path, nil)
+	writeDueDates(path, nil, "", time.Now())
 
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -383,7 +383,7 @@ func TestWriteDueDates_CreatesParentDirs(t *testing.T) {
 	path := filepath.Join(dir, "nested", "deep", "due.json")
 
 	d := time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)
-	writeDueDates(path, []model.Task{{Due: &d}})
+	writeDueDates(path, []model.Task{{Due: &d}}, "", time.Now())
 
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -405,11 +405,11 @@ func TestWriteDueDates_AtomicWrite(t *testing.T) {
 
 	// Write initial content
 	d1 := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
-	writeDueDates(path, []model.Task{{Due: &d1}})
+	writeDueDates(path, []model.Task{{Due: &d1}}, "", time.Now())
 
 	// Overwrite with new content
 	d2 := time.Date(2026, 6, 15, 0, 0, 0, 0, time.UTC)
-	writeDueDates(path, []model.Task{{Due: &d2}})
+	writeDueDates(path, []model.Task{{Due: &d2}}, "", time.Now())
 
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -458,6 +458,64 @@ func TestQueryMode_DoesNotWriteDueDates(t *testing.T) {
 
 	if _, err := os.Stat(duePath); err == nil {
 		t.Error("due.json should not be written in --query mode")
+	}
+}
+
+func TestDueDatesQuery_NoTaggedView(t *testing.T) {
+	views := []config.ViewConfig{
+		{Title: "Open", Query: "open", Sort: "file"},
+	}
+	got := dueDatesQuery(views)
+	if got != "open and @due" {
+		t.Errorf("dueDatesQuery() = %q, want %q", got, "open and @due")
+	}
+}
+
+func TestDueDatesQuery_TaggedView(t *testing.T) {
+	views := []config.ViewConfig{
+		{Title: "Open", Query: "open", Sort: "file"},
+		{Title: "Export", Query: "open and @due < today+30d", Sort: "due_asc", DueDates: true},
+	}
+	got := dueDatesQuery(views)
+	if got != "open and @due < today+30d" {
+		t.Errorf("dueDatesQuery() = %q, want %q", got, "open and @due < today+30d")
+	}
+}
+
+func TestWriteDueDates_FiltersWithQuery(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "due.json")
+
+	openDue := time.Date(2026, 3, 20, 0, 0, 0, 0, time.UTC)
+	completedDue := time.Date(2026, 3, 15, 0, 0, 0, 0, time.UTC)
+	tasks := []model.Task{
+		model.TaskWith(model.Task{Text: "open task", State: model.Open, HasCheckbox: true,
+			Tags: []model.Tag{{Name: "due", Value: "2026-03-20"}},
+			Due:  &openDue}),
+		model.TaskWith(model.Task{Text: "done task", State: model.Completed, HasCheckbox: true,
+			Tags: []model.Tag{{Name: "due", Value: "2026-03-15"}},
+			Due:  &completedDue}),
+	}
+
+	now := time.Date(2026, 3, 14, 0, 0, 0, 0, time.UTC)
+	writeDueDates(path, tasks, "open and @due", now)
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("failed to read due.json: %v", err)
+	}
+
+	var dates []string
+	if err := json.Unmarshal(data, &dates); err != nil {
+		t.Fatalf("invalid JSON: %v", err)
+	}
+
+	// Only the open task's due date should appear
+	if len(dates) != 1 {
+		t.Fatalf("expected 1 date, got %d: %v", len(dates), dates)
+	}
+	if dates[0] != "2026-03-20" {
+		t.Errorf("dates[0] = %q, want %q", dates[0], "2026-03-20")
 	}
 }
 

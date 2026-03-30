@@ -50,10 +50,14 @@ func Apply(tasks []model.Task, queryStr string, sortOrder string, now time.Time)
 }
 
 // ApplyViews runs Apply for each ViewConfig and returns results.
+// Views with Hidden: true are skipped and excluded from the results.
 func ApplyViews(tasks []model.Task, views []config.ViewConfig, now time.Time) ([]ViewResult, error) {
 	results := make([]ViewResult, 0, len(views))
 
 	for _, view := range views {
+		if view.Hidden {
+			continue
+		}
 		filtered, err := Apply(tasks, view.Query, view.Sort, now)
 		if err != nil {
 			return nil, err

@@ -37,11 +37,13 @@ type Config struct {
 
 // ViewConfig defines a single dashboard section.
 type ViewConfig struct {
-	Title string `yaml:"title"`
-	Query string `yaml:"query"`
-	Sort  string `yaml:"sort"`
-	Color string `yaml:"color"`
-	Order int    `yaml:"order"`
+	Title    string `yaml:"title"`
+	Query    string `yaml:"query"`
+	Sort     string `yaml:"sort"`
+	Color    string `yaml:"color"`
+	Order    int    `yaml:"order"`
+	DueDates bool   `yaml:"due_dates"`
+	Hidden   bool   `yaml:"hidden"`
 }
 
 // CustomBinding defines a user-configured key shortcut.
@@ -311,6 +313,16 @@ func applyDefaults(raw *rawConfig) (*Config, error) {
 		}
 	}
 
+	dueDateViewCount := 0
+	for _, v := range cfg.Views {
+		if v.DueDates {
+			dueDateViewCount++
+		}
+	}
+	if dueDateViewCount > 1 {
+		return nil, fmt.Errorf("at most one view may have due_dates: true")
+	}
+
 	keybindings, customBindings, err := parseKeybindings(raw.Keybindings)
 	if err != nil {
 		return nil, err
@@ -398,6 +410,9 @@ tag_colors:
 #       query: "open and @due < today+3d"  # run a query
 
 # Dashboard sections — each view is a filtered, sorted slice of your tasks
+# Optional fields:
+#   due_dates: true    — use this view's query for the due.json export (at most one)
+#   hidden: true       — exclude from dashboard (still usable for due_dates, keybindings, --view)
 views:
   - title: "Today"
     query: "open and @today"
@@ -416,6 +431,13 @@ views:
     sort: due_asc
     color: "#f9e2af"
     order: 3
+
+  # Uncomment to customize which tasks feed the due.json export:
+  # - title: "Due Dates Export"
+  #   query: "open and @due"
+  #   sort: due_asc
+  #   due_dates: true
+  #   hidden: true
 `
 
 // writeDefaultConfig writes a default config file to the XDG config directory

@@ -274,3 +274,27 @@ func TestApplyViewsInvalidQuery(t *testing.T) {
 		t.Fatal("expected error for invalid query in view, got nil")
 	}
 }
+
+func TestApplyViews_HiddenViewsExcluded(t *testing.T) {
+	tasks := []model.Task{
+		{Text: "task @due(2026-03-15)", State: model.Open, HasCheckbox: true,
+			Tags: []model.Tag{{Name: "due", Value: "2026-03-15"}},
+			Due:  timePtr(time.Date(2026, 3, 15, 0, 0, 0, 0, time.UTC))},
+	}
+	views := []config.ViewConfig{
+		{Title: "Open", Query: "open", Sort: "file"},
+		{Title: "Due Export", Query: "open and @due", Sort: "due_asc", Hidden: true},
+	}
+	now := time.Date(2026, 3, 14, 0, 0, 0, 0, time.UTC)
+
+	results, err := ApplyViews(tasks, views, now)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(results) != 1 {
+		t.Fatalf("expected 1 result (hidden excluded), got %d", len(results))
+	}
+	if results[0].Title != "Open" {
+		t.Errorf("results[0].Title = %q, want %q", results[0].Title, "Open")
+	}
+}
