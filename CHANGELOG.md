@@ -1,5 +1,9 @@
 # Changelog
 
+## v1.8.1 — March 31, 2026: CI Cleanup
+
+- CI workflow now only runs on version tag pushes (no longer triggers on every push to main or PRs)
+
 ## v1.8.0 — March 30, 2026: Configurable Due Dates Export
 
 **Due dates query:**
