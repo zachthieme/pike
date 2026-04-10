@@ -5,7 +5,6 @@ import (
 	"strings"
 
 	"github.com/zachthieme/pike/internal/filter"
-	"github.com/zachthieme/pike/internal/model"
 
 	"github.com/charmbracelet/lipgloss"
 )
@@ -38,49 +37,28 @@ func (m Model) View() string {
 func (m Model) viewDashboard() string {
 	body, _ := m.renderSections()
 
-	// Count open tasks visible in the current dashboard sections.
-	displayedOpen := 0
-	for _, sec := range m.displaySections() {
-		for _, t := range sec.Tasks {
-			if t.HasCheckbox && t.State == model.Open {
-				displayedOpen++
-			}
-		}
-	}
-
-	label := fmt.Sprintf(" ○ %d/%d  ● %d wk", displayedOpen, m.openCount, m.completedThisWeek)
-	if len(m.warnings) > 0 {
-		label += fmt.Sprintf("  ⚠ %d", len(m.warnings))
-	}
-	footer := m.renderFooterBar(label)
-
+	var footer string
 	if m.filterBar.QueryErr() != nil {
-		footer += "\n" + FooterStyle().Render("  "+m.filterBar.QueryErr().Error())
+		footer = "\n" + FooterStyle().Render("  "+m.filterBar.QueryErr().Error())
 	}
 
-	full := body + "\n" + footer
+	full := body + footer
 	return m.truncateView(full)
-}
-
-// renderFooterBar renders a right-aligned footer with a horizontal rule and label.
-func (m Model) renderFooterBar(label string) string {
-	lineWidth := max(0, m.width-lipgloss.Width(label))
-	return FooterStyle().Render(strings.Repeat("\u2500", lineWidth) + label)
 }
 
 func (m Model) viewFocused() string {
 	body, count := m.renderSections()
 
-	footer := m.renderFooterBar(fmt.Sprintf(" %d results", count))
+	var footer string
 	if m.filterBar.QueryErr() != nil {
-		footer += "\n" + FooterStyle().Render("  "+m.filterBar.QueryErr().Error())
+		footer = "\n" + FooterStyle().Render("  "+m.filterBar.QueryErr().Error())
 	}
 
 	if count == 0 {
-		return body + "\nNo results\n" + footer
+		return body + "\nNo results" + footer
 	}
 
-	full := body + "\n" + footer
+	full := body + footer
 	return m.truncateView(full)
 }
 

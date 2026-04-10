@@ -111,16 +111,6 @@ func TestViewDashboardContainsTaskMarkers(t *testing.T) {
 	}
 }
 
-func TestViewDashboardContainsFooterCounts(t *testing.T) {
-	m := viewTestModel(viewTestTasks(), testViews())
-	output := stripped(m)
-
-	// Footer should show open count and completed-this-week count.
-	if !strings.Contains(output, "wk") {
-		t.Error("dashboard View() missing footer 'wk' label")
-	}
-}
-
 func TestViewFocusedShowsSingleSection(t *testing.T) {
 	m := viewTestModel(viewTestTasks(), testViews())
 
@@ -134,9 +124,6 @@ func TestViewFocusedShowsSingleSection(t *testing.T) {
 	}
 	if !strings.Contains(output, "Overdue task") {
 		t.Error("focused View() missing overdue task text")
-	}
-	if !strings.Contains(output, "results") {
-		t.Error("focused View() missing 'results' footer")
 	}
 }
 
@@ -181,14 +168,11 @@ func TestViewCursorMarkerPresent(t *testing.T) {
 }
 
 func TestViewEmptyTasksRendersWithoutPanic(t *testing.T) {
+	// Verify that rendering with no matching tasks does not panic.
 	m := viewTestModel(nil, []config.ViewConfig{
 		{Title: "Empty", Query: "open and @nonexistent", Sort: "file", Color: "cyan", Order: 1},
 	})
-	output := stripped(m)
-
-	if output == "" {
-		t.Error("View() returned empty string for empty task set")
-	}
+	_ = stripped(m)
 }
 
 func TestViewWindowSizeAffectsOutput(t *testing.T) {

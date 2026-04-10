@@ -40,9 +40,6 @@ type Model struct {
 	sections           []filter.ViewResult // current filtered/sorted sections
 	unfilteredSections []filter.ViewResult // pre-filter cache for visibleSections()
 	hiddenCounts       []int              // per-section count of @hidden tasks removed
-	openCount          int                // cached open checkbox count, updated on rebuild
-	completedThisWeek  int                // cached completed-this-week count
-
 	// Navigation and view state.
 	nav          Navigator // cursor + section navigation
 	focusedView  string    // section title when mode == modeFocused; empty otherwise

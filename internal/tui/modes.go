@@ -41,21 +41,6 @@ func (m *Model) rebuildSections() {
 		m.rebuildDashboard(now)
 	}
 
-	// Cache counts so View() doesn't rescan.
-	weekStart := startOfWeek(now, m.weekStartDay())
-
-	openCount := 0
-	completedThisWeek := 0
-	for _, t := range m.allTasks {
-		if t.HasCheckbox && t.State == model.Open {
-			openCount++
-		}
-		if t.HasCheckbox && t.State == model.Completed && t.Completed != nil && !t.Completed.Before(weekStart) {
-			completedThisWeek++
-		}
-	}
-	m.openCount = openCount
-	m.completedThisWeek = completedThisWeek
 }
 
 // rebuildSingleSection builds a single-section view from the given tasks,

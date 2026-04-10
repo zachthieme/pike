@@ -7,23 +7,6 @@ import (
 	"github.com/zachthieme/pike/internal/model"
 )
 
-// startOfWeek returns midnight of the most recent occurrence of the given weekday.
-// weekday is 0=Sunday, 1=Monday, ..., 6=Saturday.
-func startOfWeek(now time.Time, weekday int) time.Time {
-	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
-	current := int(today.Weekday())
-	diff := (current - weekday + 7) % 7
-	return today.AddDate(0, 0, -diff)
-}
-
-// weekStartDay returns the configured week start day, defaulting to Sunday (0).
-func (m Model) weekStartDay() int {
-	if m.config != nil {
-		return m.config.WeekStartDay
-	}
-	return 0
-}
-
 // visibleSections returns non-empty sections from the cached unfiltered view set.
 func (m Model) visibleSections() []filter.ViewResult {
 	// Use cached unfiltered results when available (dashboard mode).
