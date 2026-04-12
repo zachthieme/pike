@@ -11,7 +11,9 @@ import (
 type TaskState int
 
 const (
+	// Open indicates a task checkbox is unchecked: "- [ ]".
 	Open TaskState = iota
+	// Completed indicates a task checkbox is checked: "- [x]" or "- [X]".
 	Completed
 )
 

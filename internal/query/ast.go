@@ -1,4 +1,3 @@
-// Package query implements a DSL for filtering tasks by state, tags, dates, and text.
 package query
 
 import (
