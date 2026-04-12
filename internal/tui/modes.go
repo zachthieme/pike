@@ -118,6 +118,12 @@ func (m *Model) filterTasks(tasks []model.Task, now time.Time) ([]model.Task, bo
 
 // regroupChildren moves children adjacent to their parent within a section.
 // Children whose parent is not in the section remain in their sorted position.
+//
+// INVARIANT: only single-level parent-child hierarchy is supported.
+// A task is a "child" if Indent > 0 and ParentIndex >= 0.
+// Grand-children (children of children) are not modeled: parser.LinkSubtasks
+// links only one indent level deep. If multi-level nesting is added, this
+// function must be updated to walk the full subtree, not just direct children.
 func (m *Model) regroupChildren(tasks []model.Task) []model.Task {
 	if len(tasks) == 0 {
 		return tasks

@@ -49,8 +49,8 @@ type Task struct {
 	Completed   *time.Time      // Parsed from @completed(YYYY-MM-DD), nil if absent
 	HasCheckbox bool            // true if line had - [ ] or - [x], false for plain bullets
 	Indent      int             // column count of leading whitespace (0 for top-level)
-	ChildIndices []int           // indices of direct subtasks in flat task list (single level)
-	ParentIndex  int            // index of parent in flat task list, -1 if none
+	ChildIndices []int           // indices of direct subtasks (single level only; see tui.regroupChildren)
+	ParentIndex  int            // index of parent in flat task list, -1 if none (single level only)
 }
 
 // NewTask creates a Task with pre-computed LowerText and an initialized tagSet.
