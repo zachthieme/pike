@@ -45,6 +45,9 @@ type Task struct {
 	Due         *time.Time      // Parsed from @due(YYYY-MM-DD), nil if absent
 	Completed   *time.Time      // Parsed from @completed(YYYY-MM-DD), nil if absent
 	HasCheckbox bool            // true if line had - [ ] or - [x], false for plain bullets
+	Indent      int             // column count of leading whitespace (0 for top-level)
+	Children    []*Task         // direct subtasks (single level only)
+	ParentIndex int             // index of parent in flat task list, -1 if none
 }
 
 // NewTask creates a Task with pre-computed LowerText and an initialized tagSet.
@@ -58,6 +61,7 @@ func NewTask(text, file string, line int, state TaskState, hasCheckbox bool) *Ta
 		Line:        line,
 		HasCheckbox: hasCheckbox,
 		tagSet:      make(map[string]bool),
+		ParentIndex: -1,
 	}
 }
 
@@ -73,6 +77,8 @@ func TaskWith(partial Task) Task {
 	}
 	t.Due = partial.Due
 	t.Completed = partial.Completed
+	t.Indent = partial.Indent
+	t.ParentIndex = partial.ParentIndex
 	return *t
 }
 
@@ -91,6 +97,18 @@ func (t *Task) SetText(text string) {
 // HasTag returns true if the task has a tag with the given name (O(1) lookup).
 func (t *Task) HasTag(name string) bool {
 	return t.tagSet[name]
+}
+
+// Progress returns the count of completed vs. total children.
+// Returns (0, 0) for leaf tasks (no children).
+func (t *Task) Progress() (done, total int) {
+	total = len(t.Children)
+	for _, c := range t.Children {
+		if c.State == Completed {
+			done++
+		}
+	}
+	return done, total
 }
 
 // Warning represents a non-fatal issue found during parsing.

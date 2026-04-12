@@ -92,6 +92,7 @@ func TestParseLine(t *testing.T) {
 		wantTags      []model.Tag
 		wantDue       *time.Time
 		wantCompleted *time.Time
+		wantIndent    int
 	}{
 		{
 			name:      "open task",
@@ -153,10 +154,11 @@ func TestParseLine(t *testing.T) {
 			wantDue: date(2026, time.March, 14),
 		},
 		{
-			name:      "indented task",
-			line:      "  - [ ] Nested item",
-			wantText:  "Nested item",
-			wantState: model.Open,
+			name:       "indented task",
+			line:       "  - [ ] Nested item",
+			wantText:   "Nested item",
+			wantState:  model.Open,
+			wantIndent: 2,
 		},
 		{
 			name:    "non-task plain text",
@@ -193,13 +195,12 @@ func TestParseLine(t *testing.T) {
 			},
 		},
 		{
-			name:      "indented plain bullet with tag",
-			line:      "  - Saransh leave ends 4/16 @horizon",
-			wantText:  "Saransh leave ends 4/16 @horizon",
-			wantState: model.Open,
-			wantTags: []model.Tag{
-				{Name: "horizon", Value: ""},
-			},
+			name:       "indented plain bullet with tag",
+			line:       "  - Saransh leave ends 4/16 @horizon",
+			wantText:   "Saransh leave ends 4/16 @horizon",
+			wantState:  model.Open,
+			wantTags:   []model.Tag{{Name: "horizon", Value: ""}},
+			wantIndent: 2,
 		},
 		{
 			name:      "invalid date format in due tag",
@@ -254,13 +255,42 @@ func TestParseLine(t *testing.T) {
 			wantNil: true,
 		},
 		{
-			name:      "deeply indented task",
-			line:      "      - [x] Very nested @weekly",
-			wantText:  "Very nested @weekly",
-			wantState: model.Completed,
-			wantTags: []model.Tag{
-				{Name: "weekly", Value: ""},
-			},
+			name:       "deeply indented task",
+			line:       "      - [x] Very nested @weekly",
+			wantText:   "Very nested @weekly",
+			wantState:  model.Completed,
+			wantTags:   []model.Tag{{Name: "weekly", Value: ""}},
+			wantIndent: 6,
+		},
+		{
+			name:       "indent zero for top-level checkbox",
+			line:       "- [ ] Top level task",
+			wantText:   "Top level task",
+			wantState:  model.Open,
+			wantIndent: 0,
+		},
+		{
+			name:       "indent two for child checkbox",
+			line:       "  - [ ] Child task",
+			wantText:   "Child task",
+			wantState:  model.Open,
+			wantIndent: 2,
+		},
+		{
+			name:       "indent four for deeper child",
+			line:       "    - [x] Deep child @weekly",
+			wantText:   "Deep child @weekly",
+			wantState:  model.Completed,
+			wantIndent: 4,
+			wantTags:   []model.Tag{{Name: "weekly", Value: ""}},
+		},
+		{
+			name:       "indent two for tagged bullet child",
+			line:       "  - Review API @risk",
+			wantText:   "Review API @risk",
+			wantState:  model.Open,
+			wantIndent: 2,
+			wantTags:   []model.Tag{{Name: "risk", Value: ""}},
 		},
 	}
 
@@ -334,6 +364,10 @@ func TestParseLine(t *testing.T) {
 				} else if !task.Completed.Equal(*tt.wantCompleted) {
 					t.Errorf("Completed = %v, want %v", task.Completed, tt.wantCompleted)
 				}
+			}
+
+			if task.Indent != tt.wantIndent {
+				t.Errorf("Indent = %d, want %d", task.Indent, tt.wantIndent)
 			}
 		})
 	}

@@ -107,3 +107,59 @@ func TestHasTag(t *testing.T) {
 		t.Error("expected HasTag('risk') to be false")
 	}
 }
+
+func TestProgress(t *testing.T) {
+	tests := []struct {
+		name      string
+		children  []*Task
+		wantDone  int
+		wantTotal int
+	}{
+		{
+			name:      "no children",
+			children:  nil,
+			wantDone:  0,
+			wantTotal: 0,
+		},
+		{
+			name: "all open",
+			children: []*Task{
+				{State: Open},
+				{State: Open},
+			},
+			wantDone:  0,
+			wantTotal: 2,
+		},
+		{
+			name: "mixed",
+			children: []*Task{
+				{State: Completed},
+				{State: Open},
+				{State: Completed},
+			},
+			wantDone:  2,
+			wantTotal: 3,
+		},
+		{
+			name: "all completed",
+			children: []*Task{
+				{State: Completed},
+				{State: Completed},
+			},
+			wantDone:  2,
+			wantTotal: 2,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			task := &Task{Children: tt.children}
+			done, total := task.Progress()
+			if done != tt.wantDone {
+				t.Errorf("done = %d, want %d", done, tt.wantDone)
+			}
+			if total != tt.wantTotal {
+				t.Errorf("total = %d, want %d", total, tt.wantTotal)
+			}
+		})
+	}
+}
