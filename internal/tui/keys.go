@@ -5,6 +5,20 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
+// handleKey is the top-level key dispatch for all modes.
+//
+// Dispatch order:
+//  1. modeTagSearch         → full delegation to TagSearch sub-model
+//  2. modeRecentlyCompleted → intercept Escape before FilterBar
+//  3. FilterBar active      → handleKeyFilterInput (typing) or handleKeyFilterResults (browsing)
+//  4. CreateBar active      → full delegation to CreateBar sub-model
+//  5. Custom bindings       → handleKeyCustomBinding (O(1) lookup, skipped if viewLocked)
+//  6. Default               → handleKeyDashboard (shared across dashboard/focused modes)
+//     a. Quit, Escape, Summary, Filter, Query — global keys
+//     b. handleModeEntryKey — mode switches (a/t/c)
+//     c. handleTaskAction — toggle, collapse, hidden, editor
+//     d. handleCursorMovement — arrows, page, jump
+//     e. handleFocusSectionKey — 1-9 section focus
 func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// Tag search mode: delegate all keys to TagSearch sub-model.
 	if m.mode == modeTagSearch {
@@ -127,6 +141,45 @@ func (m Model) handleKeyCustomBinding(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool)
 	return m, nil, true
 }
 
+// handleEscapeKey handles the Escape key with mode-specific priority:
+//  1. Dismiss summary overlay (any mode)
+//  2. Unfocus section (modeFocused, if !viewLocked)
+//  3. Exit to dashboard (any non-dashboard mode)
+func (m Model) handleEscapeKey() (tea.Model, tea.Cmd) {
+	switch {
+	case m.showSummary:
+		m.showSummary = false
+	case m.mode == modeFocused && !m.viewLocked:
+		m.mode = modeDashboard
+		m.focusedView = ""
+		m.rebuildSections()
+		m.nav.ClampCursor(m.displaySections())
+	case m.mode != modeDashboard && m.mode != modeFocused:
+		m.exitToDashboard()
+	}
+	return m, nil
+}
+
+// handleModeEntryKey handles keys that switch between display modes (a, t, c).
+// Returns handled=true if a mode switch key was matched.
+func (m Model) handleModeEntryKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
+	switch {
+	case key.Matches(msg, m.keys.AllTasks):
+		focusCmd := m.enterAllTasksMode(false, "")
+		return m, tea.Batch(focusCmd, tea.ClearScreen), true
+	case key.Matches(msg, m.keys.TagSearch):
+		focusCmd := m.enterTagSearchMode()
+		return m, tea.Batch(focusCmd, tea.ClearScreen), true
+	case key.Matches(msg, m.keys.RecentlyCompleted):
+		if m.mode == modeRecentlyCompleted {
+			return m, nil, true
+		}
+		focusCmd := m.enterRecentlyCompletedMode()
+		return m, tea.Batch(focusCmd, tea.ClearScreen), true
+	}
+	return m, nil, false
+}
+
 // handleKeyDashboard handles keys in the default dashboard/navigation mode.
 func (m Model) handleKeyDashboard(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch {
@@ -134,19 +187,7 @@ func (m Model) handleKeyDashboard(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, tea.Quit
 
 	case key.Matches(msg, m.keys.Escape):
-		// Escape priority: dismiss summary → unfocus section → exit mode → do nothing.
-		switch {
-		case m.showSummary:
-			m.showSummary = false
-		case m.mode == modeFocused && !m.viewLocked:
-			m.mode = modeDashboard
-			m.focusedView = ""
-			m.rebuildSections()
-			m.nav.ClampCursor(m.displaySections())
-		case m.mode != modeDashboard && m.mode != modeFocused:
-			m.exitToDashboard()
-		}
-		return m, nil
+		return m.handleEscapeKey()
 
 	case key.Matches(msg, m.keys.Summary):
 		m.showSummary = !m.showSummary
@@ -170,21 +211,6 @@ func (m Model) handleKeyDashboard(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		})
 		return m, cmd
 
-	case key.Matches(msg, m.keys.AllTasks):
-		focusCmd := m.enterAllTasksMode(false, "")
-		return m, tea.Batch(focusCmd, tea.ClearScreen)
-
-	case key.Matches(msg, m.keys.TagSearch):
-		focusCmd := m.enterTagSearchMode()
-		return m, tea.Batch(focusCmd, tea.ClearScreen)
-
-	case key.Matches(msg, m.keys.RecentlyCompleted):
-		if m.mode == modeRecentlyCompleted {
-			return m, nil
-		}
-		focusCmd := m.enterRecentlyCompletedMode()
-		return m, tea.Batch(focusCmd, tea.ClearScreen)
-
 	case key.Matches(msg, m.keys.NextSection):
 		m.nav.JumpToNextSection(m.displaySections())
 		return m, nil
@@ -198,6 +224,9 @@ func (m Model) handleKeyDashboard(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, cmd
 	}
 
+	if mdl, cmd, handled := m.handleModeEntryKey(msg); handled {
+		return mdl, cmd
+	}
 	if mdl, cmd, handled := m.handleTaskAction(msg); handled {
 		return mdl, cmd
 	}
