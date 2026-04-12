@@ -78,7 +78,6 @@ func TaskWith(partial Task) Task {
 	t.Due = partial.Due
 	t.Completed = partial.Completed
 	t.Indent = partial.Indent
-	t.ParentIndex = partial.ParentIndex
 	return *t
 }
 

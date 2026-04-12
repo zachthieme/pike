@@ -1313,3 +1313,40 @@ func TestEscapePriorityChain(t *testing.T) {
 		t.Errorf("focusedView = %q, want empty after escape", m4.focusedView)
 	}
 }
+
+func TestNewModelLinksSubtasks(t *testing.T) {
+	tasks := []model.Task{
+		model.TaskWith(model.Task{
+			Text: "Parent @today", State: model.Open,
+			File: "a.md", Line: 1, Indent: 0,
+			Tags: []model.Tag{{Name: "today"}},
+		}),
+		model.TaskWith(model.Task{
+			Text: "Child one", State: model.Open,
+			File: "a.md", Line: 2, Indent: 2, HasCheckbox: true,
+		}),
+		model.TaskWith(model.Task{
+			Text: "Child two", State: model.Completed,
+			File: "a.md", Line: 3, Indent: 2, HasCheckbox: true,
+		}),
+	}
+	views := []config.ViewConfig{
+		{Title: "Open", Query: "open", Sort: "file", Color: "green", Order: 1},
+	}
+	m := testModel(tasks, views)
+
+	// Verify parent-child linking happened
+	if len(m.allTasks[0].Children) != 2 {
+		t.Fatalf("parent Children count = %d, want 2", len(m.allTasks[0].Children))
+	}
+	if m.allTasks[1].ParentIndex != 0 {
+		t.Errorf("child 1 ParentIndex = %d, want 0", m.allTasks[1].ParentIndex)
+	}
+	if m.allTasks[2].ParentIndex != 0 {
+		t.Errorf("child 2 ParentIndex = %d, want 0", m.allTasks[2].ParentIndex)
+	}
+	done, total := m.allTasks[0].Progress()
+	if done != 1 || total != 2 {
+		t.Errorf("Progress = (%d, %d), want (1, 2)", done, total)
+	}
+}

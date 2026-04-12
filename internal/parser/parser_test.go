@@ -82,6 +82,103 @@ func TestParseLineWarnings(t *testing.T) {
 	}
 }
 
+func TestLinkSubtasks(t *testing.T) {
+	tests := []struct {
+		name           string
+		tasks          []model.Task
+		wantParents    []int // expected ParentIndex for each task
+		wantChildCount []int // expected len(Children) for each task
+	}{
+		{
+			name: "no children",
+			tasks: []model.Task{
+				{File: "a.md", Line: 1, Indent: 0},
+				{File: "a.md", Line: 2, Indent: 0},
+			},
+			wantParents:    []int{-1, -1},
+			wantChildCount: []int{0, 0},
+		},
+		{
+			name: "single parent with two children",
+			tasks: []model.Task{
+				{File: "a.md", Line: 1, Indent: 0},
+				{File: "a.md", Line: 2, Indent: 2},
+				{File: "a.md", Line: 3, Indent: 2},
+			},
+			wantParents:    []int{-1, 0, 0},
+			wantChildCount: []int{2, 0, 0},
+		},
+		{
+			name: "two parents each with children",
+			tasks: []model.Task{
+				{File: "a.md", Line: 1, Indent: 0},
+				{File: "a.md", Line: 2, Indent: 2},
+				{File: "a.md", Line: 3, Indent: 0},
+				{File: "a.md", Line: 4, Indent: 2},
+			},
+			wantParents:    []int{-1, 0, -1, 2},
+			wantChildCount: []int{1, 0, 1, 0},
+		},
+		{
+			name: "grandchild not linked (single level only)",
+			tasks: []model.Task{
+				{File: "a.md", Line: 1, Indent: 0},
+				{File: "a.md", Line: 2, Indent: 2},
+				{File: "a.md", Line: 3, Indent: 4},
+			},
+			wantParents:    []int{-1, 0, -1},
+			wantChildCount: []int{1, 0, 0},
+		},
+		{
+			name: "cross-file tasks not linked",
+			tasks: []model.Task{
+				{File: "a.md", Line: 1, Indent: 0},
+				{File: "b.md", Line: 1, Indent: 2},
+			},
+			wantParents:    []int{-1, -1},
+			wantChildCount: []int{0, 0},
+		},
+		{
+			name: "orphan at indent > 0 with no preceding parent",
+			tasks: []model.Task{
+				{File: "a.md", Line: 5, Indent: 2},
+			},
+			wantParents:    []int{-1},
+			wantChildCount: []int{0},
+		},
+		{
+			name: "tagged bullet parent with checkbox children",
+			tasks: []model.Task{
+				{File: "a.md", Line: 1, Indent: 0, HasCheckbox: false},
+				{File: "a.md", Line: 2, Indent: 2, HasCheckbox: true},
+				{File: "a.md", Line: 3, Indent: 2, HasCheckbox: true},
+			},
+			wantParents:    []int{-1, 0, 0},
+			wantChildCount: []int{2, 0, 0},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Set ParentIndex to -1 (as NewTask would)
+			for i := range tt.tasks {
+				tt.tasks[i].ParentIndex = -1
+			}
+
+			LinkSubtasks(tt.tasks)
+
+			for i, task := range tt.tasks {
+				if task.ParentIndex != tt.wantParents[i] {
+					t.Errorf("task[%d] ParentIndex = %d, want %d", i, task.ParentIndex, tt.wantParents[i])
+				}
+				if len(task.Children) != tt.wantChildCount[i] {
+					t.Errorf("task[%d] len(Children) = %d, want %d", i, len(task.Children), tt.wantChildCount[i])
+				}
+			}
+		})
+	}
+}
+
 func TestParseLine(t *testing.T) {
 	tests := []struct {
 		name          string

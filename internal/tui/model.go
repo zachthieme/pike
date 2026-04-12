@@ -7,6 +7,7 @@ import (
 	"github.com/zachthieme/pike/internal/config"
 	"github.com/zachthieme/pike/internal/filter"
 	"github.com/zachthieme/pike/internal/model"
+	"github.com/zachthieme/pike/internal/parser"
 
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -49,6 +50,9 @@ type Model struct {
 	showSummary  bool
 	showHidden   bool // whether to show @hidden tasks
 	showAll      bool // when true, all-tasks includes completed (e.g. from tag search)
+	// Subtask collapse state — keys are "file:line", presence means expanded.
+	// Absent = collapsed (default).
+	expanded map[string]bool
 
 	// Sub-models.
 	filterBar FilterBar
@@ -77,9 +81,11 @@ type Model struct {
 
 // NewModel creates a new TUI model with the given configuration and initial tasks.
 func NewModel(cfg *config.Config, tasks []model.Task, scanFunc func() ([]model.Task, error), configFunc func() (*config.Config, error)) Model {
+	parser.LinkSubtasks(tasks)
 	m := Model{
 		config:         cfg,
 		allTasks:       tasks,
+		expanded:       make(map[string]bool),
 		focusedView:    "",
 		filterBar:      NewFilterBar(),
 		tagSearch:      NewTagSearch(),
@@ -208,6 +214,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.customKeyIndex = buildCustomKeyIndex(msg.Config.CustomBindings)
 		}
 		if msg.Tasks != nil {
+			parser.LinkSubtasks(msg.Tasks)
 			m.allTasks = msg.Tasks
 			if m.mode == modeTagSearch {
 				tags := extractTagNames(m.allTasks)

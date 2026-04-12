@@ -107,6 +107,32 @@ func extractTags(task *model.Task, file string, lineNum int) []model.Warning {
 	return warnings
 }
 
+// LinkSubtasks builds single-level parent-child relationships among tasks.
+// Tasks must be ordered by file then line number (as returned by scanner).
+// Modifies tasks in place: sets ParentIndex on children, appends to
+// Children on parents. Does not reorder or remove tasks.
+// Only links one level deep — a task that is already a child cannot be a parent.
+func LinkSubtasks(tasks []model.Task) {
+	for i := range tasks {
+		if tasks[i].Indent == 0 {
+			continue
+		}
+		for j := i - 1; j >= 0; j-- {
+			if tasks[j].File != tasks[i].File {
+				break // crossed file boundary
+			}
+			if tasks[j].Indent < tasks[i].Indent {
+				if tasks[j].ParentIndex != -1 {
+					break // tasks[j] is already a child; tasks[i] would be a grandchild — stop
+				}
+				tasks[i].ParentIndex = j
+				tasks[j].Children = append(tasks[j].Children, &tasks[i])
+				break
+			}
+		}
+	}
+}
+
 // ParseLine parses a single line of text and returns a Task if the line
 // matches the task format, or nil if it does not.
 // Matches checkbox lines (- [ ] / - [x]) and plain bullet lines (- text)
