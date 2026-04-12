@@ -92,7 +92,7 @@ func (m Model) toggleTask() (tea.Model, tea.Cmd) {
 				if notesDir != "" {
 					parentPath = filepath.Join(notesDir, parentFile)
 				}
-				_ = toggle.Complete(ctx, parentPath, parentLine, now)
+				_ = toggle.Complete(ctx, parentPath, parentLine, now) //nolint:errcheck // best-effort cascade; child already written, refresh will reconcile
 			}
 		} else {
 			if err := toggle.Uncomplete(ctx, filePath, line); err != nil {
@@ -104,7 +104,7 @@ func (m Model) toggleTask() (tea.Model, tea.Cmd) {
 				if notesDir != "" {
 					parentPath = filepath.Join(notesDir, parentFile)
 				}
-				_ = toggle.Uncomplete(ctx, parentPath, parentLine)
+				_ = toggle.Uncomplete(ctx, parentPath, parentLine) //nolint:errcheck // best-effort cascade; child already written, refresh will reconcile
 			}
 		}
 		return toggleResultMsg{Err: nil}
@@ -128,14 +128,14 @@ func (m Model) toggleHiddenTag() (tea.Model, tea.Cmd) {
 
 // toggleCollapse expands or collapses the subtask list for the parent at the cursor.
 // No-op if the cursor is on a child or a task with no children.
-func (m *Model) toggleCollapse() {
+func (m Model) toggleCollapse() (tea.Model, tea.Cmd) {
 	tasks := flatTasks(m.displaySections())
 	if len(tasks) == 0 || m.nav.Cursor() >= len(tasks) {
-		return
+		return m, nil
 	}
 	task := tasks[m.nav.Cursor()]
 	if !task.HasChildren() {
-		return // only toggle on parents
+		return m, nil
 	}
 	key := task.Key()
 	if m.expanded[key] {
@@ -145,4 +145,5 @@ func (m *Model) toggleCollapse() {
 	}
 	m.rebuildSections()
 	m.nav.ClampCursor(m.displaySections())
+	return m, nil
 }

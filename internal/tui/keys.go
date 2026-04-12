@@ -270,8 +270,8 @@ func (m Model) handleCursorMovement(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 func (m Model) handleTaskAction(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 	switch {
 	case key.Matches(msg, m.keys.ToggleCollapse):
-		m.toggleCollapse()
-		return m, nil, true
+		mdl, cmd := m.toggleCollapse()
+		return mdl, cmd, true
 	case key.Matches(msg, m.keys.Toggle):
 		mdl, cmd := m.toggleTask()
 		return mdl, cmd, true
