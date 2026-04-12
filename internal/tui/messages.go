@@ -118,3 +118,41 @@ type TagSelectedMsg struct {
 }
 
 type TagSearchExitMsg struct{}
+
+// --- InputBar messages ---
+
+// InputActivateMsg tells InputBar to activate with the given prompt and placeholder.
+type InputActivateMsg struct {
+	Prompt       string
+	Placeholder  string
+	InitialValue string
+}
+
+// InputDeactivateMsg tells InputBar to deactivate and clear.
+type InputDeactivateMsg struct{}
+
+// InputChangedMsg is emitted when the input text changes.
+type InputChangedMsg struct {
+	Text string
+}
+
+// InputSubmittedMsg is emitted when the user presses Enter.
+type InputSubmittedMsg struct {
+	Text string
+}
+
+// InputClearedMsg is emitted when the user dismisses the input (Escape on empty).
+type InputClearedMsg struct{}
+
+// --- CreateBar messages ---
+
+// CreateActivateMsg tells CreateBar to activate for task creation.
+type CreateActivateMsg struct{}
+
+// CreateSubmittedMsg is emitted when the user submits a new task.
+type CreateSubmittedMsg struct {
+	Text string
+}
+
+// CreateClearedMsg is emitted when the user cancels task creation.
+type CreateClearedMsg struct{}
