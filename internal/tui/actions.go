@@ -2,6 +2,7 @@ package tui
 
 import (
 	"context"
+	"fmt"
 	"path/filepath"
 
 	"github.com/zachthieme/pike/internal/editor"
@@ -38,6 +39,11 @@ func (m Model) resolveFilePath(relPath string) string {
 }
 
 // toggleTask completes or uncompletes the task at the cursor asynchronously.
+// When toggling a child task, cascades to the parent:
+//   - Completing last open child -> auto-completes parent (using toggle date)
+//   - Uncompleting a child of a completed parent -> uncompletes parent
+//
+// Auto-complete only applies to parents with HasCheckbox.
 func (m Model) toggleTask() (tea.Model, tea.Cmd) {
 	tasks := flatTasks(m.displaySections())
 	if len(tasks) == 0 || m.nav.Cursor() >= len(tasks) {
@@ -53,14 +59,56 @@ func (m Model) toggleTask() (tea.Model, tea.Cmd) {
 	line := task.Line
 	now := m.nowFunc()
 
+	// Capture parent info for auto-complete cascade
+	var parentFile string
+	var parentLine int
+	var parentState model.TaskState
+	var parentHasCheckbox bool
+	var siblingsDone, siblingsTotal int
+	hasParent := task.Indent > 0 && task.ParentIndex >= 0 && task.ParentIndex < len(m.allTasks)
+
+	if hasParent {
+		parent := m.allTasks[task.ParentIndex]
+		parentFile = parent.File
+		parentLine = parent.Line
+		parentState = parent.State
+		parentHasCheckbox = parent.HasCheckbox
+		siblingsDone, siblingsTotal = parent.Progress()
+	}
+
+	notesDir := ""
+	if m.config != nil {
+		notesDir = m.config.NotesDir
+	}
+
 	return m, func() tea.Msg {
-		var err error
+		ctx := context.Background()
 		if state == model.Open {
-			err = toggle.Complete(context.Background(), filePath, line, now)
+			if err := toggle.Complete(ctx, filePath, line, now); err != nil {
+				return toggleResultMsg{Err: err}
+			}
+			// Auto-complete parent if this was the last open child
+			if hasParent && parentHasCheckbox && parentState == model.Open && siblingsDone+1 == siblingsTotal {
+				parentPath := parentFile
+				if notesDir != "" {
+					parentPath = filepath.Join(notesDir, parentFile)
+				}
+				_ = toggle.Complete(ctx, parentPath, parentLine, now)
+			}
 		} else {
-			err = toggle.Uncomplete(context.Background(), filePath, line)
+			if err := toggle.Uncomplete(ctx, filePath, line); err != nil {
+				return toggleResultMsg{Err: err}
+			}
+			// Auto-uncomplete parent if it was completed
+			if hasParent && parentHasCheckbox && parentState == model.Completed {
+				parentPath := parentFile
+				if notesDir != "" {
+					parentPath = filepath.Join(notesDir, parentFile)
+				}
+				_ = toggle.Uncomplete(ctx, parentPath, parentLine)
+			}
 		}
-		return toggleResultMsg{Err: err}
+		return toggleResultMsg{Err: nil}
 	}
 }
 
@@ -77,4 +125,25 @@ func (m Model) toggleHiddenTag() (tea.Model, tea.Cmd) {
 	return m, func() tea.Msg {
 		return toggleResultMsg{Err: toggle.ToggleHidden(context.Background(), filePath, line)}
 	}
+}
+
+// toggleCollapse expands or collapses the subtask list for the parent at the cursor.
+// No-op if the cursor is on a child or a task with no children.
+func (m *Model) toggleCollapse() {
+	tasks := flatTasks(m.displaySections())
+	if len(tasks) == 0 || m.nav.Cursor() >= len(tasks) {
+		return
+	}
+	task := tasks[m.nav.Cursor()]
+	if len(task.Children) == 0 {
+		return // only toggle on parents
+	}
+	key := fmt.Sprintf("%s:%d", task.File, task.Line)
+	if m.expanded[key] {
+		delete(m.expanded, key)
+	} else {
+		m.expanded[key] = true
+	}
+	m.rebuildSections()
+	m.nav.ClampCursor(m.displaySections())
 }

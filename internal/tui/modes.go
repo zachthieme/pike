@@ -58,8 +58,10 @@ func (m *Model) rebuildSingleSection(title, color string, tasks []model.Task, no
 		}
 	}
 	tasks = tasksort.StablePartitionPinned(filtered)
+	tasks = m.regroupChildren(tasks)
 	m.sections = []filter.ViewResult{{Title: title, Color: color, Tasks: tasks}}
 	m.applyHiddenFilter()
+	m.applyCollapseFilter()
 }
 
 // rebuildDashboard builds the multi-section dashboard view.
@@ -86,8 +88,14 @@ func (m *Model) rebuildDashboard(now time.Time) {
 		}
 	}
 
+	// Regroup children next to their parents after sort
+	for i := range results {
+		results[i].Tasks = m.regroupChildren(results[i].Tasks)
+	}
+
 	m.sections = results
 	m.applyHiddenFilter()
+	m.applyCollapseFilter()
 }
 
 // filterTasks applies the active filter (substring or DSL) to a task slice.
@@ -106,6 +114,74 @@ func (m *Model) filterTasks(tasks []model.Task, now time.Time) ([]model.Task, bo
 		return filtered, true
 	}
 	return applySubstringFilter(tasks, m.filterBar.Text()), true
+}
+
+// regroupChildren moves children adjacent to their parent within a section.
+// Children whose parent is not in the section remain in their sorted position.
+func (m *Model) regroupChildren(tasks []model.Task) []model.Task {
+	if len(tasks) == 0 {
+		return tasks
+	}
+
+	// Build set of parent keys present in this task list
+	parentKeys := make(map[string]bool)
+	for _, t := range tasks {
+		if len(t.Children) > 0 {
+			parentKeys[fmt.Sprintf("%s:%d", t.File, t.Line)] = true
+		}
+	}
+
+	// Separate children (whose parent is in this list) from the rest
+	childrenOf := make(map[string][]model.Task)
+	var ordered []model.Task
+	for _, t := range tasks {
+		if t.Indent > 0 && t.ParentIndex >= 0 {
+			parent := m.allTasks[t.ParentIndex]
+			key := fmt.Sprintf("%s:%d", parent.File, parent.Line)
+			if parentKeys[key] {
+				childrenOf[key] = append(childrenOf[key], t)
+				continue
+			}
+		}
+		ordered = append(ordered, t)
+	}
+
+	// Reinsert children after their parents
+	result := make([]model.Task, 0, len(tasks))
+	for _, t := range ordered {
+		result = append(result, t)
+		key := fmt.Sprintf("%s:%d", t.File, t.Line)
+		if children, ok := childrenOf[key]; ok {
+			result = append(result, children...)
+		}
+	}
+	return result
+}
+
+// applyCollapseFilter removes children of collapsed parents from sections.
+// A parent is collapsed by default; expanded parents are in m.expanded.
+// Children whose parent is not in the same section are not affected.
+func (m *Model) applyCollapseFilter() {
+	for i, sec := range m.sections {
+		// Build set of tasks present in this section
+		present := make(map[string]bool)
+		for _, t := range sec.Tasks {
+			present[fmt.Sprintf("%s:%d", t.File, t.Line)] = true
+		}
+
+		var kept []model.Task
+		for _, t := range sec.Tasks {
+			if t.Indent > 0 && t.ParentIndex >= 0 {
+				parent := m.allTasks[t.ParentIndex]
+				parentKey := fmt.Sprintf("%s:%d", parent.File, parent.Line)
+				if present[parentKey] && !m.expanded[parentKey] {
+					continue // parent visible and collapsed — skip child
+				}
+			}
+			kept = append(kept, t)
+		}
+		m.sections[i].Tasks = kept
+	}
 }
 
 // applyHiddenFilter counts @hidden tasks per section and, when showHidden is

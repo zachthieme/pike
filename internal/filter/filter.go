@@ -2,6 +2,7 @@
 package filter
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/zachthieme/pike/internal/config"
@@ -51,6 +52,8 @@ func Apply(tasks []model.Task, queryStr string, sortOrder string, now time.Time)
 
 // ApplyViews runs Apply for each ViewConfig and returns results.
 // Views with Hidden: true are skipped and excluded from the results.
+// Children of matched parents are included even if they don't independently
+// match the query, so that subtask collapse/expand works in the TUI.
 func ApplyViews(tasks []model.Task, views []config.ViewConfig, now time.Time) ([]ViewResult, error) {
 	results := make([]ViewResult, 0, len(views))
 
@@ -63,6 +66,8 @@ func ApplyViews(tasks []model.Task, views []config.ViewConfig, now time.Time) ([
 			return nil, err
 		}
 
+		filtered = includeChildren(filtered, tasks)
+
 		results = append(results, ViewResult{
 			Title: view.Title,
 			Color: view.Color,
@@ -71,4 +76,52 @@ func ApplyViews(tasks []model.Task, views []config.ViewConfig, now time.Time) ([
 	}
 
 	return results, nil
+}
+
+// includeChildren adds children of matched parents that aren't already in the
+// result set. This ensures subtask collapse/expand works even when children
+// don't independently match the view query. Children are inserted right after
+// their parent to maintain visual grouping.
+func includeChildren(matched []model.Task, allTasks []model.Task) []model.Task {
+	if len(matched) == 0 {
+		return matched
+	}
+
+	// Build set of matched task keys
+	present := make(map[string]bool, len(matched))
+	for _, t := range matched {
+		present[taskKey(t)] = true
+	}
+
+	// Check if any parents exist — fast path
+	hasParents := false
+	for _, t := range matched {
+		if len(t.Children) > 0 {
+			hasParents = true
+			break
+		}
+	}
+	if !hasParents {
+		return matched
+	}
+
+	// Find parents in matched set and collect their missing children
+	var result []model.Task
+	for _, t := range matched {
+		result = append(result, t)
+		if len(t.Children) == 0 {
+			continue
+		}
+		for _, child := range t.Children {
+			if !present[taskKey(*child)] {
+				result = append(result, *child)
+				present[taskKey(*child)] = true
+			}
+		}
+	}
+	return result
+}
+
+func taskKey(t model.Task) string {
+	return t.File + ":" + fmt.Sprintf("%d", t.Line)
 }

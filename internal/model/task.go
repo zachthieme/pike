@@ -68,8 +68,9 @@ func NewTask(text, file string, line int, state TaskState, hasCheckbox bool) *Ta
 // TaskWith constructs a Task from the given partial struct literal, ensuring
 // the tagSet is properly initialized from Tags. This allows struct-literal style
 // construction while maintaining invariants. Fields that are set on the input
-// (Text, File, Line, State, HasCheckbox, Tags, Due, Completed) are copied;
-// LowerText and tagSet are derived automatically.
+// (Text, File, Line, State, HasCheckbox, Tags, Due, Completed, Indent) are
+// copied; LowerText and tagSet are derived automatically.
+// Children and ParentIndex are not copied — they are set by [parser.LinkSubtasks].
 func TaskWith(partial Task) Task {
 	t := NewTask(partial.Text, partial.File, partial.Line, partial.State, partial.HasCheckbox)
 	for _, tag := range partial.Tags {

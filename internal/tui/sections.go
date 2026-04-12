@@ -49,11 +49,35 @@ func (m Model) renderSection(title string, tasks []model.Task, color string, sec
 		linkColor = m.config.LinkColor
 	}
 
+	// Build set of parent keys in this section for child indentation
+	parentInSection := make(map[string]bool)
+	for _, task := range tasks {
+		if len(task.Children) > 0 {
+			parentInSection[fmt.Sprintf("%s:%d", task.File, task.Line)] = true
+		}
+	}
+
 	var lines []string
 	for i, task := range tasks {
 		flatIdx := sectionStart + i
 		selected := flatIdx == m.nav.Cursor() && (!m.filterBar.Active() || !m.filterBar.InputFocused())
 		line := formatTaskLine(task, m.tagColors, linkColor, selected)
+
+		// Append progress indicator for parent tasks
+		if done, total := task.Progress(); total > 0 {
+			progress := fmt.Sprintf("  [%d/%d]", done, total)
+			line += FaintStyle().Render(progress)
+		}
+
+		// Indent children whose parent is in this section
+		if task.Indent > 0 && task.ParentIndex >= 0 {
+			parent := m.allTasks[task.ParentIndex]
+			parentKey := fmt.Sprintf("%s:%d", parent.File, parent.Line)
+			if parentInSection[parentKey] {
+				line = "  " + line
+			}
+		}
+
 		lines = append(lines, line)
 	}
 

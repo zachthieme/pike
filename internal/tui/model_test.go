@@ -2,6 +2,8 @@ package tui
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -1314,6 +1316,78 @@ func TestEscapePriorityChain(t *testing.T) {
 	}
 }
 
+func TestCollapseFilterHidesChildren(t *testing.T) {
+	tasks := []model.Task{
+		model.TaskWith(model.Task{
+			Text: "Parent @today", State: model.Open,
+			File: "a.md", Line: 1, Indent: 0,
+			Tags: []model.Tag{{Name: "today"}},
+		}),
+		model.TaskWith(model.Task{
+			Text: "Child", State: model.Open,
+			File: "a.md", Line: 2, Indent: 2, HasCheckbox: true,
+		}),
+	}
+	views := []config.ViewConfig{
+		{Title: "Open", Query: "open", Sort: "file", Color: "green", Order: 1},
+	}
+	m := testModel(tasks, views)
+
+	// Default: collapsed — child should be hidden
+	sections := m.displaySections()
+	taskCount := 0
+	for _, s := range sections {
+		taskCount += len(s.Tasks)
+	}
+	if taskCount != 1 {
+		t.Errorf("collapsed: visible tasks = %d, want 1 (parent only)", taskCount)
+	}
+
+	// Expand parent
+	m.expanded[fmt.Sprintf("%s:%d", "a.md", 1)] = true
+	m.rebuildSections()
+	sections = m.displaySections()
+	taskCount = 0
+	for _, s := range sections {
+		taskCount += len(s.Tasks)
+	}
+	if taskCount != 2 {
+		t.Errorf("expanded: visible tasks = %d, want 2 (parent + child)", taskCount)
+	}
+}
+
+func TestRenderSectionShowsProgress(t *testing.T) {
+	tasks := []model.Task{
+		model.TaskWith(model.Task{
+			Text: "Parent task @today", State: model.Open,
+			File: "a.md", Line: 1, Indent: 0,
+			Tags: []model.Tag{{Name: "today"}},
+		}),
+		model.TaskWith(model.Task{
+			Text: "Child open", State: model.Open,
+			File: "a.md", Line: 2, Indent: 2, HasCheckbox: true,
+		}),
+		model.TaskWith(model.Task{
+			Text: "Child done", State: model.Completed,
+			File: "a.md", Line: 3, Indent: 2, HasCheckbox: true,
+		}),
+	}
+	views := []config.ViewConfig{
+		{Title: "All", Query: "open or completed", Sort: "file", Color: "green", Order: 1},
+	}
+	m := testModel(tasks, views)
+	// Expand so children are visible
+	m.expanded["a.md:1"] = true
+	m.rebuildSections()
+	m.width = 80
+	m.height = 40
+
+	output := m.View()
+	if !strings.Contains(output, "[1/2]") {
+		t.Errorf("expected progress [1/2] in output, got:\n%s", output)
+	}
+}
+
 func TestNewModelLinksSubtasks(t *testing.T) {
 	tasks := []model.Task{
 		model.TaskWith(model.Task{
@@ -1348,5 +1422,242 @@ func TestNewModelLinksSubtasks(t *testing.T) {
 	done, total := m.allTasks[0].Progress()
 	if done != 1 || total != 2 {
 		t.Errorf("Progress = (%d, %d), want (1, 2)", done, total)
+	}
+}
+
+func TestToggleCollapseExpandsChildren(t *testing.T) {
+	tasks := []model.Task{
+		model.TaskWith(model.Task{
+			Text: "Parent @today", State: model.Open,
+			File: "a.md", Line: 1, Indent: 0,
+			Tags: []model.Tag{{Name: "today"}},
+		}),
+		model.TaskWith(model.Task{
+			Text: "Child", State: model.Open,
+			File: "a.md", Line: 2, Indent: 2, HasCheckbox: true,
+		}),
+	}
+	views := []config.ViewConfig{
+		{Title: "Open", Query: "open", Sort: "file", Color: "green", Order: 1},
+	}
+	m := testModel(tasks, views)
+
+	// Initially collapsed — only parent visible
+	sections := m.displaySections()
+	count := 0
+	for _, s := range sections {
+		count += len(s.Tasks)
+	}
+	if count != 1 {
+		t.Fatalf("before z: visible = %d, want 1", count)
+	}
+
+	// Press z on parent (cursor at 0)
+	updated, _ := sendKey(m, "z")
+	m2 := updated.(Model)
+	sections = m2.displaySections()
+	count = 0
+	for _, s := range sections {
+		count += len(s.Tasks)
+	}
+	if count != 2 {
+		t.Errorf("after z: visible = %d, want 2", count)
+	}
+
+	// Press z again to collapse
+	updated, _ = sendKey(m2, "z")
+	m3 := updated.(Model)
+	sections = m3.displaySections()
+	count = 0
+	for _, s := range sections {
+		count += len(s.Tasks)
+	}
+	if count != 1 {
+		t.Errorf("after second z: visible = %d, want 1", count)
+	}
+}
+
+func TestAutoCompleteWritesParent(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "tasks.md")
+	content := "- [ ] Parent\n  - [x] Child one @completed(2026-04-10)\n  - [ ] Child two\n"
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	tasks := []model.Task{
+		model.TaskWith(model.Task{
+			Text: "Parent", State: model.Open,
+			File: "tasks.md", Line: 1, Indent: 0, HasCheckbox: true,
+		}),
+		model.TaskWith(model.Task{
+			Text: "Child one @completed(2026-04-10)", State: model.Completed,
+			File: "tasks.md", Line: 2, Indent: 2, HasCheckbox: true,
+		}),
+		model.TaskWith(model.Task{
+			Text: "Child two", State: model.Open,
+			File: "tasks.md", Line: 3, Indent: 2, HasCheckbox: true,
+		}),
+	}
+
+	cfg := &config.Config{
+		NotesDir: dir,
+		Editor:   "vi",
+		Views: []config.ViewConfig{
+			{Title: "All", Query: "open or completed", Sort: "file", Color: "green", Order: 1},
+		},
+	}
+	m := NewModel(cfg, tasks, nil, nil)
+	m.now = func() time.Time { return time.Date(2026, 4, 11, 0, 0, 0, 0, time.UTC) }
+	m.expanded["tasks.md:1"] = true
+	m.rebuildSections()
+
+	// Cursor on child two (parent=0, child1=1, child2=2)
+	m.nav.SetCursor(2)
+	_, cmd := m.toggleTask()
+	if cmd == nil {
+		t.Fatal("expected cmd")
+	}
+
+	// Execute the command (performs file I/O)
+	msg := cmd()
+	if result, ok := msg.(toggleResultMsg); ok && result.Err != nil {
+		t.Fatalf("toggle error: %v", result.Err)
+	}
+
+	// Read file and verify both child and parent were toggled
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	lines := strings.Split(string(data), "\n")
+	if !strings.Contains(lines[0], "- [x]") {
+		t.Errorf("parent not auto-completed: %q", lines[0])
+	}
+	if !strings.Contains(lines[0], "@completed(2026-04-11)") {
+		t.Errorf("parent should have toggle date as completion date: %q", lines[0])
+	}
+	if !strings.Contains(lines[2], "- [x]") {
+		t.Errorf("child two not completed: %q", lines[2])
+	}
+}
+
+func TestAutoUncompleteParent(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "tasks.md")
+	content := "- [x] Parent @completed(2026-04-10)\n  - [x] Child one @completed(2026-04-09)\n  - [x] Child two @completed(2026-04-10)\n"
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	tasks := []model.Task{
+		model.TaskWith(model.Task{
+			Text: "Parent @completed(2026-04-10)", State: model.Completed,
+			File: "tasks.md", Line: 1, Indent: 0, HasCheckbox: true,
+		}),
+		model.TaskWith(model.Task{
+			Text: "Child one @completed(2026-04-09)", State: model.Completed,
+			File: "tasks.md", Line: 2, Indent: 2, HasCheckbox: true,
+		}),
+		model.TaskWith(model.Task{
+			Text: "Child two @completed(2026-04-10)", State: model.Completed,
+			File: "tasks.md", Line: 3, Indent: 2, HasCheckbox: true,
+		}),
+	}
+
+	cfg := &config.Config{
+		NotesDir: dir,
+		Editor:   "vi",
+		Views: []config.ViewConfig{
+			{Title: "All", Query: "open or completed", Sort: "file", Color: "green", Order: 1},
+		},
+	}
+	m := NewModel(cfg, tasks, nil, nil)
+	m.now = func() time.Time { return time.Date(2026, 4, 11, 0, 0, 0, 0, time.UTC) }
+	m.expanded["tasks.md:1"] = true
+	m.rebuildSections()
+
+	// Cursor on child two (index 2)
+	m.nav.SetCursor(2)
+	_, cmd := m.toggleTask()
+	if cmd == nil {
+		t.Fatal("expected cmd")
+	}
+
+	msg := cmd()
+	if result, ok := msg.(toggleResultMsg); ok && result.Err != nil {
+		t.Fatalf("toggle error: %v", result.Err)
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	lines := strings.Split(string(data), "\n")
+	// Parent should be uncompleted
+	if !strings.Contains(lines[0], "- [ ]") {
+		t.Errorf("parent not auto-uncompleted: %q", lines[0])
+	}
+	// Child two should be uncompleted
+	if !strings.Contains(lines[2], "- [ ]") {
+		t.Errorf("child two not uncompleted: %q", lines[2])
+	}
+}
+
+func TestRegroupChildrenKeepsChildrenAdjacentToParent(t *testing.T) {
+	// Build allTasks with linked parent-child relationships
+	allTasks := []model.Task{
+		{File: "a.md", Line: 1, Indent: 0, ParentIndex: -1},  // parent A
+		{File: "a.md", Line: 2, Indent: 2, ParentIndex: -1},  // child of A (will be linked)
+		{File: "a.md", Line: 5, Indent: 0, ParentIndex: -1},  // parent B
+		{File: "a.md", Line: 6, Indent: 2, ParentIndex: -1},  // child of B (will be linked)
+	}
+	// Link: child[1] → parent[0], child[3] → parent[2]
+	allTasks[1].ParentIndex = 0
+	allTasks[3].ParentIndex = 2
+	allTasks[0].Children = []*model.Task{&allTasks[1]}
+	allTasks[2].Children = []*model.Task{&allTasks[3]}
+
+	m := &Model{allTasks: allTasks}
+
+	tests := []struct {
+		name      string
+		input     []model.Task
+		wantOrder []int // expected Line numbers in output order
+	}{
+		{
+			name:      "already adjacent",
+			input:     []model.Task{allTasks[0], allTasks[1], allTasks[2], allTasks[3]},
+			wantOrder: []int{1, 2, 5, 6},
+		},
+		{
+			name:      "children separated from parents by sort",
+			input:     []model.Task{allTasks[0], allTasks[2], allTasks[1], allTasks[3]},
+			wantOrder: []int{1, 2, 5, 6},
+		},
+		{
+			name:      "child without parent in section stays in place",
+			input:     []model.Task{allTasks[1], allTasks[2], allTasks[3]},
+			wantOrder: []int{2, 5, 6},
+		},
+		{
+			name:      "empty list",
+			input:     []model.Task{},
+			wantOrder: []int{},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := m.regroupChildren(tt.input)
+			if len(result) != len(tt.wantOrder) {
+				t.Fatalf("len = %d, want %d", len(result), len(tt.wantOrder))
+			}
+			for i, want := range tt.wantOrder {
+				if result[i].Line != want {
+					t.Errorf("result[%d].Line = %d, want %d", i, result[i].Line, want)
+				}
+			}
+		})
 	}
 }

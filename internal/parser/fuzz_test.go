@@ -17,6 +17,8 @@ func FuzzParseLine(f *testing.F) {
 		"- [ ] ",
 		"- [x] @due(9999-99-99)",
 		"   - [ ] indented @tag(value)",
+		"  - [ ] indented task @tag",
+		"    - [x] deep indented @due(2026-01-01)",
 	}
 	for _, s := range seeds {
 		f.Add(s)
@@ -26,6 +28,9 @@ func FuzzParseLine(f *testing.F) {
 		task, warnings := ParseLine(input, "fuzz.md", 1)
 
 		if task != nil {
+			if task.Indent < 0 {
+				t.Errorf("Indent = %d, want >= 0", task.Indent)
+			}
 			if task.Due != nil {
 				if task.Due.Format("2006-01-02") == "" {
 					t.Error("task.Due formatted to empty string")
