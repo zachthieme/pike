@@ -52,8 +52,8 @@ func (m Model) renderSection(title string, tasks []model.Task, color string, sec
 	// Build set of parent keys in this section for child indentation
 	parentInSection := make(map[string]bool)
 	for _, task := range tasks {
-		if len(task.Children) > 0 {
-			parentInSection[fmt.Sprintf("%s:%d", task.File, task.Line)] = true
+		if task.HasChildren() {
+			parentInSection[task.Key()] = true
 		}
 	}
 
@@ -64,16 +64,15 @@ func (m Model) renderSection(title string, tasks []model.Task, color string, sec
 		line := formatTaskLine(task, m.tagColors, linkColor, selected)
 
 		// Append progress indicator for parent tasks
-		if done, total := task.Progress(); total > 0 {
+		if done, total := task.Progress(m.allTasks); total > 0 {
 			progress := fmt.Sprintf("  [%d/%d]", done, total)
 			line += FaintStyle().Render(progress)
 		}
 
 		// Indent children whose parent is in this section
-		if task.Indent > 0 && task.ParentIndex >= 0 {
+		if task.Indent > 0 && task.ParentIndex >= 0 && task.ParentIndex < len(m.allTasks) {
 			parent := m.allTasks[task.ParentIndex]
-			parentKey := fmt.Sprintf("%s:%d", parent.File, parent.Line)
-			if parentInSection[parentKey] {
+			if parentInSection[parent.Key()] {
 				line = "  " + line
 			}
 		}

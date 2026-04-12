@@ -2,7 +2,6 @@
 package filter
 
 import (
-	"fmt"
 	"time"
 
 	"github.com/zachthieme/pike/internal/config"
@@ -90,13 +89,13 @@ func includeChildren(matched []model.Task, allTasks []model.Task) []model.Task {
 	// Build set of matched task keys
 	present := make(map[string]bool, len(matched))
 	for _, t := range matched {
-		present[taskKey(t)] = true
+		present[t.Key()] = true
 	}
 
 	// Check if any parents exist — fast path
 	hasParents := false
 	for _, t := range matched {
-		if len(t.Children) > 0 {
+		if t.HasChildren() {
 			hasParents = true
 			break
 		}
@@ -109,19 +108,18 @@ func includeChildren(matched []model.Task, allTasks []model.Task) []model.Task {
 	var result []model.Task
 	for _, t := range matched {
 		result = append(result, t)
-		if len(t.Children) == 0 {
+		if !t.HasChildren() {
 			continue
 		}
-		for _, child := range t.Children {
-			if !present[taskKey(*child)] {
-				result = append(result, *child)
-				present[taskKey(*child)] = true
+		for _, idx := range t.ChildIndices {
+			if idx >= 0 && idx < len(allTasks) {
+				child := allTasks[idx]
+				if !present[child.Key()] {
+					result = append(result, child)
+					present[child.Key()] = true
+				}
 			}
 		}
 	}
 	return result
-}
-
-func taskKey(t model.Task) string {
-	return t.File + ":" + fmt.Sprintf("%d", t.Line)
 }

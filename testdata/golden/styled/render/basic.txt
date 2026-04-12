@@ -2,3 +2,6 @@
 - [x] Clean the kitchen
 - [ ] Walk the dog
 - [x] Ship the package
+- [ ] Plan dinner party
+- [ ] Send invitations
+- [x] Pick a menu

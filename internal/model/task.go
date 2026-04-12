@@ -2,6 +2,7 @@
 package model
 
 import (
+	"strconv"
 	"strings"
 	"time"
 )
@@ -46,8 +47,8 @@ type Task struct {
 	Completed   *time.Time      // Parsed from @completed(YYYY-MM-DD), nil if absent
 	HasCheckbox bool            // true if line had - [ ] or - [x], false for plain bullets
 	Indent      int             // column count of leading whitespace (0 for top-level)
-	Children    []*Task         // direct subtasks (single level only)
-	ParentIndex int             // index of parent in flat task list, -1 if none
+	ChildIndices []int           // indices of direct subtasks in flat task list (single level)
+	ParentIndex  int            // index of parent in flat task list, -1 if none
 }
 
 // NewTask creates a Task with pre-computed LowerText and an initialized tagSet.
@@ -70,7 +71,7 @@ func NewTask(text, file string, line int, state TaskState, hasCheckbox bool) *Ta
 // construction while maintaining invariants. Fields that are set on the input
 // (Text, File, Line, State, HasCheckbox, Tags, Due, Completed, Indent) are
 // copied; LowerText and tagSet are derived automatically.
-// Children and ParentIndex are not copied — they are set by [parser.LinkSubtasks].
+// ChildIndices and ParentIndex are not copied — they are set by [parser.LinkSubtasks].
 func TaskWith(partial Task) Task {
 	t := NewTask(partial.Text, partial.File, partial.Line, partial.State, partial.HasCheckbox)
 	for _, tag := range partial.Tags {
@@ -100,15 +101,31 @@ func (t *Task) HasTag(name string) bool {
 }
 
 // Progress returns the count of completed vs. total children.
+// Requires the flat task list to resolve ChildIndices.
 // Returns (0, 0) for leaf tasks (no children).
-func (t *Task) Progress() (done, total int) {
-	total = len(t.Children)
-	for _, c := range t.Children {
-		if c.State == Completed {
+func (t *Task) Progress(allTasks []Task) (done, total int) {
+	total = len(t.ChildIndices)
+	for _, idx := range t.ChildIndices {
+		if idx >= 0 && idx < len(allTasks) && allTasks[idx].State == Completed {
 			done++
 		}
 	}
 	return done, total
+}
+
+// HasChildren returns true if this task has subtasks.
+func (t *Task) HasChildren() bool {
+	return len(t.ChildIndices) > 0
+}
+
+// TaskKey returns a stable identifier for a task as "file:line".
+func TaskKey(file string, line int) string {
+	return file + ":" + strconv.Itoa(line)
+}
+
+// Key returns this task's stable identifier.
+func (t *Task) Key() string {
+	return TaskKey(t.File, t.Line)
 }
 
 // Warning represents a non-fatal issue found during parsing.

@@ -5,3 +5,6 @@
 - [ ] Walk the dog
 - Plain text paragraph, not a task
 - [X] Ship the package
+- [ ] Plan dinner party
+  - [ ] Send invitations
+  - [x] Pick a menu

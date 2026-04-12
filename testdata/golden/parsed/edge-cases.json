@@ -5,7 +5,8 @@
     "file": "edge-cases.md",
     "line": 3,
     "tags": null,
-    "has_checkbox": true
+    "has_checkbox": true,
+    "indent": 0
   },
   {
     "text": "Tag at start @today of the line",
@@ -15,7 +16,8 @@
     "tags": [
       "@today"
     ],
-    "has_checkbox": true
+    "has_checkbox": true,
+    "indent": 0
   },
   {
     "text": "Multiple same tag @risk and @risk again",
@@ -26,7 +28,8 @@
       "@risk",
       "@risk"
     ],
-    "has_checkbox": true
+    "has_checkbox": true,
+    "indent": 0
   },
   {
     "text": "Empty parens @note()",
@@ -36,7 +39,8 @@
     "tags": [
       "@note"
     ],
-    "has_checkbox": true
+    "has_checkbox": true,
+    "indent": 0
   },
   {
     "text": "Unicode text 日本語タスク @today",
@@ -46,7 +50,8 @@
     "tags": [
       "@today"
     ],
-    "has_checkbox": true
+    "has_checkbox": true,
+    "indent": 0
   },
   {
     "text": "Very long tag value @delegated(some very long person name here)",
@@ -56,7 +61,8 @@
     "tags": [
       "@delegated(some very long person name here)"
     ],
-    "has_checkbox": true
+    "has_checkbox": true,
+    "indent": 0
   },
   {
     "text": "Nested parens in text (not a tag) @due(2026-04-01)",
@@ -67,6 +73,7 @@
       "@due(2026-04-01)"
     ],
     "due": "2026-04-01",
-    "has_checkbox": true
+    "has_checkbox": true,
+    "indent": 0
   }
 ]

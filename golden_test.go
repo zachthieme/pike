@@ -33,6 +33,7 @@ type parsedTask struct {
 	Due         string   `json:"due,omitempty"`
 	Completed   string   `json:"completed,omitempty"`
 	HasCheckbox bool     `json:"has_checkbox"`
+	Indent      int      `json:"indent"`
 }
 
 func toParsedTask(t model.Task) parsedTask {
@@ -42,6 +43,7 @@ func toParsedTask(t model.Task) parsedTask {
 		File:        t.File,
 		Line:        t.Line,
 		HasCheckbox: t.HasCheckbox,
+		Indent:      t.Indent,
 	}
 	for _, tag := range t.Tags {
 		pt.Tags = append(pt.Tags, style.TagToken(tag))

@@ -5,7 +5,8 @@
     "file": "basic.md",
     "line": 4,
     "tags": null,
-    "has_checkbox": true
+    "has_checkbox": true,
+    "indent": 0
   },
   {
     "text": "Ship the package",
@@ -13,7 +14,17 @@
     "file": "basic.md",
     "line": 7,
     "tags": null,
-    "has_checkbox": true
+    "has_checkbox": true,
+    "indent": 0
+  },
+  {
+    "text": "Pick a menu",
+    "state": "completed",
+    "file": "basic.md",
+    "line": 10,
+    "tags": null,
+    "has_checkbox": true,
+    "indent": 2
   },
   {
     "text": "Completed review @completed(2026-03-12) @today",
@@ -25,7 +36,8 @@
       "@today"
     ],
     "completed": "2026-03-12",
-    "has_checkbox": true
+    "has_checkbox": true,
+    "indent": 0
   },
   {
     "text": "Write docs @completed(2026-03-10)",
@@ -36,6 +48,7 @@
       "@completed(2026-03-10)"
     ],
     "completed": "2026-03-10",
-    "has_checkbox": true
+    "has_checkbox": true,
+    "indent": 0
   }
 ]

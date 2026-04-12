@@ -110,7 +110,7 @@ func extractTags(task *model.Task, file string, lineNum int) []model.Warning {
 // LinkSubtasks builds single-level parent-child relationships among tasks.
 // Tasks must be ordered by file then line number (as returned by scanner).
 // Modifies tasks in place: sets ParentIndex on children, appends to
-// Children on parents. Does not reorder or remove tasks.
+// ChildIndices on parents. Does not reorder or remove tasks.
 // Only links one level deep — a task that is already a child cannot be a parent.
 func LinkSubtasks(tasks []model.Task) {
 	for i := range tasks {
@@ -126,7 +126,7 @@ func LinkSubtasks(tasks []model.Task) {
 					break // tasks[j] is already a child; tasks[i] would be a grandchild — stop
 				}
 				tasks[i].ParentIndex = j
-				tasks[j].Children = append(tasks[j].Children, &tasks[i])
+				tasks[j].ChildIndices = append(tasks[j].ChildIndices, i)
 				break
 			}
 		}

@@ -1466,8 +1466,8 @@ func TestNewModelLinksSubtasks(t *testing.T) {
 	m := testModel(tasks, views)
 
 	// Verify parent-child linking happened
-	if len(m.allTasks[0].Children) != 2 {
-		t.Fatalf("parent Children count = %d, want 2", len(m.allTasks[0].Children))
+	if len(m.allTasks[0].ChildIndices) != 2 {
+		t.Fatalf("parent ChildIndices count = %d, want 2", len(m.allTasks[0].ChildIndices))
 	}
 	if m.allTasks[1].ParentIndex != 0 {
 		t.Errorf("child 1 ParentIndex = %d, want 0", m.allTasks[1].ParentIndex)
@@ -1475,7 +1475,7 @@ func TestNewModelLinksSubtasks(t *testing.T) {
 	if m.allTasks[2].ParentIndex != 0 {
 		t.Errorf("child 2 ParentIndex = %d, want 0", m.allTasks[2].ParentIndex)
 	}
-	done, total := m.allTasks[0].Progress()
+	done, total := m.allTasks[0].Progress(m.allTasks)
 	if done != 1 || total != 2 {
 		t.Errorf("Progress = (%d, %d), want (1, 2)", done, total)
 	}
@@ -1671,8 +1671,8 @@ func TestRegroupChildrenKeepsChildrenAdjacentToParent(t *testing.T) {
 	// Link: child[1] → parent[0], child[3] → parent[2]
 	allTasks[1].ParentIndex = 0
 	allTasks[3].ParentIndex = 2
-	allTasks[0].Children = []*model.Task{&allTasks[1]}
-	allTasks[2].Children = []*model.Task{&allTasks[3]}
+	allTasks[0].ChildIndices = []int{1}
+	allTasks[2].ChildIndices = []int{3}
 
 	m := &Model{allTasks: allTasks}
 

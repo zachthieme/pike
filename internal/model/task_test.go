@@ -110,50 +110,57 @@ func TestHasTag(t *testing.T) {
 
 func TestProgress(t *testing.T) {
 	tests := []struct {
-		name      string
-		children  []*Task
-		wantDone  int
-		wantTotal int
+		name         string
+		allTasks     []Task
+		parentIdx    int
+		wantDone     int
+		wantTotal    int
 	}{
 		{
 			name:      "no children",
-			children:  nil,
+			allTasks:  []Task{{ParentIndex: -1}},
+			parentIdx: 0,
 			wantDone:  0,
 			wantTotal: 0,
 		},
 		{
 			name: "all open",
-			children: []*Task{
-				{State: Open},
-				{State: Open},
+			allTasks: []Task{
+				{ParentIndex: -1, ChildIndices: []int{1, 2}},
+				{State: Open, ParentIndex: 0},
+				{State: Open, ParentIndex: 0},
 			},
+			parentIdx: 0,
 			wantDone:  0,
 			wantTotal: 2,
 		},
 		{
 			name: "mixed",
-			children: []*Task{
-				{State: Completed},
-				{State: Open},
-				{State: Completed},
+			allTasks: []Task{
+				{ParentIndex: -1, ChildIndices: []int{1, 2, 3}},
+				{State: Completed, ParentIndex: 0},
+				{State: Open, ParentIndex: 0},
+				{State: Completed, ParentIndex: 0},
 			},
+			parentIdx: 0,
 			wantDone:  2,
 			wantTotal: 3,
 		},
 		{
 			name: "all completed",
-			children: []*Task{
-				{State: Completed},
-				{State: Completed},
+			allTasks: []Task{
+				{ParentIndex: -1, ChildIndices: []int{1, 2}},
+				{State: Completed, ParentIndex: 0},
+				{State: Completed, ParentIndex: 0},
 			},
+			parentIdx: 0,
 			wantDone:  2,
 			wantTotal: 2,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			task := &Task{Children: tt.children}
-			done, total := task.Progress()
+			done, total := tt.allTasks[tt.parentIdx].Progress(tt.allTasks)
 			if done != tt.wantDone {
 				t.Errorf("done = %d, want %d", done, tt.wantDone)
 			}

@@ -87,7 +87,7 @@ func TestLinkSubtasks(t *testing.T) {
 		name           string
 		tasks          []model.Task
 		wantParents    []int // expected ParentIndex for each task
-		wantChildCount []int // expected len(Children) for each task
+		wantChildCount []int // expected len(ChildIndices) for each task
 	}{
 		{
 			name: "no children",
@@ -171,8 +171,8 @@ func TestLinkSubtasks(t *testing.T) {
 				if task.ParentIndex != tt.wantParents[i] {
 					t.Errorf("task[%d] ParentIndex = %d, want %d", i, task.ParentIndex, tt.wantParents[i])
 				}
-				if len(task.Children) != tt.wantChildCount[i] {
-					t.Errorf("task[%d] len(Children) = %d, want %d", i, len(task.Children), tt.wantChildCount[i])
+				if len(task.ChildIndices) != tt.wantChildCount[i] {
+					t.Errorf("task[%d] len(Children) = %d, want %d", i, len(task.ChildIndices), tt.wantChildCount[i])
 				}
 			}
 		})

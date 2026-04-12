@@ -5,7 +5,8 @@
     "file": "basic.md",
     "line": 3,
     "tags": null,
-    "has_checkbox": true
+    "has_checkbox": true,
+    "indent": 0
   },
   {
     "text": "Clean the kitchen",
@@ -13,7 +14,8 @@
     "file": "basic.md",
     "line": 4,
     "tags": null,
-    "has_checkbox": true
+    "has_checkbox": true,
+    "indent": 0
   },
   {
     "text": "Walk the dog",
@@ -21,7 +23,8 @@
     "file": "basic.md",
     "line": 5,
     "tags": null,
-    "has_checkbox": true
+    "has_checkbox": true,
+    "indent": 0
   },
   {
     "text": "Ship the package",
@@ -29,6 +32,34 @@
     "file": "basic.md",
     "line": 7,
     "tags": null,
-    "has_checkbox": true
+    "has_checkbox": true,
+    "indent": 0
+  },
+  {
+    "text": "Plan dinner party",
+    "state": "open",
+    "file": "basic.md",
+    "line": 8,
+    "tags": null,
+    "has_checkbox": true,
+    "indent": 0
+  },
+  {
+    "text": "Send invitations",
+    "state": "open",
+    "file": "basic.md",
+    "line": 9,
+    "tags": null,
+    "has_checkbox": true,
+    "indent": 2
+  },
+  {
+    "text": "Pick a menu",
+    "state": "completed",
+    "file": "basic.md",
+    "line": 10,
+    "tags": null,
+    "has_checkbox": true,
+    "indent": 2
   }
 ]

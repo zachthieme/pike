@@ -2,7 +2,6 @@ package tui
 
 import (
 	"context"
-	"fmt"
 	"path/filepath"
 
 	"github.com/zachthieme/pike/internal/editor"
@@ -73,7 +72,7 @@ func (m Model) toggleTask() (tea.Model, tea.Cmd) {
 		parentLine = parent.Line
 		parentState = parent.State
 		parentHasCheckbox = parent.HasCheckbox
-		siblingsDone, siblingsTotal = parent.Progress()
+		siblingsDone, siblingsTotal = parent.Progress(m.allTasks)
 	}
 
 	notesDir := ""
@@ -135,10 +134,10 @@ func (m *Model) toggleCollapse() {
 		return
 	}
 	task := tasks[m.nav.Cursor()]
-	if len(task.Children) == 0 {
+	if !task.HasChildren() {
 		return // only toggle on parents
 	}
-	key := fmt.Sprintf("%s:%d", task.File, task.Line)
+	key := task.Key()
 	if m.expanded[key] {
 		delete(m.expanded, key)
 	} else {

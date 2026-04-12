@@ -9,7 +9,8 @@
       "@due(2026-03-14)"
     ],
     "due": "2026-03-14",
-    "has_checkbox": true
+    "has_checkbox": true,
+    "indent": 0
   },
   {
     "text": "Completed review @completed(2026-03-12) @today",
@@ -21,7 +22,8 @@
       "@today"
     ],
     "completed": "2026-03-12",
-    "has_checkbox": true
+    "has_checkbox": true,
+    "indent": 0
   },
   {
     "text": "Ask [[alice-bob|Alice Bob]] about [the plan](https://example.com/plan) @delegated(alice)",
@@ -31,7 +33,8 @@
     "tags": [
       "@delegated(alice)"
     ],
-    "has_checkbox": true
+    "has_checkbox": true,
+    "indent": 0
   },
   {
     "text": "Regular bullet with @tag makes it a task",
@@ -41,6 +44,7 @@
     "tags": [
       "@tag"
     ],
-    "has_checkbox": false
+    "has_checkbox": false,
+    "indent": 0
   }
 ]

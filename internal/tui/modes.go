@@ -126,8 +126,8 @@ func (m *Model) regroupChildren(tasks []model.Task) []model.Task {
 	// Build set of parent keys present in this task list
 	parentKeys := make(map[string]bool)
 	for _, t := range tasks {
-		if len(t.Children) > 0 {
-			parentKeys[fmt.Sprintf("%s:%d", t.File, t.Line)] = true
+		if t.HasChildren() {
+			parentKeys[t.Key()] = true
 		}
 	}
 
@@ -135,11 +135,10 @@ func (m *Model) regroupChildren(tasks []model.Task) []model.Task {
 	childrenOf := make(map[string][]model.Task)
 	var ordered []model.Task
 	for _, t := range tasks {
-		if t.Indent > 0 && t.ParentIndex >= 0 {
+		if t.Indent > 0 && t.ParentIndex >= 0 && t.ParentIndex < len(m.allTasks) {
 			parent := m.allTasks[t.ParentIndex]
-			key := fmt.Sprintf("%s:%d", parent.File, parent.Line)
-			if parentKeys[key] {
-				childrenOf[key] = append(childrenOf[key], t)
+			if parentKeys[parent.Key()] {
+				childrenOf[parent.Key()] = append(childrenOf[parent.Key()], t)
 				continue
 			}
 		}
@@ -150,8 +149,7 @@ func (m *Model) regroupChildren(tasks []model.Task) []model.Task {
 	result := make([]model.Task, 0, len(tasks))
 	for _, t := range ordered {
 		result = append(result, t)
-		key := fmt.Sprintf("%s:%d", t.File, t.Line)
-		if children, ok := childrenOf[key]; ok {
+		if children, ok := childrenOf[t.Key()]; ok {
 			result = append(result, children...)
 		}
 	}
@@ -166,14 +164,14 @@ func (m *Model) applyCollapseFilter() {
 		// Build set of tasks present in this section
 		present := make(map[string]bool)
 		for _, t := range sec.Tasks {
-			present[fmt.Sprintf("%s:%d", t.File, t.Line)] = true
+			present[t.Key()] = true
 		}
 
 		var kept []model.Task
 		for _, t := range sec.Tasks {
-			if t.Indent > 0 && t.ParentIndex >= 0 {
+			if t.Indent > 0 && t.ParentIndex >= 0 && t.ParentIndex < len(m.allTasks) {
 				parent := m.allTasks[t.ParentIndex]
-				parentKey := fmt.Sprintf("%s:%d", parent.File, parent.Line)
+				parentKey := parent.Key()
 				if present[parentKey] && !m.expanded[parentKey] {
 					continue // parent visible and collapsed — skip child
 				}
