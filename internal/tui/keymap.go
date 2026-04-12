@@ -18,6 +18,7 @@ type KeyMap struct {
 	AllTasks, TagSearch, ToggleHidden key.Binding
 	Toggle, ToggleHiddenTag, RecentlyCompleted key.Binding
 	ToggleCollapse key.Binding
+	CreateTask key.Binding
 }
 
 // DefaultKeyMap returns the default key bindings.
@@ -111,6 +112,10 @@ func DefaultKeyMap() KeyMap {
 			key.WithKeys("z"),
 			key.WithHelp("z", "toggle collapse"),
 		),
+		CreateTask: key.NewBinding(
+			key.WithKeys("i"),
+			key.WithHelp("i", "new task"),
+		),
 	}
 
 	for i := 0; i < 9; i++ {
@@ -139,6 +144,7 @@ func BuildKeyMap(overrides map[string][]string, custom []config.CustomBinding) K
 		"toggle": &km.Toggle, "toggle_hidden_tag": &km.ToggleHiddenTag,
 		"recently_completed": &km.RecentlyCompleted,
 		"toggle_collapse": &km.ToggleCollapse,
+		"create_task": &km.CreateTask,
 	}
 
 	for name, keys := range overrides {

@@ -30,6 +30,7 @@ type Config struct {
 	WeekStartDay           int               `yaml:"-"` // 0=Sunday, 1=Monday, ..., 6=Saturday
 	RecentlyCompletedDays  int               `yaml:"-"`
 	DueDatesPath           string            `yaml:"-"` // path to write due dates JSON for wen integration
+	InboxFile string `yaml:"-"` // file to append new tasks to (relative to NotesDir)
 	Views                  []ViewConfig      `yaml:"-"`
 	Keybindings            map[string][]string `yaml:"-"`
 	CustomBindings         []CustomBinding     `yaml:"-"`
@@ -80,6 +81,7 @@ type rawConfig struct {
 	WeekStartDay           *int              `yaml:"week_start_day"`
 	RecentlyCompletedDays  *int              `yaml:"recently_completed_days"`
 	DueDatesPath           string            `yaml:"due_dates_path"`
+	InboxFile string `yaml:"inbox_file"`
 	Views                  []ViewConfig      `yaml:"views"`
 	Keybindings            *rawKeybindings   `yaml:"keybindings"`
 }
@@ -157,6 +159,7 @@ var knownActions = map[string]bool{
 	"query": true, "escape": true, "refresh": true, "all_tasks": true,
 	"tag_search": true, "toggle_hidden": true, "toggle": true,
 	"toggle_hidden_tag": true, "recently_completed": true,
+	"create_task": true,
 }
 
 func parseKeybindings(raw *rawKeybindings) (map[string][]string, []CustomBinding, error) {
@@ -293,6 +296,13 @@ func applyDefaults(raw *rawConfig) (*Config, error) {
 	// DueDatesPath: write due dates JSON for wen integration (opt-in)
 	if raw.DueDatesPath != "" {
 		cfg.DueDatesPath = expandTilde(raw.DueDatesPath)
+	}
+
+	// InboxFile: default to "inbox.md"
+	if raw.InboxFile != "" {
+		cfg.InboxFile = raw.InboxFile
+	} else {
+		cfg.InboxFile = "inbox.md"
 	}
 
 	// Views: default to a single "All Open" view

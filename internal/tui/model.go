@@ -2,12 +2,15 @@
 package tui
 
 import (
+	"context"
+	"path/filepath"
 	"time"
 
 	"github.com/zachthieme/pike/internal/config"
 	"github.com/zachthieme/pike/internal/filter"
 	"github.com/zachthieme/pike/internal/model"
 	"github.com/zachthieme/pike/internal/parser"
+	"github.com/zachthieme/pike/internal/toggle"
 
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -57,6 +60,7 @@ type Model struct {
 	// Sub-models.
 	filterBar FilterBar
 	tagSearch TagSearch
+	createBar CreateBar
 
 	// Viewport.
 	width  int
@@ -89,6 +93,7 @@ func NewModel(cfg *config.Config, tasks []model.Task, scanFunc func() ([]model.T
 		focusedView:    "",
 		filterBar:      NewFilterBar(),
 		tagSearch:      NewTagSearch(),
+		createBar:      NewCreateBar(),
 		scanFunc:       scanFunc,
 		editorCmd:      cfg.Editor,
 		tagColors:      cfg.TagColors,
@@ -253,6 +258,27 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case TagSearchExitMsg:
 		m.exitToDashboard()
+		return m, nil
+
+	case CreateSubmittedMsg:
+		m.createBar, _ = m.createBar.Update(InputDeactivateMsg{})
+		text := msg.Text
+		notesDir := ""
+		inboxFile := "inbox.md"
+		if m.config != nil {
+			notesDir = m.config.NotesDir
+			if m.config.InboxFile != "" {
+				inboxFile = m.config.InboxFile
+			}
+		}
+		filePath := filepath.Join(notesDir, inboxFile)
+		return m, func() tea.Msg {
+			err := toggle.AppendTask(context.Background(), filePath, text)
+			return toggleResultMsg{Err: err}
+		}
+
+	case CreateClearedMsg:
+		m.createBar, _ = m.createBar.Update(InputDeactivateMsg{})
 		return m, nil
 
 	case tea.KeyMsg:

@@ -86,6 +86,62 @@ func sendSpecialKey(m tea.Model, keyType tea.KeyType) (tea.Model, tea.Cmd) {
 	return m.Update(tea.KeyMsg{Type: keyType})
 }
 
+func TestCreateTaskInline(t *testing.T) {
+	dir := t.TempDir()
+	inboxPath := filepath.Join(dir, "inbox.md")
+
+	tasks := testTasks()
+	views := testViews()
+	cfg := &config.Config{
+		NotesDir:  dir,
+		InboxFile: "inbox.md",
+		Editor:    "vi",
+		TagColors: map[string]string{"due": "red", "today": "green", "_default": "cyan"},
+		Views:     views,
+	}
+	m := NewModel(cfg, tasks, nil, nil)
+	m.now = func() time.Time { return testNow }
+	m.width = 80
+	m.height = 40
+
+	// Press i to activate create bar
+	updated, _ := sendKey(m, "i")
+	m2 := updated.(Model)
+	if !m2.createBar.Active() {
+		t.Fatal("expected createBar active after 'i'")
+	}
+
+	// Type "buy milk @today"
+	for _, r := range "buy milk @today" {
+		updated, _ = sendKey(m2, string(r))
+		m2 = updated.(Model)
+	}
+
+	// Press Enter to submit
+	updated, cmd := sendSpecialKey(m2, tea.KeyEnter)
+	m3 := updated.(Model)
+
+	// CreateBar should be deactivated
+	if m3.createBar.Active() {
+		t.Error("expected createBar inactive after Enter")
+	}
+
+	// Execute the async command (file write)
+	if cmd != nil {
+		msg := cmd()
+		m3.Update(msg)
+	}
+
+	// Verify file was written
+	data, err := os.ReadFile(inboxPath)
+	if err != nil {
+		t.Fatalf("reading inbox: %v", err)
+	}
+	if !strings.Contains(string(data), "- [ ] buy milk @today") {
+		t.Errorf("inbox content = %q, want to contain '- [ ] buy milk @today'", string(data))
+	}
+}
+
 func TestCursorMovementDown(t *testing.T) {
 	m := testModel(testTasks(), testViews())
 

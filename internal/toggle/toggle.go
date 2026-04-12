@@ -170,6 +170,52 @@ func ToggleHidden(ctx context.Context, filePath string, line int) error {
 	return defaultToggler.ToggleHidden(ctx, filePath, line)
 }
 
+// AppendTask appends a new checkbox task line to a file. Creates the file
+// if it doesn't exist. The line is formatted as "- [ ] text".
+// Returns an error if text is empty.
+func AppendTask(ctx context.Context, filePath string, text string) error {
+	return defaultToggler.AppendTask(ctx, filePath, text)
+}
+
+// AppendTask appends a new checkbox task line to a file.
+func (t *Toggler) AppendTask(ctx context.Context, filePath string, text string) error {
+	if text == "" {
+		return fmt.Errorf("cannot append empty task")
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
+	mu := t.locks.lock(filePath)
+	defer mu.Unlock()
+
+	line := "- [ ] " + text
+
+	var lines []string
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		if !os.IsNotExist(err) {
+			return fmt.Errorf("read file: %w", err)
+		}
+		lines = []string{line}
+	} else {
+		content := strings.TrimSuffix(string(data), "\n")
+		if content == "" {
+			lines = []string{line}
+		} else {
+			lines = append(strings.Split(content, "\n"), line)
+		}
+	}
+
+	info, err := os.Stat(filePath)
+	perm := os.FileMode(0o644)
+	if err == nil {
+		perm = info.Mode()
+	}
+
+	return writeLines(filePath, lines, perm)
+}
+
 // verifyUnmodified re-reads the file and checks that the target line hasn't
 // been modified by an external process since we first read it. This narrows
 // the TOCTOU window to just the time between our two reads.

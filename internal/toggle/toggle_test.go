@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -302,4 +303,52 @@ func TestToggleHiddenCancelledContext(t *testing.T) {
 	if got != original {
 		t.Errorf("file was modified despite cancelled context:\n%s", got)
 	}
+}
+
+func TestAppendTask(t *testing.T) {
+	t.Run("appends to existing file", func(t *testing.T) {
+		dir := t.TempDir()
+		path := filepath.Join(dir, "tasks.md")
+		os.WriteFile(path, []byte("- [ ] existing task\n"), 0o644) //nolint:errcheck // test setup
+
+		err := AppendTask(context.Background(), path, "buy milk @today")
+		if err != nil {
+			t.Fatalf("AppendTask error: %v", err)
+		}
+
+		data, _ := os.ReadFile(path)
+		lines := strings.Split(strings.TrimSuffix(string(data), "\n"), "\n")
+		if len(lines) != 2 {
+			t.Fatalf("expected 2 lines, got %d: %q", len(lines), string(data))
+		}
+		if lines[1] != "- [ ] buy milk @today" {
+			t.Errorf("line 2 = %q, want '- [ ] buy milk @today'", lines[1])
+		}
+	})
+
+	t.Run("creates file if not exists", func(t *testing.T) {
+		dir := t.TempDir()
+		path := filepath.Join(dir, "new.md")
+
+		err := AppendTask(context.Background(), path, "first task")
+		if err != nil {
+			t.Fatalf("AppendTask error: %v", err)
+		}
+
+		data, _ := os.ReadFile(path)
+		want := "- [ ] first task\n"
+		if string(data) != want {
+			t.Errorf("file content = %q, want %q", string(data), want)
+		}
+	})
+
+	t.Run("empty text returns error", func(t *testing.T) {
+		dir := t.TempDir()
+		path := filepath.Join(dir, "tasks.md")
+
+		err := AppendTask(context.Background(), path, "")
+		if err == nil {
+			t.Error("expected error for empty text")
+		}
+	})
 }

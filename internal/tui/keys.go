@@ -27,6 +27,20 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.handleKeyFilterResults(msg)
 	}
 
+	// CreateBar active: delegate all keys.
+	if m.createBar.Active() {
+		var cmd tea.Cmd
+		m.createBar, cmd = m.createBar.Update(msg)
+		if output := m.createBar.Output(); output != nil {
+			updated, extraCmd := m.Update(output)
+			if extraCmd != nil {
+				return updated, tea.Batch(cmd, extraCmd)
+			}
+			return updated, cmd
+		}
+		return m, cmd
+	}
+
 	// Custom bindings — checked before built-in keys so custom wins on conflict.
 	if !m.viewLocked {
 		if model, cmd, handled := m.handleKeyCustomBinding(msg); handled {
@@ -177,6 +191,11 @@ func (m Model) handleKeyDashboard(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	case key.Matches(msg, m.keys.Refresh):
 		return m, func() tea.Msg { return RefreshMsg{} }
+
+	case key.Matches(msg, m.keys.CreateTask):
+		var cmd tea.Cmd
+		m.createBar, cmd = m.createBar.Update(CreateActivateMsg{})
+		return m, cmd
 	}
 
 	if mdl, cmd, handled := m.handleTaskAction(msg); handled {

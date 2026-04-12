@@ -736,6 +736,26 @@ views:
 	}
 }
 
+func TestInboxFileDefault(t *testing.T) {
+	cfg, err := LoadBytes([]byte(""))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.InboxFile != "inbox.md" {
+		t.Errorf("InboxFile = %q, want 'inbox.md'", cfg.InboxFile)
+	}
+}
+
+func TestInboxFileConfigured(t *testing.T) {
+	cfg, err := LoadBytes([]byte("inbox_file: capture.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.InboxFile != "capture.md" {
+		t.Errorf("InboxFile = %q, want 'capture.md'", cfg.InboxFile)
+	}
+}
+
 func TestLoadBytes_MultipleDueDatesViewsError(t *testing.T) {
 	yaml := `
 views:
