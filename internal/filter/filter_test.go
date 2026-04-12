@@ -275,6 +275,107 @@ func TestApplyViewsInvalidQuery(t *testing.T) {
 	}
 }
 
+func TestApplyViews_IncludesUnmatchedChildren(t *testing.T) {
+	parent := model.TaskWith(model.Task{
+		Text:        "Parent task @today",
+		State:       model.Open,
+		File:        "notes/todo.md",
+		Line:        1,
+		HasCheckbox: true,
+		Tags:        []model.Tag{{Name: "today"}},
+	})
+	child1 := model.TaskWith(model.Task{
+		Text:        "Child one",
+		State:       model.Open,
+		File:        "notes/todo.md",
+		Line:        2,
+		HasCheckbox: true,
+		Indent:      2,
+	})
+	child2 := model.TaskWith(model.Task{
+		Text:        "Child two",
+		State:       model.Open,
+		File:        "notes/todo.md",
+		Line:        3,
+		HasCheckbox: true,
+		Indent:      2,
+	})
+
+	// Wire up parent-child relationships
+	parent.ChildIndices = []int{1, 2}
+	child1.ParentIndex = 0
+	child2.ParentIndex = 0
+
+	allTasks := []model.Task{parent, child1, child2}
+	now := time.Date(2026, 3, 13, 0, 0, 0, 0, time.UTC)
+
+	views := []config.ViewConfig{
+		{Title: "Today", Query: "@today", Sort: "file"},
+	}
+
+	// Only the parent matches @today. Children should be included anyway.
+	results, err := ApplyViews(allTasks, views, now)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(results) != 1 {
+		t.Fatalf("expected 1 view result, got %d", len(results))
+	}
+	if len(results[0].Tasks) != 3 {
+		t.Errorf("expected 3 tasks (parent + 2 children), got %d", len(results[0].Tasks))
+		for i, task := range results[0].Tasks {
+			t.Logf("  [%d] %s", i, task.Text)
+		}
+	}
+}
+
+func TestApplyViews_ChildrenAlreadyMatched(t *testing.T) {
+	parent := model.TaskWith(model.Task{
+		Text:        "Parent task",
+		State:       model.Open,
+		File:        "notes/todo.md",
+		Line:        1,
+		HasCheckbox: true,
+	})
+	child := model.TaskWith(model.Task{
+		Text:        "Child task",
+		State:       model.Open,
+		File:        "notes/todo.md",
+		Line:        2,
+		HasCheckbox: true,
+		Indent:      2,
+	})
+
+	parent.ChildIndices = []int{1}
+	child.ParentIndex = 0
+
+	allTasks := []model.Task{parent, child}
+	now := time.Date(2026, 3, 13, 0, 0, 0, 0, time.UTC)
+
+	views := []config.ViewConfig{
+		{Title: "Open", Query: "open", Sort: "file"},
+	}
+
+	// Both match "open" — child should not be duplicated.
+	results, err := ApplyViews(allTasks, views, now)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(results[0].Tasks) != 2 {
+		t.Errorf("expected 2 tasks (no duplication), got %d", len(results[0].Tasks))
+	}
+}
+
+func TestApplyInvalidSortOrder(t *testing.T) {
+	tasks := makeTasks()
+	now := time.Date(2026, 3, 13, 0, 0, 0, 0, time.UTC)
+
+	_, err := Apply(tasks, "open", "bogus_sort", now)
+	if err == nil {
+		t.Fatal("expected error for invalid sort order, got nil")
+	}
+}
+
 func TestApplyViews_HiddenViewsExcluded(t *testing.T) {
 	tasks := []model.Task{
 		{Text: "task @due(2026-03-15)", State: model.Open, HasCheckbox: true,

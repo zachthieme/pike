@@ -1,9 +1,11 @@
 package render
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/zachthieme/pike/internal/model"
 )
@@ -187,6 +189,20 @@ func TestFormatTask(t *testing.T) {
 			noColor:   false,
 			want:      "- [ ] Plain task @today",
 		},
+		{
+			name: "plain bullet without checkbox",
+			task: model.Task{
+				Text:        "Review PR @risk",
+				State:       model.Open,
+				File:        "dev.md",
+				Line:        1,
+				Tags:        []model.Tag{{Name: "risk"}},
+				HasCheckbox: false,
+			},
+			tagColors: tagColors,
+			noColor:   true,
+			want:      "- Review PR @risk",
+		},
 	}
 
 	for _, tt := range tests {
@@ -273,6 +289,18 @@ func TestFormatSummary(t *testing.T) {
 				"Task Summary",
 			},
 		},
+		{
+			name:          "very long label triggers padding floor",
+			open:          999999999,
+			overdue:       0,
+			dueThisWeek:   0,
+			completedWeek: 0,
+			noColor:       true,
+			wantContains: []string{
+				"999999999",
+				"Open tasks",
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -313,5 +341,94 @@ func TestFormatSummaryAlignment(t *testing.T) {
 				t.Errorf("Line too short, expected padded format: %q", line)
 			}
 		}
+	}
+}
+
+func TestFormatJSON(t *testing.T) {
+	due := time.Date(2026, 3, 15, 0, 0, 0, 0, time.UTC)
+	completed := time.Date(2026, 3, 10, 0, 0, 0, 0, time.UTC)
+
+	tasks := []model.Task{
+		{
+			Text:        "Buy groceries @today",
+			State:       model.Open,
+			File:        "notes/todo.md",
+			Line:        5,
+			Tags:        []model.Tag{{Name: "today"}},
+			HasCheckbox: true,
+		},
+		{
+			Text:        "Ship feature @due(2026-03-15)",
+			State:       model.Open,
+			File:        "work/tasks.md",
+			Line:        3,
+			Tags:        []model.Tag{{Name: "due", Value: "2026-03-15"}},
+			Due:         &due,
+			HasCheckbox: true,
+		},
+		{
+			Text:        "Done task @completed(2026-03-10)",
+			State:       model.Completed,
+			File:        "notes/done.md",
+			Line:        8,
+			Tags:        []model.Tag{{Name: "completed", Value: "2026-03-10"}},
+			Completed:   &completed,
+			HasCheckbox: true,
+		},
+		{
+			Text:        "Tagged bullet @risk",
+			State:       model.Open,
+			File:        "notes/ideas.md",
+			Line:        1,
+			Tags:        []model.Tag{{Name: "risk"}},
+			HasCheckbox: false,
+		},
+	}
+
+	var buf strings.Builder
+	if err := FormatJSON(&buf, tasks); err != nil {
+		t.Fatalf("FormatJSON() error: %v", err)
+	}
+
+	got := buf.String()
+
+	wantContains := []string{
+		`"text": "Buy groceries @today"`,
+		`"state": "open"`,
+		`"file": "notes/todo.md"`,
+		`"line": 5`,
+		`"tags": [`,
+		`"@today"`,
+		`"due": "2026-03-15"`,
+		`"completed": "2026-03-10"`,
+		`"has_checkbox": true`,
+		`"has_checkbox": false`,
+		`"@risk"`,
+		`"@due(2026-03-15)"`,
+	}
+	for _, want := range wantContains {
+		if !strings.Contains(got, want) {
+			t.Errorf("FormatJSON() missing %q in output:\n%s", want, got)
+		}
+	}
+
+	// Verify valid JSON
+	var parsed []map[string]interface{}
+	if err := json.Unmarshal([]byte(got), &parsed); err != nil {
+		t.Fatalf("FormatJSON() produced invalid JSON: %v\nOutput:\n%s", err, got)
+	}
+	if len(parsed) != 4 {
+		t.Errorf("expected 4 JSON objects, got %d", len(parsed))
+	}
+}
+
+func TestFormatJSON_EmptyTasks(t *testing.T) {
+	var buf strings.Builder
+	if err := FormatJSON(&buf, []model.Task{}); err != nil {
+		t.Fatalf("FormatJSON() error: %v", err)
+	}
+	got := strings.TrimSpace(buf.String())
+	if got != "[]" {
+		t.Errorf("FormatJSON() for empty = %q, want %q", got, "[]")
 	}
 }

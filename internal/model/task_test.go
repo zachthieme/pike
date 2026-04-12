@@ -1,6 +1,9 @@
 package model
 
-import "testing"
+import (
+	"testing"
+	"time"
+)
 
 func TestTaskStateValues(t *testing.T) {
 	if Open == Completed {
@@ -168,5 +171,83 @@ func TestProgress(t *testing.T) {
 				t.Errorf("total = %d, want %d", total, tt.wantTotal)
 			}
 		})
+	}
+}
+
+func TestTaskWith(t *testing.T) {
+	due := time.Date(2026, 3, 15, 0, 0, 0, 0, time.UTC)
+	task := TaskWith(Task{
+		Text:        "Ship feature @due(2026-03-15)",
+		State:       Open,
+		File:        "work.md",
+		Line:        7,
+		HasCheckbox: true,
+		Tags:        []Tag{{Name: "due", Value: "2026-03-15"}},
+		Due:         &due,
+		Indent:      4,
+	})
+
+	if task.Text != "Ship feature @due(2026-03-15)" {
+		t.Errorf("Text = %q", task.Text)
+	}
+	if task.LowerText != "ship feature @due(2026-03-15)" {
+		t.Errorf("LowerText = %q, want lowered", task.LowerText)
+	}
+	if !task.HasTag("due") {
+		t.Error("expected HasTag('due') from Tags")
+	}
+	if task.Due == nil || !task.Due.Equal(due) {
+		t.Errorf("Due = %v, want %v", task.Due, due)
+	}
+	if task.Indent != 4 {
+		t.Errorf("Indent = %d, want 4", task.Indent)
+	}
+	if task.ParentIndex != -1 {
+		t.Errorf("ParentIndex = %d, want -1 (not copied)", task.ParentIndex)
+	}
+}
+
+func TestSetText(t *testing.T) {
+	task := NewTask("Original", "f.md", 1, Open, true)
+	task.SetText("Updated TEXT")
+	if task.Text != "Updated TEXT" {
+		t.Errorf("Text = %q, want %q", task.Text, "Updated TEXT")
+	}
+	if task.LowerText != "updated text" {
+		t.Errorf("LowerText = %q, want %q", task.LowerText, "updated text")
+	}
+}
+
+func TestHasChildren(t *testing.T) {
+	noChildren := Task{ParentIndex: -1}
+	if noChildren.HasChildren() {
+		t.Error("expected HasChildren() = false for task without children")
+	}
+
+	withChildren := Task{ParentIndex: -1, ChildIndices: []int{1, 2}}
+	if !withChildren.HasChildren() {
+		t.Error("expected HasChildren() = true for task with children")
+	}
+}
+
+func TestTaskKey(t *testing.T) {
+	got := TaskKey("notes/todo.md", 42)
+	if got != "notes/todo.md:42" {
+		t.Errorf("TaskKey() = %q, want %q", got, "notes/todo.md:42")
+	}
+}
+
+func TestKey(t *testing.T) {
+	task := NewTask("test", "work.md", 7, Open, true)
+	got := task.Key()
+	if got != "work.md:7" {
+		t.Errorf("Key() = %q, want %q", got, "work.md:7")
+	}
+}
+
+func TestTaskStateStringUnknown(t *testing.T) {
+	unknown := TaskState(99)
+	if got := unknown.String(); got != "unknown" {
+		t.Errorf("TaskState(99).String() = %q, want %q", got, "unknown")
 	}
 }
