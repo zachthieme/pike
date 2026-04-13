@@ -11,6 +11,8 @@ type tokenType int
 const (
 	tokOpen      tokenType = iota // "open"
 	tokCompleted                  // "completed"
+	tokTask                       // "task"
+	tokBullet                     // "bullet"
 	tokAnd                        // "and"
 	tokOr                         // "or"
 	tokNot                        // "not"
@@ -37,6 +39,10 @@ func (t tokenType) String() string {
 		return "tokOpen"
 	case tokCompleted:
 		return "tokCompleted"
+	case tokTask:
+		return "tokTask"
+	case tokBullet:
+		return "tokBullet"
 	case tokAnd:
 		return "tokAnd"
 	case tokOr:
@@ -212,6 +218,10 @@ func lex(input string) ([]token, error) {
 				tokens = append(tokens, token{Type: tokOpen, Value: word})
 			case "completed":
 				tokens = append(tokens, token{Type: tokCompleted, Value: word})
+			case "task":
+				tokens = append(tokens, token{Type: tokTask, Value: word})
+			case "bullet":
+				tokens = append(tokens, token{Type: tokBullet, Value: word})
 			case "and":
 				tokens = append(tokens, token{Type: tokAnd, Value: word})
 			case "or":

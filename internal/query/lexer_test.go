@@ -12,6 +12,8 @@ func TestLexKeywords(t *testing.T) {
 	}{
 		{"open", tokOpen},
 		{"completed", tokCompleted},
+		{"task", tokTask},
+		{"bullet", tokBullet},
 		{"and", tokAnd},
 		{"or", tokOr},
 		{"not", tokNot},

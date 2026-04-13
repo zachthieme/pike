@@ -25,6 +25,10 @@ func EvalWithOptions(node Node, task *model.Task, now time.Time, opts EvalOption
 		return task.State == model.Open
 	case *completedNode:
 		return task.State == model.Completed
+	case *taskNode:
+		return task.HasCheckbox
+	case *bulletNode:
+		return !task.HasCheckbox
 	case *tagNode:
 		if opts.PartialTags {
 			return hasTagPartial(task, strings.ToLower(n.Name))

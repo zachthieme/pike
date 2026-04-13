@@ -79,14 +79,28 @@ func (p *parser) parseOrExpr() (Node, error) {
 	return left, nil
 }
 
-// and_expr = not_expr ("and" not_expr)*
+// canStartAtom reports whether a token type can begin a new atom or not_expr.
+// Used by parseAndExpr to support implicit AND (juxtaposition).
+func canStartAtom(t tokenType) bool {
+	switch t {
+	case tokOpen, tokCompleted, tokTask, tokBullet, tokTag, tokRegex, tokWord, tokString, tokLParen, tokNot:
+		return true
+	}
+	return false
+}
+
+// and_expr = not_expr (("and" | implicit) not_expr)*
 func (p *parser) parseAndExpr() (Node, error) {
 	left, err := p.parseNotExpr()
 	if err != nil {
 		return nil, err
 	}
-	for p.current().Type == tokAnd {
-		p.advance() // consume "and"
+	for {
+		if p.current().Type == tokAnd {
+			p.advance() // consume explicit "and"
+		} else if !canStartAtom(p.current().Type) {
+			break
+		}
 		right, err := p.parseNotExpr()
 		if err != nil {
 			return nil, err
@@ -109,7 +123,7 @@ func (p *parser) parseNotExpr() (Node, error) {
 	return p.parseAtom()
 }
 
-// atom = "open" | "completed" | tag_or_datecmp | regex | "(" expr ")"
+// atom = "open" | "completed" | "task" | "bullet" | tag_or_datecmp | regex | "(" expr ")"
 func (p *parser) parseAtom() (Node, error) {
 	tok := p.current()
 
@@ -121,6 +135,14 @@ func (p *parser) parseAtom() (Node, error) {
 	case tokCompleted:
 		p.advance()
 		return &completedNode{}, nil
+
+	case tokTask:
+		p.advance()
+		return &taskNode{}, nil
+
+	case tokBullet:
+		p.advance()
+		return &bulletNode{}, nil
 
 	case tokTag:
 		return p.parseTagOrDateCmp()

@@ -20,6 +20,16 @@ type completedNode struct{}
 
 func (n *completedNode) nodeType() string { return "completed" }
 
+// taskNode matches items with a checkbox (HasCheckbox == true).
+type taskNode struct{}
+
+func (n *taskNode) nodeType() string { return "task" }
+
+// bulletNode matches plain tagged items without a checkbox (HasCheckbox == false).
+type bulletNode struct{}
+
+func (n *bulletNode) nodeType() string { return "bullet" }
+
 // tagNode matches tasks that have a specific tag.
 type tagNode struct {
 	Name string // tag name without @

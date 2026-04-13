@@ -387,3 +387,88 @@ func TestEvalIntegrationQuotedText(t *testing.T) {
 		t.Error(`'open and "meeting notes"' should not match "meeting agenda"`)
 	}
 }
+
+func TestEvalTaskBulletMatching(t *testing.T) {
+	checkboxTask := model.NewTask("Buy groceries @today", "notes.md", 1, model.Open, true)
+	checkboxTask.AddTag(model.Tag{Name: "today"})
+
+	bulletItem := model.NewTask("Review PR @risk", "dev.md", 1, model.Open, false)
+	bulletItem.AddTag(model.Tag{Name: "risk"})
+
+	// taskNode matches checkbox items
+	if !Eval(&taskNode{}, checkboxTask, now) {
+		t.Error("taskNode should match checkbox task")
+	}
+	if Eval(&taskNode{}, bulletItem, now) {
+		t.Error("taskNode should not match bullet item")
+	}
+
+	// bulletNode matches non-checkbox items
+	if !Eval(&bulletNode{}, bulletItem, now) {
+		t.Error("bulletNode should match bullet item")
+	}
+	if Eval(&bulletNode{}, checkboxTask, now) {
+		t.Error("bulletNode should not match checkbox task")
+	}
+}
+
+func TestEvalIntegrationBulletKeyword(t *testing.T) {
+	node, err := Parse("bullet and @risk")
+	if err != nil {
+		t.Fatalf("Parse error: %v", err)
+	}
+
+	// Bullet with @risk — should match
+	bulletRisk := model.NewTask("Review PR @risk", "dev.md", 1, model.Open, false)
+	bulletRisk.AddTag(model.Tag{Name: "risk"})
+	if !Eval(node, bulletRisk, now) {
+		t.Error("bullet with @risk should match 'bullet and @risk'")
+	}
+
+	// Checkbox task with @risk — should NOT match
+	checkboxRisk := model.NewTask("Fix bug @risk", "dev.md", 2, model.Open, true)
+	checkboxRisk.AddTag(model.Tag{Name: "risk"})
+	if Eval(node, checkboxRisk, now) {
+		t.Error("checkbox task should not match 'bullet and @risk'")
+	}
+
+	// Bullet without @risk — should NOT match
+	bulletNoRisk := model.NewTask("Some note @today", "dev.md", 3, model.Open, false)
+	bulletNoRisk.AddTag(model.Tag{Name: "today"})
+	if Eval(node, bulletNoRisk, now) {
+		t.Error("bullet without @risk should not match 'bullet and @risk'")
+	}
+}
+
+func TestEvalIntegrationTaskKeyword(t *testing.T) {
+	node, err := Parse("open task and not @due")
+	if err != nil {
+		t.Fatalf("Parse error: %v", err)
+	}
+
+	// Open checkbox task without @due — should match
+	checkboxNoDue := model.NewTask("Buy groceries", "notes.md", 1, model.Open, true)
+	if !Eval(node, checkboxNoDue, now) {
+		t.Error("open checkbox task without @due should match 'open task and not @due'")
+	}
+
+	// Open checkbox task with @due — should NOT match
+	checkboxWithDue := model.NewTask("Pay bills @due(2026-03-20)", "notes.md", 2, model.Open, true)
+	checkboxWithDue.AddTag(model.Tag{Name: "due", Value: "2026-03-20"})
+	if Eval(node, checkboxWithDue, now) {
+		t.Error("open checkbox task with @due should not match 'open task and not @due'")
+	}
+
+	// Open bullet (no checkbox) without @due — should NOT match (not a task)
+	bulletNoDue := model.NewTask("Review PR @risk", "dev.md", 1, model.Open, false)
+	bulletNoDue.AddTag(model.Tag{Name: "risk"})
+	if Eval(node, bulletNoDue, now) {
+		t.Error("bullet item should not match 'open task and not @due'")
+	}
+
+	// Completed checkbox task without @due — should NOT match (not open)
+	completedNoDue := model.NewTask("Old item", "notes.md", 3, model.Completed, true)
+	if Eval(node, completedNoDue, now) {
+		t.Error("completed checkbox task should not match 'open task and not @due'")
+	}
+}
