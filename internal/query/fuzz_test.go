@@ -10,7 +10,8 @@ var fuzzTasks = func() []*model.Task {
 	t1 := model.TaskWith(model.Task{Text: "open task @due(2026-03-16) @today", State: model.Open, Tags: []model.Tag{{Name: "due", Value: "2026-03-16"}, {Name: "today"}}, Due: timePtr(time.Date(2026, 3, 16, 0, 0, 0, 0, time.UTC))})
 	t2 := model.TaskWith(model.Task{Text: "completed task @completed(2026-03-10)", State: model.Completed, Tags: []model.Tag{{Name: "completed", Value: "2026-03-10"}}, Completed: timePtr(time.Date(2026, 3, 10, 0, 0, 0, 0, time.UTC))})
 	t3 := model.TaskWith(model.Task{Text: "plain task @risk", State: model.Open, Tags: []model.Tag{{Name: "risk"}}})
-	return []*model.Task{&t1, &t2, &t3}
+	t4 := model.TaskWith(model.Task{Text: "checkbox task @today", State: model.Open, HasCheckbox: true, Tags: []model.Tag{{Name: "today"}}})
+	return []*model.Task{&t1, &t2, &t3, &t4}
 }()
 
 func timePtr(t time.Time) *time.Time { return &t }
@@ -32,6 +33,11 @@ func FuzzParse(f *testing.F) {
 		"(((",
 		"and and and",
 		"open and @due < today+9999d",
+		"task",
+		"bullet",
+		"open task and not @due",
+		"bullet and @risk",
+		"open task",
 	}
 	for _, s := range seeds {
 		f.Add(s)

@@ -7,17 +7,21 @@ A query language for filtering tasks by state, tags, dates, and text patterns. U
 ```
 expr     = or_expr
 or_expr  = and_expr ("or" and_expr)*
-and_expr = not_expr ("and" not_expr)*
+and_expr = not_expr (("and")? not_expr)*
 not_expr = "not" not_expr | atom
-atom     = "open" | "completed" | @tag | @tag <op> <date> | /regex/ | "text" | word | ( expr )
+atom     = "open" | "completed" | "task" | "bullet" | @tag | @tag <op> <date> | /regex/ | "text" | word | ( expr )
 ```
+
+Adjacent atoms are implicitly ANDed: `open task @risk` is equivalent to `open and task and @risk`.
 
 ## Atoms
 
 | Atom | Matches |
 |------|---------|
-| `open` | Tasks with open state (`- [ ]` or tagged bullets) |
+| `open` | Items with open state (unchecked checkboxes and tagged bullets) |
 | `completed` | Tasks with completed state (`- [x]` / `- [X]` or `@completed` tag) |
+| `task` | Items with a checkbox (`- [ ]` or `- [x]`) |
+| `bullet` | Plain tagged items without a checkbox (`- item @tag`) |
 | `@tag` | Tasks containing the given tag |
 | `@due < DATE` | Tasks with `@due(...)` before DATE |
 | `@due > DATE` | Tasks with `@due(...)` after DATE |
@@ -83,6 +87,8 @@ open and not @risk                      # open, excluding risk
 open and deploy                         # open tasks containing "deploy"
 open and "meeting notes"                # open tasks containing "meeting notes"
 @talk and open                          # open tasks tagged @talk
+open task and not @due                  # open checkbox tasks without due dates (implicit AND between open and task)
+bullet and @risk                        # plain tagged items (no checkbox) tagged @risk
 ```
 
 ## Scope
