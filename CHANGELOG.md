@@ -1,5 +1,16 @@
 # Changelog
 
+## v1.9.0 — April 13, 2026: Task & Bullet Keywords, Implicit AND
+
+**Query DSL keywords:**
+- Added `task` keyword — matches checkbox items (`- [ ]` / `- [x]`)
+- Added `bullet` keyword — matches plain tagged items (`- item @tag`)
+- These let you distinguish todos from tagged notes in queries: `open task not @due`
+
+**Implicit AND:**
+- Adjacent atoms are now implicitly ANDed: `open task @risk` is equivalent to `open and task and @risk`
+- Explicit `and` still works and is equivalent
+
 ## v1.8.1 — March 31, 2026: CI Cleanup
 
 - CI workflow now only runs on version tag pushes (no longer triggers on every push to main or PRs)
