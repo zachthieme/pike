@@ -15,8 +15,10 @@ import (
 	"time"
 
 	"github.com/mattn/go-isatty"
+	"github.com/muesli/termenv"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 
 	"github.com/zachthieme/pike/internal/config"
 	"github.com/zachthieme/pike/internal/filter"
@@ -46,6 +48,7 @@ Flags:
   --json                 Output results as JSON (use with --query or --scope)
   --color                Force color output
   --no-color             Disable color output
+  --debug                Print debug diagnostics to stderr
   --help, -h             Show help
   --version, -v          Show version
 `
@@ -70,6 +73,7 @@ type cliFlags struct {
 	json    bool
 	color   bool
 	noColor bool
+	debug   bool
 	help    bool
 	version bool
 }
@@ -93,6 +97,7 @@ func parseFlags(args []string, stderr io.Writer) (*cliFlags, error) {
 	fs.BoolVar(&f.json, "json", false, "Output results as JSON")
 	fs.BoolVar(&f.color, "color", false, "Force color output")
 	fs.BoolVar(&f.noColor, "no-color", false, "Disable color output")
+	fs.BoolVar(&f.debug, "debug", false, "Print debug diagnostics to stderr")
 	fs.BoolVar(&f.help, "help", false, "Show help")
 	fs.BoolVar(&f.version, "version", false, "Show version")
 
@@ -175,6 +180,24 @@ func run(args []string, stdout, stderr io.Writer) error {
 		tasks, err = applyScope(tasks, f.scope, cfg.NotesDir)
 		if err != nil {
 			return err
+		}
+	}
+
+	if f.debug {
+		fmt.Fprintf(stderr, "pike %s\n", version)
+		fmt.Fprintf(stderr, "notes_dir: %s\n", notesDir)
+		fmt.Fprintf(stderr, "config: %s\n", f.config)
+		fmt.Fprintf(stderr, "TERM=%s COLORTERM=%s\n", os.Getenv("TERM"), os.Getenv("COLORTERM"))
+		fmt.Fprintf(stderr, "color_profile: %v\n", lipgloss.ColorProfile())
+		fmt.Fprintf(stderr, "dark_background: %v\n", lipgloss.HasDarkBackground())
+		fmt.Fprintf(stderr, "tasks: %d\n", len(tasks))
+		fmt.Fprintf(stderr, "views: %d\n", len(cfg.Views))
+		for _, v := range cfg.Views {
+			count := 0
+			if filtered, err := filter.Apply(tasks, v.Query, v.Sort, time.Now()); err == nil {
+				count = len(filtered)
+			}
+			fmt.Fprintf(stderr, "  %q (%s): %d tasks\n", v.Title, v.Query, count)
 		}
 	}
 
@@ -498,6 +521,12 @@ func runTUI(_ io.Writer, cfg *config.Config, tasks []model.Task, sc *scanner.Sca
 			return err
 		}
 		m.SetFocusedView(v.Title)
+	}
+
+	// Fall back to TrueColor if terminal color detection failed (e.g. terminal
+	// didn't respond to OSC 11 query), otherwise lipgloss renders nothing.
+	if lipgloss.ColorProfile() == termenv.Ascii {
+		lipgloss.SetColorProfile(termenv.TrueColor)
 	}
 
 	p := tea.NewProgram(m, tea.WithAltScreen())
