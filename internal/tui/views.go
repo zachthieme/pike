@@ -11,27 +11,52 @@ import (
 
 // View implements tea.Model.
 func (m Model) View() string {
+	// Don't render until we know the viewport dimensions; an unconstrained
+	// first render can leave artifacts in tmux when the shorter second
+	// render doesn't fully clear the screen.
+	if m.width == 0 || m.height == 0 {
+		return ""
+	}
+
 	var errLine string
 	if m.err != nil {
 		errLine = ErrorStyle().Render("Error: "+m.err.Error()) + "\n"
 	}
 
+	var content string
 	if m.showSummary {
-		return errLine + m.viewSummary()
+		content = errLine + m.viewSummary()
+	} else {
+		switch m.mode {
+		case modeFocused:
+			content = errLine + m.viewFocused()
+		case modeAllTasks:
+			content = errLine + m.viewAllTasks()
+		case modeTagSearch:
+			content = errLine + m.tagSearch.View(m.tagColors, m.width)
+		case modeRecentlyCompleted:
+			content = errLine + m.viewAllTasks()
+		default:
+			content = errLine + m.viewDashboard()
+		}
 	}
 
-	switch m.mode {
-	case modeFocused:
-		return errLine + m.viewFocused()
-	case modeAllTasks:
-		return errLine + m.viewAllTasks()
-	case modeTagSearch:
-		return errLine + m.tagSearch.View(m.tagColors, m.width)
-	case modeRecentlyCompleted:
-		return errLine + m.viewAllTasks()
-	default:
-		return errLine + m.viewDashboard()
+	return m.padToViewport(content)
+}
+
+// padToViewport pads the rendered content with empty lines so it fills the
+// full terminal height. This prevents rendering artifacts in tmux where
+// CSI J (Erase Below) may not reliably clear leftover content from
+// previous frames.
+func (m Model) padToViewport(s string) string {
+	if m.height <= 0 {
+		return s
 	}
+	lines := strings.Split(s, "\n")
+	for len(lines) < m.height {
+		lines = append(lines, "")
+	}
+	return strings.Join(lines, "\n")
 }
 
 func (m Model) viewDashboard() string {

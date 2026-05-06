@@ -73,6 +73,9 @@ func testModel(tasks []model.Task, views []config.ViewConfig) Model {
 
 	m := NewModel(cfg, tasks, nil, nil)
 	m.now = func() time.Time { return testNow }
+	m.width = 80
+	m.height = 40
+	m.nav.SetHeight(40)
 	m.rebuildSections()
 	m.nav.ClampCursor(m.displaySections())
 	return m
