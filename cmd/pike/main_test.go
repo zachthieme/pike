@@ -562,3 +562,181 @@ func TestWarningOutput(t *testing.T) {
 		t.Errorf("expected warning mentioning file on stderr, got: %q", stderr.String())
 	}
 }
+
+// writeSyncConfig writes a config file with a hey: block pointing at the test
+// stub, and a notes directory with a few tasks. It returns the config path,
+// notes dir, and the state path (which should never be created by a dry run).
+func writeSyncConfig(t *testing.T, extraHey string) (cfgPath, notesDir, statePath string) {
+	t.Helper()
+	dir := t.TempDir()
+	notesDir = filepath.Join(dir, "notes")
+	if err := os.MkdirAll(notesDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	notes := "- [ ] Buy milk @today\n" +
+		"- [ ] Old linked @today @hey(h_open)\n" +
+		"- [ ] Secret @today @hidden\n"
+	if err := os.WriteFile(filepath.Join(notesDir, "notes.md"), []byte(notes), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	stub, err := filepath.Abs(filepath.Join("testdata", "hey-stub.sh"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	statePath = filepath.Join(dir, "hey-state.json")
+	cfgPath = filepath.Join(dir, "config.yaml")
+	cfg := "hey:\n  command: " + stub + "\n  state_path: " + statePath + "\n" + extraHey
+	if err := os.WriteFile(cfgPath, []byte(cfg), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return cfgPath, notesDir, statePath
+}
+
+func TestSyncWithoutHeyBlockErrors(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "notes.md"), []byte("- [ ] task\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	var stdout, stderr bytes.Buffer
+	err := run([]string{"--config", "/dev/null", "--dir", dir, "--sync"}, &stdout, &stderr)
+	if err == nil {
+		t.Fatal("expected an error when --sync is used without a hey: block")
+	}
+	if !strings.Contains(err.Error(), "hey") {
+		t.Errorf("error should name the hey block, got: %v", err)
+	}
+}
+
+func TestSyncConflictingFlags(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "notes.md"), []byte("- [ ] task\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for _, conflict := range [][]string{
+		{"--summary"},
+		{"--query", "open"},
+		{"--scope", filepath.Join(dir, "notes.md")},
+		{"--view", "Today"},
+	} {
+		args := append([]string{"--dir", dir, "--sync"}, conflict...)
+		var stdout, stderr bytes.Buffer
+		err := run(args, &stdout, &stderr)
+		if err == nil {
+			t.Errorf("expected --sync %v to conflict", conflict)
+		}
+	}
+}
+
+func TestDryRunWithoutSyncWarns(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "notes.md"), []byte("- [ ] task\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	var stdout, stderr bytes.Buffer
+	err := run([]string{"--dir", dir, "--query", "open", "--dry-run", "--no-color"}, &stdout, &stderr)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(stderr.String(), "dry-run") {
+		t.Errorf("expected a warning about --dry-run without --sync, got: %q", stderr.String())
+	}
+}
+
+func TestSyncDryRunEndToEnd(t *testing.T) {
+	cfgPath, notesDir, statePath := writeSyncConfig(t, "")
+	notesFile := filepath.Join(notesDir, "notes.md")
+	before, err := os.ReadFile(notesFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mutationLog := filepath.Join(t.TempDir(), "mutations.log")
+	t.Setenv("PIKE_STUB_MUTATION_LOG", mutationLog)
+
+	var stdout, stderr bytes.Buffer
+	if err := run([]string{"--config", cfgPath, "--dir", notesDir, "--sync", "--dry-run"}, &stdout, &stderr); err != nil {
+		t.Fatalf("unexpected error: %v\nstderr: %s", err, stderr.String())
+	}
+
+	out := stdout.String()
+	// 1 eligible task (Buy milk) would push; 1 unlinked open todo (h_new)
+	// would import; 1 link (h_open) already exists.
+	for _, want := range []string{"1 task", "1 todo", "1 link"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("output missing %q:\n%s", want, out)
+		}
+	}
+
+	// Nothing written to notes, HEY, or state.
+	after, err := os.ReadFile(notesFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(before) != string(after) {
+		t.Error("notes file was modified during a dry run")
+	}
+	if _, err := os.Stat(statePath); !os.IsNotExist(err) {
+		t.Errorf("state file should not be written during a dry run (stat err: %v)", err)
+	}
+	if _, err := os.Stat(mutationLog); !os.IsNotExist(err) {
+		t.Error("a mutating HEY verb was called during a dry run")
+	}
+}
+
+func TestSyncDryRunJSON(t *testing.T) {
+	cfgPath, notesDir, _ := writeSyncConfig(t, "")
+	var stdout, stderr bytes.Buffer
+	if err := run([]string{"--config", cfgPath, "--dir", notesDir, "--sync", "--dry-run", "--json"}, &stdout, &stderr); err != nil {
+		t.Fatalf("unexpected error: %v\nstderr: %s", err, stderr.String())
+	}
+	var rep struct {
+		DryRun        bool `json:"dry_run"`
+		WouldPush     int  `json:"would_push"`
+		WouldImport   int  `json:"would_import"`
+		ExistingLinks int  `json:"existing_links"`
+	}
+	if err := json.Unmarshal(stdout.Bytes(), &rep); err != nil {
+		t.Fatalf("output is not valid JSON: %v\n%s", err, stdout.String())
+	}
+	if !rep.DryRun || rep.WouldPush != 1 || rep.WouldImport != 1 || rep.ExistingLinks != 1 {
+		t.Errorf("unexpected report: %+v", rep)
+	}
+}
+
+func TestSyncUnauthenticatedExitsNonZero(t *testing.T) {
+	cfgPath, notesDir, _ := writeSyncConfig(t, "")
+	t.Setenv("PIKE_STUB_AUTH", "1")
+	var stdout, stderr bytes.Buffer
+	err := run([]string{"--config", cfgPath, "--dir", notesDir, "--sync", "--dry-run"}, &stdout, &stderr)
+	if err == nil {
+		t.Fatal("expected a non-zero exit when HEY reports an auth error")
+	}
+}
+
+func TestSyncCommandMissingExitsNonZero(t *testing.T) {
+	_, notesDir, statePath := writeSyncConfig(t, "")
+	// Point the command at a path that does not exist.
+	missingCfg := filepath.Join(t.TempDir(), "config.yaml")
+	cfg := "hey:\n  command: /nonexistent/hey-binary\n  state_path: " + statePath + "\n"
+	if err := os.WriteFile(missingCfg, []byte(cfg), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	var stdout, stderr bytes.Buffer
+	err := run([]string{"--config", missingCfg, "--dir", notesDir, "--sync", "--dry-run"}, &stdout, &stderr)
+	if err == nil {
+		t.Fatal("expected a non-zero exit when the hey command cannot run")
+	}
+}
+
+func TestHelpDocumentsSync(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	if err := run([]string{"--help"}, &stdout, &stderr); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	out := stdout.String()
+	if !strings.Contains(out, "--sync") {
+		t.Errorf("help should document --sync:\n%s", out)
+	}
+	if !strings.Contains(out, "--dry-run") {
+		t.Errorf("help should document --dry-run:\n%s", out)
+	}
+}

@@ -93,10 +93,12 @@ pike [flags]
 | `--config <path>` | `-c` | Config file path |
 | `--view <name>` | `-w` | Start focused on a named section |
 | `--query <query>` | `-q` | Run a query, print results to stdout, and exit |
+| `--sync` | | Reconcile tasks with HEY (requires a `hey:` config block) |
+| `--dry-run` | | With `--sync`, report what a sync would do and write nothing |
 | `--scope <file>` | `-s` | Filter to tasks referencing the given file's subject |
 | `--sort <order>` | | Sort order for `--query`/`--scope` mode (default: `file`) |
 | `--count` | | Print result count only (use with `--query` or `--scope`) |
-| `--json` | | Output results as JSON (use with `--query` or `--scope`) |
+| `--json` | | Output results as JSON (use with `--query`, `--scope`, or `--sync`) |
 | `--summary` | | Print task summary counts and exit |
 | `--color` | | Force color output |
 | `--no-color` | | Disable color output |
