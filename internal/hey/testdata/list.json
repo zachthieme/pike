@@ -1,0 +1,18 @@
+[
+  {
+    "id": "todo_01HZOPEN",
+    "title": "Buy groceries",
+    "week_start": "2026-09-13",
+    "week_end": "2026-09-19",
+    "completed_at": null,
+    "updated_at": "2026-09-13T08:00:00Z"
+  },
+  {
+    "id": "todo_01HZDONE",
+    "title": "File taxes",
+    "week_start": "2026-09-06",
+    "week_end": "2026-09-12",
+    "completed_at": "2026-09-10T14:30:00Z",
+    "updated_at": "2026-09-10T14:30:00Z"
+  }
+]
