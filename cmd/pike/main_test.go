@@ -682,6 +682,56 @@ func TestSyncDryRunEndToEnd(t *testing.T) {
 	}
 }
 
+func TestSyncRealPushEndToEnd(t *testing.T) {
+	cfgPath, notesDir, statePath := writeSyncConfig(t, "")
+	notesFile := filepath.Join(notesDir, "notes.md")
+	mutationLog := filepath.Join(t.TempDir(), "mutations.log")
+	t.Setenv("PIKE_STUB_MUTATION_LOG", mutationLog)
+
+	var stdout, stderr bytes.Buffer
+	if err := run([]string{"--config", cfgPath, "--dir", notesDir, "--sync"}, &stdout, &stderr); err != nil {
+		t.Fatalf("unexpected error: %v\nstderr: %s", err, stderr.String())
+	}
+
+	// Only the eligible "Buy milk" task is pushed; the linked and hidden tasks
+	// are left alone.
+	if !strings.Contains(stdout.String(), "1 task(s) pushed") {
+		t.Errorf("report should count one push:\n%s", stdout.String())
+	}
+
+	after, err := os.ReadFile(notesFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "- [ ] Buy milk @today @hey(h_buymilk)\n" +
+		"- [ ] Old linked @today @hey(h_open)\n" +
+		"- [ ] Secret @today @hidden\n"
+	if string(after) != want {
+		t.Errorf("notes after push:\n got: %q\nwant: %q", string(after), want)
+	}
+
+	// The add call carried the stripped title and no --date (no @due).
+	log, err := os.ReadFile(mutationLog)
+	if err != nil {
+		t.Fatalf("expected a recorded add call: %v", err)
+	}
+	if !strings.Contains(string(log), "add Buy milk") {
+		t.Errorf("add call should use the stripped title:\n%s", string(log))
+	}
+	if strings.Contains(string(log), "--date") {
+		t.Errorf("task without @due should push no date:\n%s", string(log))
+	}
+
+	// The Link is recorded in the state file.
+	stateData, err := os.ReadFile(statePath)
+	if err != nil {
+		t.Fatalf("state file should be written: %v", err)
+	}
+	if !strings.Contains(string(stateData), "h_buymilk") || !strings.Contains(string(stateData), "Buy milk") {
+		t.Errorf("state file missing the new link:\n%s", string(stateData))
+	}
+}
+
 func TestSyncDryRunJSON(t *testing.T) {
 	cfgPath, notesDir, _ := writeSyncConfig(t, "")
 	var stdout, stderr bytes.Buffer

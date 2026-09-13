@@ -187,6 +187,35 @@ func TestUncompletePreservesOtherTags(t *testing.T) {
 	}
 }
 
+func TestAppendTagAppendsLeavingRestUnchanged(t *testing.T) {
+	dir := t.TempDir()
+	p := writeFile(t, dir, "test.md", "- [ ] Buy milk @today\nother line\n")
+
+	if err := AppendTag(context.Background(), p, 1, "Buy milk @today", "@hey(h1)"); err != nil {
+		t.Fatalf("AppendTag: %v", err)
+	}
+
+	got := readFile(t, p)
+	want := "- [ ] Buy milk @today @hey(h1)\nother line\n"
+	if got != want {
+		t.Errorf("got:\n%s\nwant:\n%s", got, want)
+	}
+}
+
+func TestAppendTagStaleLineIsSkipped(t *testing.T) {
+	dir := t.TempDir()
+	p := writeFile(t, dir, "test.md", "- [ ] Reworded since scan\n")
+
+	// The scan saw "Buy milk @today"; the line has since been edited.
+	err := AppendTag(context.Background(), p, 1, "Buy milk @today", "@hey(h1)")
+	if !errors.Is(err, ErrStaleData) {
+		t.Fatalf("expected ErrStaleData, got: %v", err)
+	}
+	if got := readFile(t, p); got != "- [ ] Reworded since scan\n" {
+		t.Errorf("stale line must not be corrupted, got:\n%s", got)
+	}
+}
+
 func TestToggleHiddenAdd(t *testing.T) {
 	dir := t.TempDir()
 	p := writeFile(t, dir, "test.md", "- [ ] Buy groceries @today\n")

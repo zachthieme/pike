@@ -170,6 +170,25 @@ func ToggleHidden(ctx context.Context, filePath string, line int) error {
 	return defaultToggler.ToggleHidden(ctx, filePath, line)
 }
 
+// AppendTag appends a tag (e.g. "@hey(h1)") to a task line, leaving the rest
+// of the line byte-for-byte unchanged. wantText is the task text the caller
+// observed when it scanned the line; if the current line no longer contains it,
+// the line changed since the scan and AppendTag returns [ErrStaleData] without
+// writing. This is the same stale-line guard Complete and Uncomplete rely on.
+func AppendTag(ctx context.Context, filePath string, line int, wantText, tag string) error {
+	return defaultToggler.AppendTag(ctx, filePath, line, wantText, tag)
+}
+
+// AppendTag appends a tag to a task line using this Toggler's lock state.
+func (t *Toggler) AppendTag(ctx context.Context, filePath string, line int, wantText, tag string) error {
+	return t.mutateFile(ctx, filePath, line, func(l string) (string, error) {
+		if !strings.Contains(l, wantText) {
+			return "", fmt.Errorf("%w: line %d no longer contains %q", ErrStaleData, line, wantText)
+		}
+		return l + " " + tag, nil
+	})
+}
+
 // AppendTask appends a new checkbox task line to a file. Creates the file
 // if it doesn't exist. The line is formatted as "- [ ] text".
 // Returns an error if text is empty.

@@ -338,24 +338,31 @@ func runSummary(w io.Writer, tasks []model.Task, now time.Time, noColor bool) er
 	return err
 }
 
-// runSync reconciles tasks with HEY. In this tracer it runs only the dry-run
-// planning pass: it prints what a Sync would do and writes nothing. Warnings go
-// to stderr; the report goes to stdout as text or, with --json, as JSON. It
-// returns an error only when the hey command cannot run or its first call
-// reports an authentication error.
+// runSync reconciles tasks with HEY. With --dry-run it runs the planning pass
+// and writes nothing; otherwise it pushes every Eligible Task matching the Sync
+// Query to HEY as a new Todo, links it, and records the state. Warnings go to
+// stderr; the report goes to stdout as text or, with --json, as JSON. It returns
+// an error only when the hey command cannot run or its first call reports an
+// authentication error.
 func runSync(ctx context.Context, stdout, stderr io.Writer, cfg *config.Config, tasks []model.Task, now time.Time, dryRun, jsonOutput bool) error {
 	if cfg.Hey == nil {
 		return fmt.Errorf("--sync requires a hey: block in your config")
 	}
 	client := hey.NewExecClient(cfg.Hey.Command, cfg.Hey.Account)
-	rep, warnings, err := heysync.Plan(ctx, heysync.Options{
+	opts := heysync.Options{
 		Tasks:     tasks,
 		Client:    client,
 		Query:     cfg.Hey.Query,
 		StatePath: cfg.Hey.StatePath,
+		NotesDir:  cfg.NotesDir,
 		Now:       now,
 		DryRun:    dryRun,
-	})
+	}
+	sync := heysync.Plan
+	if !dryRun {
+		sync = heysync.Push
+	}
+	rep, warnings, err := sync(ctx, opts)
 	for _, w := range warnings {
 		_, _ = fmt.Fprintf(stderr, "warning: %s\n", w.Message)
 	}

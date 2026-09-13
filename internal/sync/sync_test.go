@@ -94,7 +94,7 @@ func TestPlan_WouldPushHonoursEligibilityAndQuery(t *testing.T) {
 func TestPlan_ReadsStateFileIfPresent(t *testing.T) {
 	dir := t.TempDir()
 	statePath := filepath.Join(dir, "hey-state.json")
-	if err := os.WriteFile(statePath, []byte(`{"version":1,"links":{"h1":"notes.md:2"}}`), 0o644); err != nil {
+	if err := os.WriteFile(statePath, []byte(`{"version":1,"links":{"h1":{"title":"Old","file":"notes.md","line":2}}}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
 

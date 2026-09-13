@@ -22,7 +22,17 @@ list)
 ]
 JSON
   ;;
-add | complete | uncomplete | delete)
+add)
+  # `todo add <title> [--date <date>] ...`: record the call and return a freshly
+  # created todo whose id is a deterministic slug of the title.
+  if [ -n "${PIKE_STUB_MUTATION_LOG:-}" ]; then
+    echo "$*" >>"$PIKE_STUB_MUTATION_LOG"
+  fi
+  title="${3:-}"
+  slug=$(printf '%s' "$title" | tr -cd '[:alnum:]' | tr '[:upper:]' '[:lower:]')
+  printf '{"id":"h_%s","title":"%s","week_start":"2026-09-13","week_end":"2026-09-19","completed_at":null,"updated_at":"2026-09-13T08:00:00Z"}\n' "$slug" "$title"
+  ;;
+complete | uncomplete | delete)
   if [ -n "${PIKE_STUB_MUTATION_LOG:-}" ]; then
     echo "$*" >>"$PIKE_STUB_MUTATION_LOG"
   fi
