@@ -263,6 +263,110 @@ Each custom shortcut binds a single key to **either** a `view` (focus a dashboar
 
 When custom shortcuts are defined, the default `1`-`9` section focus keys are replaced. Custom shortcuts take priority over built-in keys on conflict. The `s` help overlay shows your actual configured bindings including custom shortcuts.
 
+## HEY Sync
+
+Pike can mirror tasks to and from [HEY](https://www.hey.com)'s to-do calendar so a
+task lives in your notes but also shows up on your HEY week. Your notes stay the
+primary home; HEY is a mirror pike keeps in step. Sync is **off** until you add a
+`hey:` block to your config, and it never runs on its own — you invoke it with
+`pike --sync` (or `S` in the TUI).
+
+Sync requires a `hey` command-line tool on your `PATH`, authenticated to your
+account (configurable via the `command` key below).
+
+### Enabling it
+
+Add a `hey:` block to your config:
+
+```yaml
+hey:
+  command: hey                                    # the hey CLI to run
+  query: "@due or @today"                         # which tasks push to HEY
+  account: ""                                     # --account passed to hey (optional)
+  state_path: ~/.local/share/pike/hey-state.json  # where the sync state lives
+```
+
+| Key | Default | Description |
+|-----|---------|-------------|
+| `command` | `hey` | The `hey` CLI command pike runs (looked up on `$PATH`) |
+| `query` | `@due or @today` | The **Sync Query**: which eligible tasks are pushed to HEY as new todos |
+| `account` | *(empty)* | Passed as `--account` to `hey` when set; omit for the default account |
+| `state_path` | `$XDG_DATA_HOME/pike/hey-state.json` (falls back to `~/.local/share/pike/hey-state.json`) | The sync state file recording each link |
+
+The block's mere presence is what enables sync; every key is optional and falls
+back to the default above.
+
+### Running a sync
+
+```bash
+pike --sync             # reconcile notes and HEY, writing both sides
+pike --sync --dry-run   # report what a sync would do, write nothing
+pike --sync --json      # machine-readable report
+```
+
+A sync is a two-way reconciliation:
+
+- **Push** — every **eligible task** (an unlinked, open, non-hidden checkbox task)
+  matching the Sync Query is created as a new HEY todo and linked. The todo's title
+  is the task's text with all `@tags` stripped.
+- **Import** — every unlinked, open HEY todo is appended to your inbox (see
+  `inbox_file`) as a new task, dated to its week's Saturday and linked.
+- **Reconcile** — for tasks already linked, completion, title, and schedule changes
+  are carried to whichever side is behind.
+
+`--dry-run` runs the planning pass and prints the same report without touching your
+notes, HEY, or the state file — use it to preview before committing.
+
+### The `@hey` tag (the Link)
+
+A link between a task and its HEY todo is recorded as an `@hey(id)` tag written into
+the task's own line, e.g.:
+
+```markdown
+- [ ] Ship the release notes @due(2026-04-01) @hey(h_a1b2c3)
+```
+
+The tag travels with the line through reordering, moves between files, and rewording,
+so the link survives edits that a sidecar file could not. A link is **sticky**: once
+made it persists whether or not the task still matches the Sync Query.
+
+### Sync never deletes
+
+When one side of a link disappears, pike leaves the other in place — it never deletes
+your data:
+
+- A todo removed in HEY leaves the task in your notes, with its `@hey` tag stripped
+  so a later sync can re-push it.
+- A task line removed from your notes leaves the todo in HEY and is reported as an
+  **orphan** warning.
+
+Deletions are therefore always manual, on both sides. This is deliberate: "the line
+is gone" is indistinguishable from a file excluded by a glob or temporarily
+unparseable, and "the todo is gone" from an expired session — neither is trustworthy
+enough to destroy data over.
+
+### Un-linking a task by hand
+
+To break the link between a task and its todo, delete the `@hey(id)` tag from the
+task's line in your notes. The task becomes local-only again; the todo is left
+untouched in HEY. A later sync will treat the now-unlinked task like any other and
+re-push it if it matches the Sync Query — so if you meant to stop syncing it
+entirely, remove it from the Sync Query's reach (or delete the todo in HEY) as well.
+
+### Resetting the state file
+
+The state file at `state_path` is a cache of what pike knew at the last sync; it is
+not the source of truth (your notes and the `@hey` tags are). If it becomes corrupt
+or you want a clean slate, delete it:
+
+```bash
+rm ~/.local/share/pike/hey-state.json
+```
+
+The next `pike --sync` rebuilds it from the `@hey` tags in your notes and the current
+state of HEY. Because links live in the tags, no links are lost by resetting the
+state.
+
 ## Query DSL
 
 The query language filters tasks by state, tags, dates, and text patterns. Queries are used in view configs and the `--query` flag. See [docs/query-dsl.md](docs/query-dsl.md) for the full reference (grammar, operators, date expressions, sort orders).

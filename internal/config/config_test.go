@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -851,5 +852,32 @@ func TestLoadBytes_NoHeyBlock(t *testing.T) {
 	}
 	if cfg.Hey != nil {
 		t.Errorf("expected Hey to be nil when block absent, got %+v", cfg.Hey)
+	}
+}
+
+// TestDefaultConfigHasCommentedHeyKeys asserts the config written on first run
+// carries the hey: block, commented out, with every key a user needs to enable
+// HEY sync. The keys ship commented so an untouched config leaves HEY disabled.
+func TestDefaultConfigHasCommentedHeyKeys(t *testing.T) {
+	for _, want := range []string{
+		"# hey:",
+		"#   command:",
+		"#   query:",
+		"#   account:",
+		"#   state_path:",
+	} {
+		if !strings.Contains(defaultConfigYAML, want) {
+			t.Errorf("default config missing commented hey key %q", want)
+		}
+	}
+
+	// The commented block must be inert: an untouched default config still
+	// leaves Hey nil (sync disabled).
+	cfg, err := LoadBytes([]byte(defaultConfigYAML))
+	if err != nil {
+		t.Fatalf("default config does not parse: %v", err)
+	}
+	if cfg.Hey != nil {
+		t.Errorf("commented hey: block should leave Hey nil, got %+v", cfg.Hey)
 	}
 }
