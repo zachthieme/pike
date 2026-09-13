@@ -2088,3 +2088,39 @@ func TestSyncKeyDisabledIsNoOp(t *testing.T) {
 		t.Errorf("S should not set status when disabled; got %q", updated.(Model).status)
 	}
 }
+
+func TestToggleNoPushWhenHeyBlockAbsent(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "notes.md")
+	if err := os.WriteFile(path, []byte("- [ ] Ship it @hey(h1)\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	tasks := []model.Task{model.TaskWith(model.Task{
+		Text: "Ship it @hey(h1)", State: model.Open, File: "notes.md", Line: 1,
+		HasCheckbox: true, ParentIndex: -1,
+		Tags: []model.Tag{{Name: "hey", Value: "h1"}},
+	})}
+	// Client present but no hey: block → integration disabled.
+	cfg := &config.Config{
+		NotesDir: dir, Editor: "vi",
+		Views: []config.ViewConfig{{Title: "All", Query: "open or completed", Sort: "file", Order: 1}},
+	}
+	client := &fakeHeyClient{}
+	m := NewModel(cfg, tasks, nil, nil, client)
+	m.now = func() time.Time { return testNow }
+	m.width, m.height = 80, 40
+	m.nav.SetHeight(40)
+	m.rebuildSections()
+	m.nav.SetCursor(0)
+
+	_, cmd := m.toggleTask()
+	cmd()
+
+	if len(client.calls) != 0 {
+		t.Errorf("no HEY call expected without a hey: block; calls=%v", client.calls)
+	}
+	data, _ := os.ReadFile(path)
+	if !strings.Contains(string(data), "- [x]") {
+		t.Errorf("file should still toggle; got %q", string(data))
+	}
+}
