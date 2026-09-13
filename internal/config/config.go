@@ -447,6 +447,16 @@ const defaultConfigYAML = `# Pike configuration
 # Write due dates JSON for wen calendar integration (disabled by default)
 # due_dates_path: ~/.local/share/pike/due.json
 
+# HEY sync (disabled until this block is present). Uncomment to reconcile tasks
+# with HEY via 'pike --sync'. Eligible tasks matching 'query' are pushed as new
+# todos and linked with an @hey(id) tag; unlinked open todos are imported into
+# the inbox. Sync never deletes on either side. See the README for details.
+# hey:
+#   command: hey                         # the hey CLI to run (default: hey)
+#   query: "@due or @today"              # which eligible tasks push to HEY
+#   account: ""                          # --account passed to hey (optional)
+#   state_path: ~/.local/share/pike/hey-state.json  # sync state file
+
 # Color theme (Catppuccin Mocha)
 link_color: "#89b4fa"
 hidden_color: "#6c7086"
