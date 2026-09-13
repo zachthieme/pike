@@ -70,10 +70,16 @@ func Plan(ctx context.Context, opts Options) (*Report, []model.Warning, error) {
 		return nil, warnings, fmt.Errorf("listing HEY todos: %w", err)
 	}
 	for _, td := range todos {
-		if td.Completed == nil && !linkedIDs[td.ID] {
+		// A Todo pike already holds a Link for is not an unlinked Todo, so it is
+		// never a would-import — even when its Task line is gone (an Orphan).
+		_, known := state.Links[td.ID]
+		if td.Completed == nil && !linkedIDs[td.ID] && !known {
 			rep.WouldImport++
 		}
 	}
+
+	_, orphanWarnings := reconcileOrphans(ctx, opts, linkedTasks, todos, state, rep)
+	warnings = append(warnings, orphanWarnings...)
 
 	_, completionWarnings := reconcileCompletions(ctx, opts, linkedTasks, todos, state, rep)
 	warnings = append(warnings, completionWarnings...)

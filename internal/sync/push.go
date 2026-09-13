@@ -49,6 +49,7 @@ func Push(ctx context.Context, opts Options) (*Report, []model.Warning, error) {
 	rep := &Report{DryRun: opts.DryRun}
 	linkedIDs := make(map[string]bool)
 	linkedTasks := make(map[string]*model.Task)
+	var toPush []*model.Task
 	for i := range opts.Tasks {
 		t := &opts.Tasks[i]
 		if id, ok := linkID(t); ok {
@@ -63,6 +64,15 @@ func Push(ctx context.Context, opts Options) (*Report, []model.Warning, error) {
 		if node != nil && !query.Eval(node, t, opts.Now) {
 			continue
 		}
+		toPush = append(toPush, t)
+	}
+
+	// Orphan reconciliation runs against the state as loaded, before any push
+	// mutates it, so a Task pushed this run is never mistaken for an Orphan.
+	orphanDirty, orphanWarnings := reconcileOrphans(ctx, opts, linkedTasks, todos, state, rep)
+	warnings = append(warnings, orphanWarnings...)
+
+	for _, t := range toPush {
 		if w := pushTask(ctx, opts, t, state, rep); w != nil {
 			warnings = append(warnings, *w)
 		}
@@ -73,7 +83,7 @@ func Push(ctx context.Context, opts Options) (*Report, []model.Warning, error) {
 	completionDirty, completionWarnings := reconcileCompletions(ctx, opts, linkedTasks, todos, state, rep)
 	warnings = append(warnings, completionWarnings...)
 
-	if !opts.DryRun && (rep.Pushed > 0 || rep.Imported > 0 || completionDirty) {
+	if !opts.DryRun && (rep.Pushed > 0 || rep.Imported > 0 || completionDirty || orphanDirty) {
 		if err := SaveState(opts.StatePath, state); err != nil {
 			warnings = append(warnings, model.Warning{Message: fmt.Sprintf("writing hey state: %v", err)})
 		}

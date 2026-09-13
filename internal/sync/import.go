@@ -25,7 +25,10 @@ const defaultInboxFile = "inbox.md"
 func importTodos(ctx context.Context, opts Options, todos []hey.Todo, linkedIDs map[string]bool, state *State, rep *Report) []model.Warning {
 	var warnings []model.Warning
 	for _, td := range todos {
-		if td.Completed != nil || linkedIDs[td.ID] {
+		// A Todo pike already holds a Link for is not an unlinked Todo: skip it
+		// even when its Task line is gone from the notes (an Orphan), so a Sync
+		// leaves the orphaned Todo alone rather than re-importing it.
+		if _, known := state.Links[td.ID]; td.Completed != nil || linkedIDs[td.ID] || known {
 			continue
 		}
 		if opts.DryRun {

@@ -29,6 +29,15 @@ type Report struct {
 	// WouldComplete and WouldUncomplete are the dry-run equivalents.
 	WouldComplete   int `json:"would_complete"`
 	WouldUncomplete int `json:"would_uncomplete"`
+	// Unlinked is populated by a real (non-dry-run) Sync: the number of Linked
+	// Tasks whose Todo has vanished from HEY and whose @hey tag was stripped.
+	// Orphans is the number of Links whose Task line could not be found in the
+	// notes; the surviving Todo is left alone and reported as a Warning.
+	Unlinked int `json:"unlinked"`
+	Orphans  int `json:"orphans"`
+	// WouldUnlink and WouldOrphan are the dry-run equivalents.
+	WouldUnlink int `json:"would_unlink"`
+	WouldOrphan int `json:"would_orphan"`
 }
 
 // WriteText renders the Report as human-readable lines. A dry run reports what
@@ -36,13 +45,13 @@ type Report struct {
 func (r *Report) WriteText(w io.Writer) error {
 	if r.DryRun {
 		_, err := fmt.Fprintf(w,
-			"Sync (dry run — nothing written)\n  %d task(s) would push to HEY\n  %d todo(s) would import to the inbox\n  %d item(s) would complete\n  %d item(s) would uncomplete\n  %d link(s) already exist\n",
-			r.WouldPush, r.WouldImport, r.WouldComplete, r.WouldUncomplete, r.ExistingLinks)
+			"Sync (dry run — nothing written)\n  %d task(s) would push to HEY\n  %d todo(s) would import to the inbox\n  %d item(s) would complete\n  %d item(s) would uncomplete\n  %d link(s) would unlink\n  %d orphan(s) would be reported\n  %d link(s) already exist\n",
+			r.WouldPush, r.WouldImport, r.WouldComplete, r.WouldUncomplete, r.WouldUnlink, r.WouldOrphan, r.ExistingLinks)
 		return err
 	}
 	_, err := fmt.Fprintf(w,
-		"Sync\n  %d task(s) pushed to HEY\n  %d task(s) failed to push\n  %d todo(s) imported to the inbox\n  %d item(s) completed\n  %d item(s) uncompleted\n  %d link(s) already exist\n",
-		r.Pushed, r.Failed, r.Imported, r.Completed, r.Uncompleted, r.ExistingLinks)
+		"Sync\n  %d task(s) pushed to HEY\n  %d task(s) failed to push\n  %d todo(s) imported to the inbox\n  %d item(s) completed\n  %d item(s) uncompleted\n  %d link(s) unlinked\n  %d orphan(s) reported\n  %d link(s) already exist\n",
+		r.Pushed, r.Failed, r.Imported, r.Completed, r.Uncompleted, r.Unlinked, r.Orphans, r.ExistingLinks)
 	return err
 }
 
