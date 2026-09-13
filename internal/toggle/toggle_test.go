@@ -381,3 +381,59 @@ func TestAppendTask(t *testing.T) {
 		}
 	})
 }
+
+func TestRemoveTagStripsTagLeavingRestUnchanged(t *testing.T) {
+	dir := t.TempDir()
+	p := writeFile(t, dir, "test.md", "- [ ] Buy milk @hey(h1) @due(2026-01-01)\nother line\n")
+
+	if err := RemoveTag(context.Background(), p, 1, "hey"); err != nil {
+		t.Fatalf("RemoveTag: %v", err)
+	}
+
+	got := readFile(t, p)
+	want := "- [ ] Buy milk @due(2026-01-01)\nother line\n"
+	if got != want {
+		t.Errorf("got:\n%s\nwant:\n%s", got, want)
+	}
+}
+
+func TestRemoveTagAtEndOfLine(t *testing.T) {
+	dir := t.TempDir()
+	p := writeFile(t, dir, "test.md", "- [ ] Buy milk @today @hey(h1)\n")
+
+	if err := RemoveTag(context.Background(), p, 1, "hey"); err != nil {
+		t.Fatalf("RemoveTag: %v", err)
+	}
+
+	got := readFile(t, p)
+	want := "- [ ] Buy milk @today\n"
+	if got != want {
+		t.Errorf("got:\n%s\nwant:\n%s", got, want)
+	}
+}
+
+func TestRemoveTagMissingTagIsStale(t *testing.T) {
+	dir := t.TempDir()
+	p := writeFile(t, dir, "test.md", "- [ ] Buy milk @today\n")
+
+	err := RemoveTag(context.Background(), p, 1, "hey")
+	if !errors.Is(err, ErrStaleData) {
+		t.Fatalf("expected ErrStaleData when the tag is absent, got: %v", err)
+	}
+	if got := readFile(t, p); got != "- [ ] Buy milk @today\n" {
+		t.Errorf("line must be left unchanged, got:\n%s", got)
+	}
+}
+
+func TestRemoveTagTwoTagsIsAmbiguousAndWritesNothing(t *testing.T) {
+	dir := t.TempDir()
+	p := writeFile(t, dir, "test.md", "- [ ] Buy milk @hey(h1) @hey(h2)\n")
+
+	err := RemoveTag(context.Background(), p, 1, "hey")
+	if !errors.Is(err, ErrAmbiguousTag) {
+		t.Fatalf("expected ErrAmbiguousTag for two @hey tags, got: %v", err)
+	}
+	if got := readFile(t, p); got != "- [ ] Buy milk @hey(h1) @hey(h2)\n" {
+		t.Errorf("ambiguous line must not be written, got:\n%s", got)
+	}
+}
