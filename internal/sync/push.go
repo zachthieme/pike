@@ -48,11 +48,13 @@ func Push(ctx context.Context, opts Options) (*Report, []model.Warning, error) {
 
 	rep := &Report{DryRun: opts.DryRun}
 	linkedIDs := make(map[string]bool)
+	linkedTasks := make(map[string]*model.Task)
 	for i := range opts.Tasks {
 		t := &opts.Tasks[i]
 		if id, ok := linkID(t); ok {
 			rep.ExistingLinks++
 			linkedIDs[id] = true
+			linkedTasks[id] = t
 			continue
 		}
 		if !eligible(t) {
@@ -68,7 +70,10 @@ func Push(ctx context.Context, opts Options) (*Report, []model.Warning, error) {
 
 	warnings = append(warnings, importTodos(ctx, opts, todos, linkedIDs, state, rep)...)
 
-	if !opts.DryRun && (rep.Pushed > 0 || rep.Imported > 0) {
+	completionDirty, completionWarnings := reconcileCompletions(ctx, opts, linkedTasks, todos, state, rep)
+	warnings = append(warnings, completionWarnings...)
+
+	if !opts.DryRun && (rep.Pushed > 0 || rep.Imported > 0 || completionDirty) {
 		if err := SaveState(opts.StatePath, state); err != nil {
 			warnings = append(warnings, model.Warning{Message: fmt.Sprintf("writing hey state: %v", err)})
 		}
