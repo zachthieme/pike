@@ -22,10 +22,12 @@ import (
 
 	"github.com/zachthieme/pike/internal/config"
 	"github.com/zachthieme/pike/internal/filter"
+	"github.com/zachthieme/pike/internal/hey"
 	"github.com/zachthieme/pike/internal/model"
 	"github.com/zachthieme/pike/internal/render"
 	"github.com/zachthieme/pike/internal/scanner"
 	"github.com/zachthieme/pike/internal/scope"
+	heysync "github.com/zachthieme/pike/internal/sync"
 	"github.com/zachthieme/pike/internal/tui"
 )
 
@@ -43,9 +45,11 @@ Flags:
   --view, -w <name>      Start focused on a specific section
   --summary              Print summary counts to stdout and exit
   --query, -q <query>    Run a one-shot query, print results to stdout and exit
+  --sync                 Reconcile tasks with HEY (requires a hey: config block)
+  --dry-run              With --sync, report what a sync would do; write nothing
   --sort <order>         Sort order for --query/--scope mode (default: "file")
   --count                Print result count only (use with --query or --scope)
-  --json                 Output results as JSON (use with --query or --scope)
+  --json                 Output results as JSON (use with --query, --scope, or --sync)
   --color                Force color output
   --no-color             Disable color output
   --debug                Print debug diagnostics to stderr
@@ -67,6 +71,8 @@ type cliFlags struct {
 	view    string
 	summary bool
 	query   string
+	sync    bool
+	dryRun  bool
 	sort    string
 	scope   string
 	count   bool
@@ -91,6 +97,8 @@ func parseFlags(args []string, stderr io.Writer) (*cliFlags, error) {
 	fs.StringVar(&f.view, "view", "", "Start focused on a specific section")
 	fs.BoolVar(&f.summary, "summary", false, "Print summary counts")
 	fs.StringVar(&f.query, "query", "", "Run a one-shot query")
+	fs.BoolVar(&f.sync, "sync", false, "Reconcile tasks with HEY")
+	fs.BoolVar(&f.dryRun, "dry-run", false, "With --sync, report without writing")
 	fs.StringVar(&f.sort, "sort", "file", "Sort order for --query/--scope mode")
 	fs.StringVar(&f.scope, "scope", "", "Scope to tasks referencing this file")
 	fs.BoolVar(&f.count, "count", false, "Print result count only")
@@ -119,8 +127,23 @@ func (f *cliFlags) validate(stderr io.Writer) error {
 	if f.count && f.query == "" && f.scope == "" {
 		_, _ = fmt.Fprintf(stderr, "warning: --count is only used with --query or --scope\n")
 	}
-	if f.json && f.query == "" && f.scope == "" {
-		_, _ = fmt.Fprintf(stderr, "warning: --json is only used with --query or --scope\n")
+	if f.json && f.query == "" && f.scope == "" && !f.sync {
+		_, _ = fmt.Fprintf(stderr, "warning: --json is only used with --query, --scope, or --sync\n")
+	}
+	if f.sync {
+		switch {
+		case f.summary:
+			return fmt.Errorf("--sync and --summary cannot be combined")
+		case f.query != "":
+			return fmt.Errorf("--sync and --query cannot be combined")
+		case f.scope != "":
+			return fmt.Errorf("--sync and --scope cannot be combined")
+		case f.view != "":
+			return fmt.Errorf("--sync and --view cannot be combined")
+		}
+	}
+	if f.dryRun && !f.sync {
+		_, _ = fmt.Fprintf(stderr, "warning: --dry-run is only used with --sync\n")
 	}
 	if f.scope != "" && f.summary {
 		return fmt.Errorf("--scope and --summary cannot be combined")
@@ -204,6 +227,8 @@ func run(args []string, stdout, stderr io.Writer) error {
 	now := time.Now()
 
 	switch {
+	case f.sync:
+		return runSync(ctx, stdout, stderr, cfg, tasks, now, f.dryRun, f.json)
 	case f.summary:
 		return runSummary(stdout, tasks, now, noColor)
 	case f.scope != "":
@@ -311,6 +336,36 @@ func runSummary(w io.Writer, tasks []model.Task, now time.Time, noColor bool) er
 	)
 	_, err = fmt.Fprintln(w, out)
 	return err
+}
+
+// runSync reconciles tasks with HEY. In this tracer it runs only the dry-run
+// planning pass: it prints what a Sync would do and writes nothing. Warnings go
+// to stderr; the report goes to stdout as text or, with --json, as JSON. It
+// returns an error only when the hey command cannot run or its first call
+// reports an authentication error.
+func runSync(ctx context.Context, stdout, stderr io.Writer, cfg *config.Config, tasks []model.Task, now time.Time, dryRun, jsonOutput bool) error {
+	if cfg.Hey == nil {
+		return fmt.Errorf("--sync requires a hey: block in your config")
+	}
+	client := hey.NewExecClient(cfg.Hey.Command, cfg.Hey.Account)
+	rep, warnings, err := heysync.Plan(ctx, heysync.Options{
+		Tasks:     tasks,
+		Client:    client,
+		Query:     cfg.Hey.Query,
+		StatePath: cfg.Hey.StatePath,
+		Now:       now,
+		DryRun:    dryRun,
+	})
+	for _, w := range warnings {
+		_, _ = fmt.Fprintf(stderr, "warning: %s\n", w.Message)
+	}
+	if err != nil {
+		return err
+	}
+	if jsonOutput {
+		return rep.WriteJSON(stdout)
+	}
+	return rep.WriteText(stdout)
 }
 
 // queryOpts groups output-mode options for runQuery.
@@ -460,8 +515,8 @@ func writeDueDates(path string, tasks []model.Task, query string, now time.Time)
 	}
 	tmpPath := tmp.Name()
 	if _, err := tmp.Write(data); err != nil {
-		tmp.Close()           //nolint:errcheck // cleaning up on error
-		os.Remove(tmpPath)    //nolint:errcheck // cleaning up on error
+		tmp.Close()        //nolint:errcheck // cleaning up on error
+		os.Remove(tmpPath) //nolint:errcheck // cleaning up on error
 		return
 	}
 	if err := tmp.Close(); err != nil {
