@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -9,7 +10,9 @@ import (
 	"time"
 
 	"github.com/zachthieme/pike/internal/config"
+	"github.com/zachthieme/pike/internal/hey"
 	"github.com/zachthieme/pike/internal/model"
+	heysync "github.com/zachthieme/pike/internal/sync"
 
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -71,7 +74,7 @@ func testModel(tasks []model.Task, views []config.ViewConfig) Model {
 		Views:     views,
 	}
 
-	m := NewModel(cfg, tasks, nil, nil)
+	m := NewModel(cfg, tasks, nil, nil, nil)
 	m.now = func() time.Time { return testNow }
 	m.width = 80
 	m.height = 40
@@ -102,7 +105,7 @@ func TestCreateTaskInline(t *testing.T) {
 		TagColors: map[string]string{"due": "red", "today": "green", "_default": "cyan"},
 		Views:     views,
 	}
-	m := NewModel(cfg, tasks, nil, nil)
+	m := NewModel(cfg, tasks, nil, nil, nil)
 	m.now = func() time.Time { return testNow }
 	m.width = 80
 	m.height = 40
@@ -1566,7 +1569,7 @@ func TestAutoCompleteWritesParent(t *testing.T) {
 			{Title: "All", Query: "open or completed", Sort: "file", Color: "green", Order: 1},
 		},
 	}
-	m := NewModel(cfg, tasks, nil, nil)
+	m := NewModel(cfg, tasks, nil, nil, nil)
 	m.now = func() time.Time { return time.Date(2026, 4, 11, 0, 0, 0, 0, time.UTC) }
 	m.expanded["tasks.md:1"] = true
 	m.rebuildSections()
@@ -1631,7 +1634,7 @@ func TestAutoUncompleteParent(t *testing.T) {
 			{Title: "All", Query: "open or completed", Sort: "file", Color: "green", Order: 1},
 		},
 	}
-	m := NewModel(cfg, tasks, nil, nil)
+	m := NewModel(cfg, tasks, nil, nil, nil)
 	m.now = func() time.Time { return time.Date(2026, 4, 11, 0, 0, 0, 0, time.UTC) }
 	m.expanded["tasks.md:1"] = true
 	m.rebuildSections()
@@ -1666,10 +1669,10 @@ func TestAutoUncompleteParent(t *testing.T) {
 func TestRegroupChildrenKeepsChildrenAdjacentToParent(t *testing.T) {
 	// Build allTasks with linked parent-child relationships
 	allTasks := []model.Task{
-		{File: "a.md", Line: 1, Indent: 0, ParentIndex: -1},  // parent A
-		{File: "a.md", Line: 2, Indent: 2, ParentIndex: -1},  // child of A (will be linked)
-		{File: "a.md", Line: 5, Indent: 0, ParentIndex: -1},  // parent B
-		{File: "a.md", Line: 6, Indent: 2, ParentIndex: -1},  // child of B (will be linked)
+		{File: "a.md", Line: 1, Indent: 0, ParentIndex: -1}, // parent A
+		{File: "a.md", Line: 2, Indent: 2, ParentIndex: -1}, // child of A (will be linked)
+		{File: "a.md", Line: 5, Indent: 0, ParentIndex: -1}, // parent B
+		{File: "a.md", Line: 6, Indent: 2, ParentIndex: -1}, // child of B (will be linked)
 	}
 	// Link: child[1] → parent[0], child[3] → parent[2]
 	allTasks[1].ParentIndex = 0
@@ -1718,5 +1721,406 @@ func TestRegroupChildrenKeepsChildrenAdjacentToParent(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// fakeHeyClient records the mutating verbs the TUI sends to HEY so push and
+// sync tests can assert against them. err, when set, is returned by every
+// mutating call.
+type fakeHeyClient struct {
+	todos []hey.Todo
+	calls []string // e.g. "complete:h1", "uncomplete:h1"
+	err   error
+}
+
+func (c *fakeHeyClient) List(context.Context) ([]hey.Todo, error) { return c.todos, nil }
+func (c *fakeHeyClient) Add(_ context.Context, title string, _ *time.Time) (hey.Todo, error) {
+	return hey.Todo{ID: "h_add", Title: title}, nil
+}
+func (c *fakeHeyClient) Complete(_ context.Context, id string) error {
+	c.calls = append(c.calls, "complete:"+id)
+	return c.err
+}
+func (c *fakeHeyClient) Uncomplete(_ context.Context, id string) error {
+	c.calls = append(c.calls, "uncomplete:"+id)
+	return c.err
+}
+func (c *fakeHeyClient) Delete(context.Context, string) error { return nil }
+
+func (c *fakeHeyClient) called(call string) bool {
+	for _, k := range c.calls {
+		if k == call {
+			return true
+		}
+	}
+	return false
+}
+
+func TestToggleLinkedTaskPushesComplete(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "notes.md")
+	if err := os.WriteFile(path, []byte("- [ ] Ship it @hey(h1)\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	statePath := filepath.Join(dir, "state.json")
+	if err := heysync.SaveState(statePath, &heysync.State{
+		Links: map[string]heysync.Link{"h1": {Title: "Ship it", File: "notes.md", Line: 1}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	tasks := []model.Task{model.TaskWith(model.Task{
+		Text: "Ship it @hey(h1)", State: model.Open, File: "notes.md", Line: 1,
+		HasCheckbox: true, ParentIndex: -1,
+		Tags: []model.Tag{{Name: "hey", Value: "h1"}},
+	})}
+	cfg := &config.Config{
+		NotesDir: dir, Editor: "vi",
+		Views: []config.ViewConfig{{Title: "All", Query: "open or completed", Sort: "file", Order: 1}},
+		Hey:   &config.HeyConfig{Command: "hey", Query: "@today", StatePath: statePath},
+	}
+	client := &fakeHeyClient{}
+	m := NewModel(cfg, tasks, nil, nil, client)
+	m.now = func() time.Time { return testNow }
+	m.width, m.height = 80, 40
+	m.nav.SetHeight(40)
+	m.rebuildSections()
+	m.nav.SetCursor(0)
+
+	_, cmd := m.toggleTask()
+	if cmd == nil {
+		t.Fatal("expected toggle cmd")
+	}
+	msg := cmd()
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), "- [x]") {
+		t.Errorf("task not completed on disk: %q", string(data))
+	}
+	if !client.called("complete:h1") {
+		t.Errorf("expected complete:h1; calls=%v", client.calls)
+	}
+	if res, ok := msg.(toggleResultMsg); ok && res.Err != nil {
+		t.Fatalf("unexpected toggle error: %v", res.Err)
+	}
+
+	st, err := heysync.LoadState(statePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !st.Links["h1"].Completed {
+		t.Errorf("state should record h1 completed; got %+v", st.Links["h1"])
+	}
+}
+
+func TestToggleLinkedTaskUncomplete(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "notes.md")
+	if err := os.WriteFile(path, []byte("- [x] Ship it @hey(h1) @completed(2026-03-12)\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	statePath := filepath.Join(dir, "state.json")
+	if err := heysync.SaveState(statePath, &heysync.State{
+		Links: map[string]heysync.Link{"h1": {Title: "Ship it", File: "notes.md", Line: 1, Completed: true}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	tasks := []model.Task{model.TaskWith(model.Task{
+		Text: "Ship it @hey(h1) @completed(2026-03-12)", State: model.Completed,
+		File: "notes.md", Line: 1, HasCheckbox: true, ParentIndex: -1,
+		Tags: []model.Tag{{Name: "hey", Value: "h1"}, {Name: "completed", Value: "2026-03-12"}},
+	})}
+	cfg := &config.Config{
+		NotesDir: dir, Editor: "vi",
+		Views: []config.ViewConfig{{Title: "All", Query: "open or completed", Sort: "file", Order: 1}},
+		Hey:   &config.HeyConfig{Command: "hey", Query: "@today", StatePath: statePath},
+	}
+	client := &fakeHeyClient{}
+	m := NewModel(cfg, tasks, nil, nil, client)
+	m.now = func() time.Time { return testNow }
+	m.width, m.height = 80, 40
+	m.nav.SetHeight(40)
+	m.rebuildSections()
+	m.nav.SetCursor(0)
+
+	_, cmd := m.toggleTask()
+	if cmd == nil {
+		t.Fatal("expected toggle cmd")
+	}
+	cmd()
+
+	if !client.called("uncomplete:h1") {
+		t.Errorf("expected uncomplete:h1; calls=%v", client.calls)
+	}
+	st, _ := heysync.LoadState(statePath)
+	if st.Links["h1"].Completed {
+		t.Errorf("state should record h1 open; got %+v", st.Links["h1"])
+	}
+}
+
+func TestToggleUnlinkedTaskNoPush(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "notes.md")
+	if err := os.WriteFile(path, []byte("- [ ] Local only\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	statePath := filepath.Join(dir, "state.json")
+
+	tasks := []model.Task{model.TaskWith(model.Task{
+		Text: "Local only", State: model.Open, File: "notes.md", Line: 1,
+		HasCheckbox: true, ParentIndex: -1,
+	})}
+	cfg := &config.Config{
+		NotesDir: dir, Editor: "vi",
+		Views: []config.ViewConfig{{Title: "All", Query: "open or completed", Sort: "file", Order: 1}},
+		Hey:   &config.HeyConfig{Command: "hey", Query: "@today", StatePath: statePath},
+	}
+	client := &fakeHeyClient{}
+	m := NewModel(cfg, tasks, nil, nil, client)
+	m.now = func() time.Time { return testNow }
+	m.width, m.height = 80, 40
+	m.nav.SetHeight(40)
+	m.rebuildSections()
+	m.nav.SetCursor(0)
+
+	_, cmd := m.toggleTask()
+	cmd()
+
+	if len(client.calls) != 0 {
+		t.Errorf("no HEY call expected for unlinked task; calls=%v", client.calls)
+	}
+}
+
+func TestToggleLastChildPushesParent(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "tasks.md")
+	content := "- [ ] Parent @hey(hp)\n  - [x] Child one @completed(2026-03-10)\n  - [ ] Child two @hey(hc)\n"
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	statePath := filepath.Join(dir, "state.json")
+	if err := heysync.SaveState(statePath, &heysync.State{Links: map[string]heysync.Link{
+		"hp": {Title: "Parent", File: "tasks.md", Line: 1},
+		"hc": {Title: "Child two", File: "tasks.md", Line: 3},
+	}}); err != nil {
+		t.Fatal(err)
+	}
+
+	tasks := []model.Task{
+		model.TaskWith(model.Task{Text: "Parent @hey(hp)", State: model.Open,
+			File: "tasks.md", Line: 1, Indent: 0, HasCheckbox: true,
+			Tags: []model.Tag{{Name: "hey", Value: "hp"}}}),
+		model.TaskWith(model.Task{Text: "Child one @completed(2026-03-10)", State: model.Completed,
+			File: "tasks.md", Line: 2, Indent: 2, HasCheckbox: true,
+			Tags: []model.Tag{{Name: "completed", Value: "2026-03-10"}}}),
+		model.TaskWith(model.Task{Text: "Child two @hey(hc)", State: model.Open,
+			File: "tasks.md", Line: 3, Indent: 2, HasCheckbox: true,
+			Tags: []model.Tag{{Name: "hey", Value: "hc"}}}),
+	}
+	cfg := &config.Config{
+		NotesDir: dir, Editor: "vi",
+		Views: []config.ViewConfig{{Title: "All", Query: "open or completed", Sort: "file", Order: 1}},
+		Hey:   &config.HeyConfig{Command: "hey", Query: "@today", StatePath: statePath},
+	}
+	client := &fakeHeyClient{}
+	m := NewModel(cfg, tasks, nil, nil, client)
+	m.now = func() time.Time { return testNow }
+	m.width, m.height = 80, 40
+	m.nav.SetHeight(40)
+	m.expanded["tasks.md:1"] = true
+	m.rebuildSections()
+	m.nav.SetCursor(2) // child two
+
+	_, cmd := m.toggleTask()
+	if cmd == nil {
+		t.Fatal("expected toggle cmd")
+	}
+	cmd()
+
+	if !client.called("complete:hc") {
+		t.Errorf("expected complete:hc; calls=%v", client.calls)
+	}
+	if !client.called("complete:hp") {
+		t.Errorf("expected parent complete:hp; calls=%v", client.calls)
+	}
+	st, _ := heysync.LoadState(statePath)
+	if !st.Links["hp"].Completed || !st.Links["hc"].Completed {
+		t.Errorf("state should record both completed; got hp=%+v hc=%+v", st.Links["hp"], st.Links["hc"])
+	}
+}
+
+func TestTogglePushErrorShowsStatusNoRevert(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "notes.md")
+	if err := os.WriteFile(path, []byte("- [ ] Ship it @hey(h1)\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	statePath := filepath.Join(dir, "state.json")
+	if err := heysync.SaveState(statePath, &heysync.State{
+		Links: map[string]heysync.Link{"h1": {Title: "Ship it", File: "notes.md", Line: 1}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	tasks := []model.Task{model.TaskWith(model.Task{
+		Text: "Ship it @hey(h1)", State: model.Open, File: "notes.md", Line: 1,
+		HasCheckbox: true, ParentIndex: -1,
+		Tags: []model.Tag{{Name: "hey", Value: "h1"}},
+	})}
+	cfg := &config.Config{
+		NotesDir: dir, Editor: "vi",
+		Views: []config.ViewConfig{{Title: "All", Query: "open or completed", Sort: "file", Order: 1}},
+		Hey:   &config.HeyConfig{Command: "hey", Query: "@today", StatePath: statePath},
+	}
+	client := &fakeHeyClient{err: fmt.Errorf("hey unreachable")}
+	m := NewModel(cfg, tasks, nil, nil, client)
+	m.now = func() time.Time { return testNow }
+	m.width, m.height = 80, 40
+	m.nav.SetHeight(40)
+	m.rebuildSections()
+	m.nav.SetCursor(0)
+
+	_, cmd := m.toggleTask()
+	msg := cmd()
+
+	// File change stays.
+	data, _ := os.ReadFile(path)
+	if !strings.Contains(string(data), "- [x]") {
+		t.Errorf("task should stay completed on disk; got %q", string(data))
+	}
+	// Feeding the result sets a status message and still refreshes.
+	updated, refreshCmd := m.Update(msg)
+	m2 := updated.(Model)
+	if m2.status == "" {
+		t.Error("expected a status message on push error")
+	}
+	if m2.err != nil {
+		t.Errorf("push error must not become a fatal error: %v", m2.err)
+	}
+	if refreshCmd == nil {
+		t.Error("expected a refresh command after a non-fatal push error")
+	}
+}
+
+func TestStatusLineRendersInView(t *testing.T) {
+	m := testModel(testTasks(), testViews())
+	m.status = "sync: 2 pushed, 1 imported"
+	out := m.View()
+	if !strings.Contains(out, "sync: 2 pushed, 1 imported") {
+		t.Errorf("View should show the status line; got:\n%s", out)
+	}
+}
+
+func TestStatusClearsOnKeyPress(t *testing.T) {
+	m := testModel(testTasks(), testViews())
+	m.status = "stale status"
+	updated, _ := sendKey(m, "j")
+	if updated.(Model).status != "" {
+		t.Errorf("status should clear on key press; got %q", updated.(Model).status)
+	}
+}
+
+func TestSyncKeyRunsSyncAndShowsSummary(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "inbox.md"), []byte("# Inbox\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	statePath := filepath.Join(dir, "state.json")
+
+	week := time.Date(2026, 3, 8, 0, 0, 0, 0, time.UTC)
+	weekEnd := time.Date(2026, 3, 14, 0, 0, 0, 0, time.UTC)
+	client := &fakeHeyClient{todos: []hey.Todo{
+		{ID: "n1", Title: "Call plumber", WeekStart: week, WeekEnd: weekEnd},
+	}}
+
+	cfg := &config.Config{
+		NotesDir: dir, InboxFile: "inbox.md", Editor: "vi",
+		Views: []config.ViewConfig{{Title: "All", Query: "open or completed", Sort: "file", Order: 1}},
+		Hey:   &config.HeyConfig{Command: "hey", Query: "@today", StatePath: statePath},
+	}
+	m := NewModel(cfg, nil, nil, nil, client)
+	m.now = func() time.Time { return testNow }
+	m.width, m.height = 80, 40
+	m.nav.SetHeight(40)
+
+	updated, cmd := sendKey(m, "S")
+	if cmd == nil {
+		t.Fatal("expected a sync cmd from S")
+	}
+	msg := cmd()
+
+	// Import ran: the inbox gained the todo as a Linked checkbox Task.
+	data, _ := os.ReadFile(filepath.Join(dir, "inbox.md"))
+	if !strings.Contains(string(data), "Call plumber") || !strings.Contains(string(data), "@hey(n1)") {
+		t.Errorf("inbox should contain imported todo; got %q", string(data))
+	}
+
+	res, ok := msg.(syncResultMsg)
+	if !ok {
+		t.Fatalf("expected syncResultMsg, got %T", msg)
+	}
+	if res.Err != nil {
+		t.Fatalf("unexpected sync error: %v", res.Err)
+	}
+	// Feeding the result sets a summary status and refreshes the list.
+	_ = updated
+	updated2, refreshCmd := m.Update(res)
+	if updated2.(Model).status == "" {
+		t.Error("expected a summary status after sync")
+	}
+	if refreshCmd == nil {
+		t.Error("expected a refresh command after sync")
+	}
+}
+
+func TestSyncKeyDisabledIsNoOp(t *testing.T) {
+	// No hey: block and no client → S does nothing.
+	m := testModel(testTasks(), testViews())
+	updated, cmd := sendKey(m, "S")
+	if cmd != nil {
+		t.Errorf("S should be a no-op when HEY is disabled; got a cmd")
+	}
+	if updated.(Model).status != "" {
+		t.Errorf("S should not set status when disabled; got %q", updated.(Model).status)
+	}
+}
+
+func TestToggleNoPushWhenHeyBlockAbsent(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "notes.md")
+	if err := os.WriteFile(path, []byte("- [ ] Ship it @hey(h1)\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	tasks := []model.Task{model.TaskWith(model.Task{
+		Text: "Ship it @hey(h1)", State: model.Open, File: "notes.md", Line: 1,
+		HasCheckbox: true, ParentIndex: -1,
+		Tags: []model.Tag{{Name: "hey", Value: "h1"}},
+	})}
+	// Client present but no hey: block → integration disabled.
+	cfg := &config.Config{
+		NotesDir: dir, Editor: "vi",
+		Views: []config.ViewConfig{{Title: "All", Query: "open or completed", Sort: "file", Order: 1}},
+	}
+	client := &fakeHeyClient{}
+	m := NewModel(cfg, tasks, nil, nil, client)
+	m.now = func() time.Time { return testNow }
+	m.width, m.height = 80, 40
+	m.nav.SetHeight(40)
+	m.rebuildSections()
+	m.nav.SetCursor(0)
+
+	_, cmd := m.toggleTask()
+	cmd()
+
+	if len(client.calls) != 0 {
+		t.Errorf("no HEY call expected without a hey: block; calls=%v", client.calls)
+	}
+	data, _ := os.ReadFile(path)
+	if !strings.Contains(string(data), "- [x]") {
+		t.Errorf("file should still toggle; got %q", string(data))
 	}
 }

@@ -218,6 +218,10 @@ func (m Model) handleKeyDashboard(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case key.Matches(msg, m.keys.Refresh):
 		return m, func() tea.Msg { return RefreshMsg{} }
 
+	case key.Matches(msg, m.keys.Sync):
+		// A no-op (nil cmd) when HEY is disabled.
+		return m, m.runSync()
+
 	case key.Matches(msg, m.keys.CreateTask):
 		var cmd tea.Cmd
 		m.createBar, cmd = m.createBar.Update(CreateActivateMsg{})
@@ -372,5 +376,3 @@ func (m Model) processFilterOutput(filterCmd tea.Cmd) (tea.Model, tea.Cmd) {
 		return m, tea.Batch(filterCmd, extraCmd)
 	}
 }
-
-

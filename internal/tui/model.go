@@ -8,6 +8,7 @@ import (
 
 	"github.com/zachthieme/pike/internal/config"
 	"github.com/zachthieme/pike/internal/filter"
+	"github.com/zachthieme/pike/internal/hey"
 	"github.com/zachthieme/pike/internal/model"
 	"github.com/zachthieme/pike/internal/parser"
 	"github.com/zachthieme/pike/internal/toggle"
@@ -43,7 +44,7 @@ type Model struct {
 	// Section cache — rebuilt together in rebuildSections/rebuildDashboard.
 	sections           []filter.ViewResult // current filtered/sorted sections
 	unfilteredSections []filter.ViewResult // pre-filter cache for visibleSections()
-	hiddenCounts       []int              // per-section count of @hidden tasks removed
+	hiddenCounts       []int               // per-section count of @hidden tasks removed
 	// Navigation and view state.
 	nav          Navigator // cursor + section navigation
 	focusedView  string    // section title when mode == modeFocused; empty otherwise
@@ -66,6 +67,11 @@ type Model struct {
 	width  int
 	height int
 	err    error
+	status string // one-line status message (sync result or push error)
+
+	// HEY sync — heyClient is nil when no hey: block is configured, which
+	// disables Push on toggle and makes the sync action a no-op.
+	heyClient hey.Client
 
 	// Key bindings.
 	keys           KeyMap
@@ -73,18 +79,21 @@ type Model struct {
 	customKeyIndex map[string]int // key string → index in customBindings for O(1) lookup
 
 	// Injected dependencies.
-	scanFunc   func() ([]model.Task, error)  // refresh callback
-	configFunc func() (*config.Config, error) // config reload callback
-	editorCmd  string
-	tagColors  map[string]string
-	version    string
-	now        func() time.Time          // injectable for testing
-	warnings   []model.Warning           // parse warnings from last scan
-	warningsFunc func() []model.Warning  // returns latest parse warnings
+	scanFunc     func() ([]model.Task, error)   // refresh callback
+	configFunc   func() (*config.Config, error) // config reload callback
+	editorCmd    string
+	tagColors    map[string]string
+	version      string
+	now          func() time.Time       // injectable for testing
+	warnings     []model.Warning        // parse warnings from last scan
+	warningsFunc func() []model.Warning // returns latest parse warnings
 }
 
-// NewModel creates a new TUI model with the given configuration and initial tasks.
-func NewModel(cfg *config.Config, tasks []model.Task, scanFunc func() ([]model.Task, error), configFunc func() (*config.Config, error)) Model {
+// NewModel creates a new TUI model with the given configuration and initial
+// tasks. client is the HEY client used to Push completion changes on toggle and
+// to run a full Sync; pass nil to disable HEY integration (tests substitute a
+// fake). Sync configuration is read from cfg.Hey.
+func NewModel(cfg *config.Config, tasks []model.Task, scanFunc func() ([]model.Task, error), configFunc func() (*config.Config, error), client hey.Client) Model {
 	parser.LinkSubtasks(tasks)
 	m := Model{
 		config:         cfg,
@@ -101,6 +110,7 @@ func NewModel(cfg *config.Config, tasks []model.Task, scanFunc func() ([]model.T
 		customBindings: cfg.CustomBindings,
 		customKeyIndex: buildCustomKeyIndex(cfg.CustomBindings),
 		now:            time.Now,
+		heyClient:      client,
 	}
 	m.configFunc = configFunc
 
@@ -241,6 +251,20 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.err = msg.Err
 			return m, nil
 		}
+		// A Push failure is non-fatal: the notes change already landed, so we
+		// still refresh, but surface the error in the status line.
+		if msg.PushErr != nil {
+			m.status = msg.PushErr.Error()
+		}
+		return m, func() tea.Msg { return RefreshMsg{} }
+
+	case syncResultMsg:
+		if msg.Err != nil {
+			m.status = "sync: " + msg.Err.Error()
+			return m, nil
+		}
+		// Show the summary and refresh the list so imported lines appear.
+		m.status = msg.Summary
 		return m, func() tea.Msg { return RefreshMsg{} }
 
 	case EditorFinishedMsg:
@@ -282,7 +306,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tea.KeyMsg:
-		m.err = nil // clear error on any key press
+		m.err = nil   // clear error on any key press
+		m.status = "" // clear status on any key press
 		return m.handleKey(msg)
 	}
 

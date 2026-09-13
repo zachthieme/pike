@@ -259,7 +259,7 @@ Each custom shortcut binds a single key to **either** a `view` (focus a dashboar
 | `view` | Focus a dashboard section by its title |
 | `query` | Execute a query DSL expression in all-tasks mode |
 
-**Remappable actions:** `up`, `down`, `top`, `bottom`, `page_down`, `page_up`, `next_section`, `prev_section`, `enter`, `quit`, `summary`, `filter`, `query`, `escape`, `refresh`, `all_tasks`, `tag_search`, `toggle_hidden`, `toggle`, `toggle_hidden_tag`, `recently_completed`
+**Remappable actions:** `up`, `down`, `top`, `bottom`, `page_down`, `page_up`, `next_section`, `prev_section`, `enter`, `quit`, `summary`, `filter`, `query`, `escape`, `refresh`, `all_tasks`, `tag_search`, `toggle_hidden`, `toggle`, `toggle_hidden_tag`, `recently_completed`, `sync`
 
 When custom shortcuts are defined, the default `1`-`9` section focus keys are replaced. Custom shortcuts take priority over built-in keys on conflict. The `s` help overlay shows your actual configured bindings including custom shortcuts.
 
@@ -310,6 +310,7 @@ open and "meeting notes"                # quoted substring match
 | `h` | Toggle hidden tasks visibility (show/hide `@hidden` tasks) |
 | `s` | Toggle summary overlay |
 | `r` | Refresh (re-scan files) |
+| `S` | Sync with HEY (requires a `hey:` config block) |
 | `q` | Quit |
 
 ### Filter and Query Modes
