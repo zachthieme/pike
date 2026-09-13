@@ -4,3 +4,5 @@
 coverage.out
 docs/marketing.md
 docs/superpowers/
+.vetinari.local/
+/node_modules/
