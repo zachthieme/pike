@@ -775,3 +775,81 @@ views:
 		t.Fatal("expected error for multiple due_dates views")
 	}
 }
+
+func TestLoadBytes_HeyDefaults(t *testing.T) {
+	t.Setenv("XDG_DATA_HOME", "")
+	yaml := `
+hey: {}
+`
+	cfg, err := LoadBytes([]byte(yaml))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.Hey == nil {
+		t.Fatal("expected Hey block to be present")
+	}
+	if cfg.Hey.Command != "hey" {
+		t.Errorf("Command = %q, want %q", cfg.Hey.Command, "hey")
+	}
+	if cfg.Hey.Query != "@due or @today" {
+		t.Errorf("Query = %q, want %q", cfg.Hey.Query, "@due or @today")
+	}
+	if cfg.Hey.Account != "" {
+		t.Errorf("Account = %q, want empty", cfg.Hey.Account)
+	}
+	home, _ := os.UserHomeDir()
+	wantState := filepath.Join(home, ".local", "share", "pike", "hey-state.json")
+	if cfg.Hey.StatePath != wantState {
+		t.Errorf("StatePath = %q, want %q", cfg.Hey.StatePath, wantState)
+	}
+}
+
+func TestLoadBytes_HeyStatePathXDG(t *testing.T) {
+	t.Setenv("XDG_DATA_HOME", "/tmp/xdgdata")
+	cfg, err := LoadBytes([]byte("hey: {}\n"))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := filepath.Join("/tmp/xdgdata", "pike", "hey-state.json")
+	if cfg.Hey.StatePath != want {
+		t.Errorf("StatePath = %q, want %q", cfg.Hey.StatePath, want)
+	}
+}
+
+func TestLoadBytes_HeyOverrides(t *testing.T) {
+	yaml := `
+hey:
+  command: /usr/local/bin/hey
+  query: "@today"
+  account: work
+  state_path: ~/custom/state.json
+`
+	cfg, err := LoadBytes([]byte(yaml))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.Hey.Command != "/usr/local/bin/hey" {
+		t.Errorf("Command = %q", cfg.Hey.Command)
+	}
+	if cfg.Hey.Query != "@today" {
+		t.Errorf("Query = %q", cfg.Hey.Query)
+	}
+	if cfg.Hey.Account != "work" {
+		t.Errorf("Account = %q", cfg.Hey.Account)
+	}
+	home, _ := os.UserHomeDir()
+	wantState := filepath.Join(home, "custom", "state.json")
+	if cfg.Hey.StatePath != wantState {
+		t.Errorf("StatePath = %q, want %q", cfg.Hey.StatePath, wantState)
+	}
+}
+
+func TestLoadBytes_NoHeyBlock(t *testing.T) {
+	cfg, err := LoadBytes([]byte("notes_dir: ~/notes\n"))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.Hey != nil {
+		t.Errorf("expected Hey to be nil when block absent, got %+v", cfg.Hey)
+	}
+}

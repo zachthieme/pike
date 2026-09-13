@@ -18,22 +18,32 @@ import (
 
 // Config holds all application configuration.
 type Config struct {
-	NotesDir        string            `yaml:"-"`
-	Include         []string          `yaml:"-"`
-	Exclude         []string          `yaml:"-"`
-	RefreshInterval time.Duration     `yaml:"-"`
-	Editor          string            `yaml:"-"`
-	TagColors       map[string]string `yaml:"-"`
-	LinkColor              string            `yaml:"-"`
-	HiddenColor            string            `yaml:"-"` // color for ◌ icon (hidden tasks concealed)
-	VisibleColor           string            `yaml:"-"` // color for ◉ icon (hidden tasks revealed)
-	WeekStartDay           int               `yaml:"-"` // 0=Sunday, 1=Monday, ..., 6=Saturday
-	RecentlyCompletedDays  int               `yaml:"-"`
-	DueDatesPath           string            `yaml:"-"` // path to write due dates JSON for wen integration
-	InboxFile string `yaml:"-"` // file to append new tasks to (relative to NotesDir)
-	Views                  []ViewConfig      `yaml:"-"`
-	Keybindings            map[string][]string `yaml:"-"`
-	CustomBindings         []CustomBinding     `yaml:"-"`
+	NotesDir              string              `yaml:"-"`
+	Include               []string            `yaml:"-"`
+	Exclude               []string            `yaml:"-"`
+	RefreshInterval       time.Duration       `yaml:"-"`
+	Editor                string              `yaml:"-"`
+	TagColors             map[string]string   `yaml:"-"`
+	LinkColor             string              `yaml:"-"`
+	HiddenColor           string              `yaml:"-"` // color for ◌ icon (hidden tasks concealed)
+	VisibleColor          string              `yaml:"-"` // color for ◉ icon (hidden tasks revealed)
+	WeekStartDay          int                 `yaml:"-"` // 0=Sunday, 1=Monday, ..., 6=Saturday
+	RecentlyCompletedDays int                 `yaml:"-"`
+	DueDatesPath          string              `yaml:"-"` // path to write due dates JSON for wen integration
+	InboxFile             string              `yaml:"-"` // file to append new tasks to (relative to NotesDir)
+	Views                 []ViewConfig        `yaml:"-"`
+	Keybindings           map[string][]string `yaml:"-"`
+	CustomBindings        []CustomBinding     `yaml:"-"`
+	Hey                   *HeyConfig          `yaml:"-"` // HEY sync settings; nil when no hey: block is configured
+}
+
+// HeyConfig holds settings for syncing tasks with HEY. Its presence (a non-nil
+// pointer) is what enables --sync; an absent hey: block leaves it nil.
+type HeyConfig struct {
+	Command   string // hey CLI command to run (default "hey")
+	Query     string // Sync Query selecting Eligible Tasks to push (default "@due or @today")
+	Account   string // --account passed to hey when non-empty
+	StatePath string // path to the sync state file
 }
 
 // ViewConfig defines a single dashboard section.
@@ -69,21 +79,30 @@ type rawCustomBinding struct {
 
 // rawConfig mirrors the YAML structure for unmarshalling.
 type rawConfig struct {
-	NotesDir        string            `yaml:"notes_dir"`
-	Include         []string          `yaml:"include"`
-	Exclude         []string          `yaml:"exclude"`
-	RefreshInterval string            `yaml:"refresh_interval"`
-	Editor          string            `yaml:"editor"`
-	TagColors       map[string]string `yaml:"tag_colors"`
-	LinkColor              string            `yaml:"link_color"`
-	HiddenColor            string            `yaml:"hidden_color"`
-	VisibleColor           string            `yaml:"visible_color"`
-	WeekStartDay           *int              `yaml:"week_start_day"`
-	RecentlyCompletedDays  *int              `yaml:"recently_completed_days"`
-	DueDatesPath           string            `yaml:"due_dates_path"`
-	InboxFile string `yaml:"inbox_file"`
-	Views                  []ViewConfig      `yaml:"views"`
-	Keybindings            *rawKeybindings   `yaml:"keybindings"`
+	NotesDir              string            `yaml:"notes_dir"`
+	Include               []string          `yaml:"include"`
+	Exclude               []string          `yaml:"exclude"`
+	RefreshInterval       string            `yaml:"refresh_interval"`
+	Editor                string            `yaml:"editor"`
+	TagColors             map[string]string `yaml:"tag_colors"`
+	LinkColor             string            `yaml:"link_color"`
+	HiddenColor           string            `yaml:"hidden_color"`
+	VisibleColor          string            `yaml:"visible_color"`
+	WeekStartDay          *int              `yaml:"week_start_day"`
+	RecentlyCompletedDays *int              `yaml:"recently_completed_days"`
+	DueDatesPath          string            `yaml:"due_dates_path"`
+	InboxFile             string            `yaml:"inbox_file"`
+	Views                 []ViewConfig      `yaml:"views"`
+	Keybindings           *rawKeybindings   `yaml:"keybindings"`
+	Hey                   *rawHey           `yaml:"hey"`
+}
+
+// rawHey mirrors the hey: YAML block for unmarshalling.
+type rawHey struct {
+	Command   string `yaml:"command"`
+	Query     string `yaml:"query"`
+	Account   string `yaml:"account"`
+	StatePath string `yaml:"state_path"`
 }
 
 // Load reads configuration from the given path. If path is empty, it checks
@@ -333,6 +352,12 @@ func applyDefaults(raw *rawConfig) (*Config, error) {
 		return nil, fmt.Errorf("at most one view may have due_dates: true")
 	}
 
+	// Hey: only populated when a hey: block is present, so its absence leaves
+	// all existing behaviour untouched.
+	if raw.Hey != nil {
+		cfg.Hey = applyHeyDefaults(raw.Hey)
+	}
+
 	keybindings, customBindings, err := parseKeybindings(raw.Keybindings)
 	if err != nil {
 		return nil, err
@@ -341,6 +366,40 @@ func applyDefaults(raw *rawConfig) (*Config, error) {
 	cfg.CustomBindings = customBindings
 
 	return cfg, nil
+}
+
+// applyHeyDefaults fills in the documented defaults for an explicit hey: block.
+func applyHeyDefaults(raw *rawHey) *HeyConfig {
+	hey := &HeyConfig{
+		Command: raw.Command,
+		Query:   raw.Query,
+		Account: raw.Account,
+	}
+	if hey.Command == "" {
+		hey.Command = "hey"
+	}
+	if hey.Query == "" {
+		hey.Query = "@due or @today"
+	}
+	if raw.StatePath != "" {
+		hey.StatePath = expandTilde(raw.StatePath)
+	} else {
+		hey.StatePath = defaultHeyStatePath()
+	}
+	return hey
+}
+
+// defaultHeyStatePath returns $XDG_DATA_HOME/pike/hey-state.json, falling back
+// to ~/.local/share/pike/hey-state.json.
+func defaultHeyStatePath() string {
+	if xdg := os.Getenv("XDG_DATA_HOME"); xdg != "" {
+		return filepath.Join(xdg, "pike", "hey-state.json")
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return filepath.Join(".local", "share", "pike", "hey-state.json")
+	}
+	return filepath.Join(home, ".local", "share", "pike", "hey-state.json")
 }
 
 func expandTilde(path string) string {
