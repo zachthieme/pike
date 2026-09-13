@@ -9,6 +9,8 @@ import (
 
 	"github.com/zachthieme/pike/internal/model"
 	heysync "github.com/zachthieme/pike/internal/sync"
+
+	tea "github.com/charmbracelet/bubbletea"
 )
 
 // heyEnabled reports whether HEY integration is configured: a client was
@@ -27,6 +29,48 @@ func heyLinkID(t model.Task) (string, bool) {
 		}
 	}
 	return "", false
+}
+
+// runSync runs a full HEY Sync as a Bubble Tea command: it pushes Eligible
+// Tasks, imports unlinked open Todos, and reconciles completion in both
+// directions, then reports a one-line summary. It is a no-op (nil command) when
+// HEY is disabled, so the sync key does nothing without a hey: block.
+func (m Model) runSync() tea.Cmd {
+	if !m.heyEnabled() {
+		return nil
+	}
+	client := m.heyClient
+	cfg := m.config
+	tasks := m.allTasks
+	now := m.nowFunc()
+	return func() tea.Msg {
+		rep, warnings, err := heysync.Push(context.Background(), heysync.Options{
+			Tasks:     tasks,
+			Client:    client,
+			Query:     cfg.Hey.Query,
+			StatePath: cfg.Hey.StatePath,
+			NotesDir:  cfg.NotesDir,
+			InboxFile: cfg.InboxFile,
+			Now:       now,
+		})
+		if err != nil {
+			return syncResultMsg{Err: err}
+		}
+		return syncResultMsg{Summary: syncSummaryLine(rep, len(warnings))}
+	}
+}
+
+// syncSummaryLine renders a Sync Report as a single status-line string.
+func syncSummaryLine(rep *heysync.Report, warnings int) string {
+	s := fmt.Sprintf("sync: %d pushed, %d imported, %d completed, %d uncompleted",
+		rep.Pushed, rep.Imported, rep.Completed, rep.Uncompleted)
+	if rep.Failed > 0 {
+		s += fmt.Sprintf(", %d failed", rep.Failed)
+	}
+	if warnings > 0 {
+		s += fmt.Sprintf(" (%d warning(s))", warnings)
+	}
+	return s
 }
 
 // pushCompletion sends a completion change for each Linked id to HEY and records

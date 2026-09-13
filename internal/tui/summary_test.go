@@ -53,3 +53,11 @@ func TestRenderSummary_DisabledBindingOmitted(t *testing.T) {
 		t.Error("disabled 'quit' binding should be omitted from summary")
 	}
 }
+
+func TestRenderSummary_ListsSync(t *testing.T) {
+	km := DefaultKeyMap()
+	output := RenderSummary("v1.4.0", 80, km, nil)
+	if !strings.Contains(output, "sync with HEY") {
+		t.Error("help should list the sync action")
+	}
+}

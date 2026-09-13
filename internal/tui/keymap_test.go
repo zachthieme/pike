@@ -51,3 +51,17 @@ func TestBuildKeyMap_DisableAction(t *testing.T) {
 		t.Error("Quit should be disabled with empty keys")
 	}
 }
+
+func TestBuildKeyMap_SyncDefault(t *testing.T) {
+	km := BuildKeyMap(nil, nil)
+	if !slices.Contains(km.Sync.Keys(), "S") {
+		t.Errorf("Sync should default to 'S'; keys=%v", km.Sync.Keys())
+	}
+}
+
+func TestBuildKeyMap_SyncOverride(t *testing.T) {
+	km := BuildKeyMap(map[string][]string{"sync": {"y"}}, nil)
+	if !slices.Contains(km.Sync.Keys(), "y") {
+		t.Errorf("Sync should match 'y' after override; keys=%v", km.Sync.Keys())
+	}
+}

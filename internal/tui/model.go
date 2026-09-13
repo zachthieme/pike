@@ -258,6 +258,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, func() tea.Msg { return RefreshMsg{} }
 
+	case syncResultMsg:
+		if msg.Err != nil {
+			m.status = "sync: " + msg.Err.Error()
+			return m, nil
+		}
+		// Show the summary and refresh the list so imported lines appear.
+		m.status = msg.Summary
+		return m, func() tea.Msg { return RefreshMsg{} }
+
 	case EditorFinishedMsg:
 		if msg.Err != nil {
 			m.err = msg.Err

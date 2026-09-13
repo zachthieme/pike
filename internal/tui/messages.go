@@ -20,6 +20,14 @@ type toggleResultMsg struct {
 	PushErr error
 }
 
+// syncResultMsg is sent after a full HEY Sync (triggered by the sync key)
+// completes. Summary is the one-line result shown in the status line; Err is a
+// fatal sync failure (HEY unreachable or an invalid Sync Query).
+type syncResultMsg struct {
+	Summary string
+	Err     error
+}
+
 // scanResultMsg is sent after a background scan completes.
 type scanResultMsg struct {
 	Tasks  []model.Task

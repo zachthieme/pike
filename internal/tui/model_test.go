@@ -2023,3 +2023,68 @@ func TestStatusClearsOnKeyPress(t *testing.T) {
 		t.Errorf("status should clear on key press; got %q", updated.(Model).status)
 	}
 }
+
+func TestSyncKeyRunsSyncAndShowsSummary(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "inbox.md"), []byte("# Inbox\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	statePath := filepath.Join(dir, "state.json")
+
+	week := time.Date(2026, 3, 8, 0, 0, 0, 0, time.UTC)
+	weekEnd := time.Date(2026, 3, 14, 0, 0, 0, 0, time.UTC)
+	client := &fakeHeyClient{todos: []hey.Todo{
+		{ID: "n1", Title: "Call plumber", WeekStart: week, WeekEnd: weekEnd},
+	}}
+
+	cfg := &config.Config{
+		NotesDir: dir, InboxFile: "inbox.md", Editor: "vi",
+		Views: []config.ViewConfig{{Title: "All", Query: "open or completed", Sort: "file", Order: 1}},
+		Hey:   &config.HeyConfig{Command: "hey", Query: "@today", StatePath: statePath},
+	}
+	m := NewModel(cfg, nil, nil, nil, client)
+	m.now = func() time.Time { return testNow }
+	m.width, m.height = 80, 40
+	m.nav.SetHeight(40)
+
+	updated, cmd := sendKey(m, "S")
+	if cmd == nil {
+		t.Fatal("expected a sync cmd from S")
+	}
+	msg := cmd()
+
+	// Import ran: the inbox gained the todo as a Linked checkbox Task.
+	data, _ := os.ReadFile(filepath.Join(dir, "inbox.md"))
+	if !strings.Contains(string(data), "Call plumber") || !strings.Contains(string(data), "@hey(n1)") {
+		t.Errorf("inbox should contain imported todo; got %q", string(data))
+	}
+
+	res, ok := msg.(syncResultMsg)
+	if !ok {
+		t.Fatalf("expected syncResultMsg, got %T", msg)
+	}
+	if res.Err != nil {
+		t.Fatalf("unexpected sync error: %v", res.Err)
+	}
+	// Feeding the result sets a summary status and refreshes the list.
+	_ = updated
+	updated2, refreshCmd := m.Update(res)
+	if updated2.(Model).status == "" {
+		t.Error("expected a summary status after sync")
+	}
+	if refreshCmd == nil {
+		t.Error("expected a refresh command after sync")
+	}
+}
+
+func TestSyncKeyDisabledIsNoOp(t *testing.T) {
+	// No hey: block and no client → S does nothing.
+	m := testModel(testTasks(), testViews())
+	updated, cmd := sendKey(m, "S")
+	if cmd != nil {
+		t.Errorf("S should be a no-op when HEY is disabled; got a cmd")
+	}
+	if updated.(Model).status != "" {
+		t.Errorf("S should not set status when disabled; got %q", updated.(Model).status)
+	}
+}
