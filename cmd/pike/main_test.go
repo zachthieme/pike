@@ -732,6 +732,49 @@ func TestSyncRealPushEndToEnd(t *testing.T) {
 	}
 }
 
+func TestSyncRealImportEndToEnd(t *testing.T) {
+	cfgPath, notesDir, statePath := writeSyncConfig(t, "")
+	inboxFile := filepath.Join(notesDir, "inbox.md")
+	if _, err := os.Stat(inboxFile); !os.IsNotExist(err) {
+		t.Fatalf("inbox.md should be absent before sync (stat err: %v)", err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	if err := run([]string{"--config", cfgPath, "--dir", notesDir, "--sync"}, &stdout, &stderr); err != nil {
+		t.Fatalf("unexpected error: %v\nstderr: %s", err, stderr.String())
+	}
+
+	// The report counts the one unlinked open todo (h_new) imported.
+	if !strings.Contains(stdout.String(), "1 todo(s) imported") {
+		t.Errorf("report should count one import:\n%s", stdout.String())
+	}
+
+	// The inbox is created and carries the imported line: @due on the Week's
+	// Saturday and an @hey Link, so a later scan treats it as Linked.
+	got, err := os.ReadFile(inboxFile)
+	if err != nil {
+		t.Fatalf("inbox should be created: %v", err)
+	}
+	want := "- [ ] Unlinked todo @due(2026-09-19) @hey(h_new)\n"
+	if string(got) != want {
+		t.Errorf("inbox after import:\n got: %q\nwant: %q", string(got), want)
+	}
+
+	// The completed todo (h_done) is never imported.
+	if strings.Contains(string(got), "Old todo") {
+		t.Errorf("completed todo should not be imported:\n%s", string(got))
+	}
+
+	// The import Link is recorded in the state file.
+	stateData, err := os.ReadFile(statePath)
+	if err != nil {
+		t.Fatalf("state file should be written: %v", err)
+	}
+	if !strings.Contains(string(stateData), "h_new") {
+		t.Errorf("state file missing the import link:\n%s", string(stateData))
+	}
+}
+
 func TestSyncDryRunJSON(t *testing.T) {
 	cfgPath, notesDir, _ := writeSyncConfig(t, "")
 	var stdout, stderr bytes.Buffer
