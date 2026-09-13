@@ -60,7 +60,7 @@ func viewTestModel(tasks []model.Task, views []config.ViewConfig) Model {
 		Views:                 views,
 		RecentlyCompletedDays: 7,
 	}
-	m := NewModel(cfg, tasks, nil, nil)
+	m := NewModel(cfg, tasks, nil, nil, nil)
 	m.now = func() time.Time { return testNow }
 	m.width = 80
 	m.height = 40

@@ -572,7 +572,13 @@ func runTUI(_ io.Writer, cfg *config.Config, tasks []model.Task, sc *scanner.Sca
 	warningsGetter := func() []model.Warning {
 		return sc.Warnings
 	}
-	m := tui.NewModel(cfg, tasks, scanRefresh, configReload)
+	// A hey: block enables Push on toggle and the sync action; without one the
+	// client is nil and HEY integration is disabled.
+	var heyClient hey.Client
+	if cfg.Hey != nil {
+		heyClient = hey.NewExecClient(cfg.Hey.Command, cfg.Hey.Account)
+	}
+	m := tui.NewModel(cfg, tasks, scanRefresh, configReload, heyClient)
 	m.SetVersion(version)
 	m.SetWarnings(sc.Warnings)
 	m.SetWarningsFunc(warningsGetter)

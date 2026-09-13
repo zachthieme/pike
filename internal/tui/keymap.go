@@ -9,16 +9,16 @@ import (
 
 // KeyMap defines the key bindings for the TUI.
 type KeyMap struct {
-	Up, Down, Top, Bottom        key.Binding
-	PageDown, PageUp             key.Binding
-	NextSection, PrevSection     key.Binding
-	FocusSection                 [9]key.Binding // 1-9
-	Enter, Quit, Summary         key.Binding
-	Filter, Query, Escape, Refresh key.Binding
-	AllTasks, TagSearch, ToggleHidden key.Binding
+	Up, Down, Top, Bottom                      key.Binding
+	PageDown, PageUp                           key.Binding
+	NextSection, PrevSection                   key.Binding
+	FocusSection                               [9]key.Binding // 1-9
+	Enter, Quit, Summary                       key.Binding
+	Filter, Query, Escape, Refresh             key.Binding
+	AllTasks, TagSearch, ToggleHidden          key.Binding
 	Toggle, ToggleHiddenTag, RecentlyCompleted key.Binding
-	ToggleCollapse key.Binding
-	CreateTask key.Binding
+	ToggleCollapse                             key.Binding
+	CreateTask                                 key.Binding
 }
 
 // DefaultKeyMap returns the default key bindings.
@@ -120,7 +120,7 @@ func DefaultKeyMap() KeyMap {
 
 	for i := 0; i < 9; i++ {
 		km.FocusSection[i] = key.NewBinding(
-			key.WithKeys(string(rune('1' + i))),
+			key.WithKeys(string(rune('1'+i))),
 			key.WithHelp(string(rune('1'+i)), "focus section"),
 		)
 	}
@@ -143,8 +143,8 @@ func BuildKeyMap(overrides map[string][]string, custom []config.CustomBinding) K
 		"tag_search": &km.TagSearch, "toggle_hidden": &km.ToggleHidden,
 		"toggle": &km.Toggle, "toggle_hidden_tag": &km.ToggleHiddenTag,
 		"recently_completed": &km.RecentlyCompleted,
-		"toggle_collapse": &km.ToggleCollapse,
-		"create_task": &km.CreateTask,
+		"toggle_collapse":    &km.ToggleCollapse,
+		"create_task":        &km.CreateTask,
 	}
 
 	for name, keys := range overrides {

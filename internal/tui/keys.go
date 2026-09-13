@@ -372,5 +372,3 @@ func (m Model) processFilterOutput(filterCmd tea.Cmd) (tea.Model, tea.Cmd) {
 		return m, tea.Batch(filterCmd, extraCmd)
 	}
 }
-
-

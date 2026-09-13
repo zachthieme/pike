@@ -22,6 +22,10 @@ func (m Model) View() string {
 	if m.err != nil {
 		errLine = ErrorStyle().Render("Error: "+m.err.Error()) + "\n"
 	}
+	// A one-line status message (sync result or Push error) sits under any error.
+	if m.status != "" {
+		errLine += FooterStyle().Render("  "+m.status) + "\n"
+	}
 
 	var content string
 	if m.showSummary {

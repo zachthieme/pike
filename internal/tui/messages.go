@@ -11,8 +11,14 @@ type RefreshMsg struct{}
 // EditorFinishedMsg is sent after the editor process exits.
 type EditorFinishedMsg struct{ Err error }
 
-// toggleResultMsg is sent after a toggle operation completes.
-type toggleResultMsg struct{ Err error }
+// toggleResultMsg is sent after a toggle operation completes. Err is a fatal
+// file-write error (nothing was changed on disk). PushErr is a non-fatal HEY
+// Push failure: the notes change was written and stays, but the change did not
+// reach HEY, so the error is shown in the status line.
+type toggleResultMsg struct {
+	Err     error
+	PushErr error
+}
 
 // scanResultMsg is sent after a background scan completes.
 type scanResultMsg struct {
@@ -26,7 +32,7 @@ type viewMode int
 
 const (
 	modeDashboard viewMode = iota
-	modeFocused   // single section focus; Model.focusedView holds title
+	modeFocused            // single section focus; Model.focusedView holds title
 	modeAllTasks
 	modeTagSearch
 	modeRecentlyCompleted

@@ -58,11 +58,16 @@ func (m Model) toggleTask() (tea.Model, tea.Cmd) {
 	line := task.Line
 	now := m.nowFunc()
 
+	// The toggled Task's Link, if any, is pushed to HEY after the file write.
+	taskID, taskLinked := heyLinkID(task)
+
 	// Capture parent info for auto-complete cascade
 	var parentFile string
 	var parentLine int
 	var parentState model.TaskState
 	var parentHasCheckbox bool
+	var parentID string
+	var parentLinked bool
 	var siblingsDone, siblingsTotal int
 	hasParent := task.Indent > 0 && task.ParentIndex >= 0 && task.ParentIndex < len(m.allTasks)
 
@@ -72,6 +77,7 @@ func (m Model) toggleTask() (tea.Model, tea.Cmd) {
 		parentLine = parent.Line
 		parentState = parent.State
 		parentHasCheckbox = parent.HasCheckbox
+		parentID, parentLinked = heyLinkID(parent)
 		siblingsDone, siblingsTotal = parent.Progress(m.allTasks)
 	}
 
@@ -82,7 +88,9 @@ func (m Model) toggleTask() (tea.Model, tea.Cmd) {
 
 	return m, func() tea.Msg {
 		ctx := context.Background()
-		if state == model.Open {
+		done := state == model.Open
+		parentCascaded := false
+		if done {
 			if err := toggle.Complete(ctx, filePath, line, now); err != nil {
 				return toggleResultMsg{Err: err}
 			}
@@ -93,6 +101,7 @@ func (m Model) toggleTask() (tea.Model, tea.Cmd) {
 					parentPath = filepath.Join(notesDir, parentFile)
 				}
 				_ = toggle.Complete(ctx, parentPath, parentLine, now) //nolint:errcheck // best-effort cascade; child already written, refresh will reconcile
+				parentCascaded = true
 			}
 		} else {
 			if err := toggle.Uncomplete(ctx, filePath, line); err != nil {
@@ -105,9 +114,23 @@ func (m Model) toggleTask() (tea.Model, tea.Cmd) {
 					parentPath = filepath.Join(notesDir, parentFile)
 				}
 				_ = toggle.Uncomplete(ctx, parentPath, parentLine) //nolint:errcheck // best-effort cascade; child already written, refresh will reconcile
+				parentCascaded = true
 			}
 		}
-		return toggleResultMsg{Err: nil}
+
+		// After the file write, Push the completion change to HEY for the
+		// toggled Task and any Linked parent the cascade auto-completed.
+		var ids []string
+		if taskLinked {
+			ids = append(ids, taskID)
+		}
+		if parentCascaded && parentLinked {
+			ids = append(ids, parentID)
+		}
+		if pushErr := m.pushCompletion(ctx, ids, done); pushErr != nil {
+			return toggleResultMsg{PushErr: pushErr}
+		}
+		return toggleResultMsg{}
 	}
 }
 
