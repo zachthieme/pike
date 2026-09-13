@@ -97,6 +97,18 @@
 
 - `--scope <file>` flag: filter open tasks to those referencing the given file (by wiki-link, filename, or display name). Composes with `--query`, `--view`, `--json`, `--count`, and `--sort`.
 
+### Collected changes — September 13, 2026
+
+**Features:**
+- [user] `@hey(id)` Link tags are now hidden in the TUI and `--query` text output so nine-digit HEY ids never clutter the dashboard; the tag is still present in `--json` output for scripting (#3).
+
+**Added:**
+- [user] `--sync --dry-run` previews a HEY sync: with a `hey:` config block it reports how many eligible tasks would push, how many unlinked open todos would import, and how many links already exist — writing nothing (#4).
+- [user] `hey:` config block (`command`, `query`, `account`, `state_path`) enabling HEY sync; absent, all existing behaviour is unchanged (#4).
+
+**Changed:**
+- [user] `--sync` conflicts with `--summary`, `--query`, `--scope`, and `--view`; `--dry-run` without `--sync` warns; `--sync --json` emits the report as JSON (#4).
+
 ### v1.6.1 — March 17, 2026: Idiomatic Go & Bubble Tea Cleanup
 
 **Toggle file permissions:**
