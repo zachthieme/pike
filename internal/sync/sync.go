@@ -81,8 +81,13 @@ func Plan(ctx context.Context, opts Options) (*Report, []model.Warning, error) {
 	_, orphanWarnings := reconcileOrphans(ctx, opts, linkedTasks, todos, state, rep)
 	warnings = append(warnings, orphanWarnings...)
 
+	origLinks := snapshotLinks(state)
+
 	_, titleWarnings := reconcileTitles(ctx, opts, linkedTasks, todos, state, rep)
 	warnings = append(warnings, titleWarnings...)
+
+	_, weekWarnings := reconcileWeeks(ctx, opts, linkedTasks, todos, origLinks, state, rep)
+	warnings = append(warnings, weekWarnings...)
 
 	_, completionWarnings := reconcileCompletions(ctx, opts, linkedTasks, todos, state, rep)
 	warnings = append(warnings, completionWarnings...)

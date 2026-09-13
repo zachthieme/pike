@@ -280,6 +280,34 @@ func (t *Toggler) SetTagValue(ctx context.Context, filePath string, line int, na
 	})
 }
 
+// dueTagRe matches an @due token with or without a value, mirroring the parser's
+// tag grammar so a "set or replace" leaves exactly one @due token behind.
+var dueTagRe = regexp.MustCompile(`@due(?:\([^)]*\))?`)
+
+// SetDue sets the task line's @due tag to date (formatted YYYY-MM-DD): it
+// rewrites an existing @due value in place, or appends @due(date) when the line
+// has none, leaving the rest of the line unchanged. A line carrying two or more
+// @due tags is ambiguous ([ErrAmbiguousTag]) and nothing is written. This is the
+// atomic line-write path a Sync uses to reschedule a Task from HEY's Week.
+func SetDue(ctx context.Context, filePath string, line int, date time.Time) error {
+	return defaultToggler.SetDue(ctx, filePath, line, date)
+}
+
+// SetDue sets a task line's @due tag using this Toggler's lock state.
+func (t *Toggler) SetDue(ctx context.Context, filePath string, line int, date time.Time) error {
+	value := date.Format("2006-01-02")
+	return t.mutateFile(ctx, filePath, line, func(l string) (string, error) {
+		switch matches := dueTagRe.FindAllString(l, -1); len(matches) {
+		case 0:
+			return l + " @due(" + value + ")", nil
+		case 1:
+			return dueTagRe.ReplaceAllString(l, "@due("+value+")"), nil
+		default:
+			return "", fmt.Errorf("%w: line %d has %d @due tags", ErrAmbiguousTag, line, len(matches))
+		}
+	})
+}
+
 // tagRemovalRe matches one @name or @name(value) token together with any
 // leading whitespace and its trailing separator, mirroring the parser's tag
 // grammar so removal strips exactly the tokens pike recognises.
