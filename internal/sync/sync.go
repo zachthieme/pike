@@ -34,8 +34,10 @@ func Plan(ctx context.Context, opts Options) (*Report, []model.Warning, error) {
 
 	// Reading the state file is best-effort: an absent file is normal on the
 	// first run; a corrupt one is a Warning, not a failure.
-	if _, err := LoadState(opts.StatePath); err != nil {
+	state, err := LoadState(opts.StatePath)
+	if err != nil {
 		warnings = append(warnings, model.Warning{Message: fmt.Sprintf("reading hey state: %v", err)})
+		state = &State{Links: make(map[string]Link)}
 	}
 
 	node, err := query.Parse(opts.Query)
@@ -45,11 +47,13 @@ func Plan(ctx context.Context, opts Options) (*Report, []model.Warning, error) {
 
 	rep := &Report{DryRun: opts.DryRun}
 	linkedIDs := make(map[string]bool)
+	linkedTasks := make(map[string]*model.Task)
 	for i := range opts.Tasks {
 		t := &opts.Tasks[i]
 		if id, ok := linkID(t); ok {
 			rep.ExistingLinks++
 			linkedIDs[id] = true
+			linkedTasks[id] = t
 			continue
 		}
 		if !eligible(t) {
@@ -70,6 +74,9 @@ func Plan(ctx context.Context, opts Options) (*Report, []model.Warning, error) {
 			rep.WouldImport++
 		}
 	}
+
+	_, completionWarnings := reconcileCompletions(ctx, opts, linkedTasks, todos, state, rep)
+	warnings = append(warnings, completionWarnings...)
 
 	return rep, warnings, nil
 }

@@ -820,6 +820,77 @@ func TestSyncCommandMissingExitsNonZero(t *testing.T) {
 	}
 }
 
+func TestSyncCompletionEndToEnd(t *testing.T) {
+	dir := t.TempDir()
+	notesDir := filepath.Join(dir, "notes")
+	if err := os.MkdirAll(notesDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// h_open is open in HEY (stub) but completed in the notes → completed wins,
+	// so the Todo is completed in HEY. h_done is completed in HEY but open in the
+	// notes → completed wins, so the notes line is checked with @completed.
+	notes := "- [x] Finish report @hey(h_open) @completed(2026-09-12)\n" +
+		"- [ ] Read book @hey(h_done)\n"
+	notesFile := filepath.Join(notesDir, "notes.md")
+	if err := os.WriteFile(notesFile, []byte(notes), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	stub, err := filepath.Abs(filepath.Join("testdata", "hey-stub.sh"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	statePath := filepath.Join(dir, "hey-state.json")
+	cfgPath := filepath.Join(dir, "config.yaml")
+	cfg := "hey:\n  command: " + stub + "\n  state_path: " + statePath + "\n"
+	if err := os.WriteFile(cfgPath, []byte(cfg), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	mutationLog := filepath.Join(t.TempDir(), "mutations.log")
+	t.Setenv("PIKE_STUB_MUTATION_LOG", mutationLog)
+
+	var stdout, stderr bytes.Buffer
+	if err := run([]string{"--config", cfgPath, "--dir", notesDir, "--sync"}, &stdout, &stderr); err != nil {
+		t.Fatalf("unexpected error: %v\nstderr: %s", err, stderr.String())
+	}
+
+	// The report counts two completions (one on each side).
+	if !strings.Contains(stdout.String(), "2 item(s) completed") {
+		t.Errorf("report should count two completions:\n%s", stdout.String())
+	}
+
+	// The open Todo was completed in HEY.
+	log, err := os.ReadFile(mutationLog)
+	if err != nil {
+		t.Fatalf("expected a recorded complete call: %v", err)
+	}
+	if !strings.Contains(string(log), "complete h_open") {
+		t.Errorf("expected complete h_open in mutation log:\n%s", string(log))
+	}
+
+	// The open notes Task was checked and stamped from HEY's completed_at.
+	after, err := os.ReadFile(notesFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	lines := strings.Split(string(after), "\n")
+	if !strings.HasPrefix(lines[1], "- [x] Read book @hey(h_done) @completed(") {
+		t.Errorf("second line should be completed from HEY:\n%s", string(after))
+	}
+	// The completed Task in the notes was left as-is.
+	if lines[0] != "- [x] Finish report @hey(h_open) @completed(2026-09-12)" {
+		t.Errorf("first line should be preserved:\n%s", string(after))
+	}
+
+	// The state file records both agreed completions.
+	stateData, err := os.ReadFile(statePath)
+	if err != nil {
+		t.Fatalf("state file should be written: %v", err)
+	}
+	if !strings.Contains(string(stateData), "h_open") || !strings.Contains(string(stateData), "h_done") {
+		t.Errorf("state should record both links:\n%s", string(stateData))
+	}
+}
+
 func TestHelpDocumentsSync(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	if err := run([]string{"--help"}, &stdout, &stderr); err != nil {
