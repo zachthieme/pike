@@ -17,6 +17,7 @@ import (
 var (
 	ErrStaleData      = errors.New("stale data: file changed externally")
 	ErrLineOutOfRange = errors.New("line number out of range")
+	ErrAmbiguousTag   = errors.New("ambiguous tag: line carries more than one")
 )
 
 var completedTagRe = regexp.MustCompile(`\s*@completed(\([^)]*\))?(?:\s|$)`)
@@ -187,6 +188,44 @@ func (t *Toggler) AppendTag(ctx context.Context, filePath string, line int, want
 		}
 		return l + " " + tag, nil
 	})
+}
+
+// RemoveTag strips a single @name (or @name(value)) token from a task line,
+// collapsing the surrounding whitespace and leaving the rest of the line
+// unchanged. It is the supported way to un-link a Task from HEY. A line with no
+// such tag is treated as stale ([ErrStaleData]) and a line carrying two or more
+// is ambiguous ([ErrAmbiguousTag]); in both cases nothing is written.
+func RemoveTag(ctx context.Context, filePath string, line int, name string) error {
+	return defaultToggler.RemoveTag(ctx, filePath, line, name)
+}
+
+// RemoveTag strips a tag from a task line using this Toggler's lock state.
+func (t *Toggler) RemoveTag(ctx context.Context, filePath string, line int, name string) error {
+	re := tagRemovalRe(name)
+	return t.mutateFile(ctx, filePath, line, func(l string) (string, error) {
+		matches := re.FindAllString(l, -1)
+		switch len(matches) {
+		case 0:
+			return "", fmt.Errorf("%w: line %d has no @%s tag", ErrStaleData, line, name)
+		case 1:
+			l = re.ReplaceAllStringFunc(l, func(match string) string {
+				if strings.HasSuffix(match, " ") || strings.HasSuffix(match, "\t") {
+					return " "
+				}
+				return ""
+			})
+			return strings.TrimRight(l, " \t"), nil
+		default:
+			return "", fmt.Errorf("%w: line %d has %d @%s tags", ErrAmbiguousTag, line, len(matches), name)
+		}
+	})
+}
+
+// tagRemovalRe matches one @name or @name(value) token together with any
+// leading whitespace and its trailing separator, mirroring the parser's tag
+// grammar so removal strips exactly the tokens pike recognises.
+func tagRemovalRe(name string) *regexp.Regexp {
+	return regexp.MustCompile(`\s*@` + regexp.QuoteMeta(name) + `(?:\([^)]*\))?(?:\s|$)`)
 }
 
 // AppendTask appends a new checkbox task line to a file. Creates the file

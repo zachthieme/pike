@@ -42,12 +42,17 @@ func (c *recordingClient) Add(_ context.Context, title string, date *time.Time) 
 		return hey.Todo{}, err
 	}
 	c.nextID++
-	return hey.Todo{
+	todo := hey.Todo{
 		ID:        "h_new" + strconv.Itoa(c.nextID),
 		Title:     title,
 		WeekStart: c.week,
 		Updated:   c.week,
-	}, nil
+	}
+	// A just-added Todo shows up in HEY's list on the next sync, so a later
+	// List reflects it — otherwise a freshly-linked Task would look like its
+	// Todo had vanished and be unlinked as an Orphan.
+	c.todos = append(c.todos, todo)
+	return todo, nil
 }
 
 func (c *recordingClient) Complete(context.Context, string) error   { return nil }

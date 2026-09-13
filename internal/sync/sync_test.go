@@ -98,9 +98,14 @@ func TestPlan_ReadsStateFileIfPresent(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	client := &fakeClient{t: t}
+	// The state entry h1 has both a live Task in the notes and a Todo in HEY, so
+	// it is a normal existing Link — not an Orphan.
+	client := &fakeClient{t: t, todos: []hey.Todo{openTodo("h1", "Old")}}
 	_, warnings, err := Plan(context.Background(), Options{
-		Tasks:     []model.Task{openTask("Buy milk @today", model.Tag{Name: "today"})},
+		Tasks: []model.Task{
+			openTask("Buy milk @today", model.Tag{Name: "today"}),
+			openTask("Old @hey(h1)", model.Tag{Name: "hey", Value: "h1"}),
+		},
 		Client:    client,
 		Query:     "@due or @today",
 		StatePath: statePath,
