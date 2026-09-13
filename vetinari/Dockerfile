@@ -53,14 +53,14 @@ RUN npm install -g @mariozechner/pi-coding-agent @openai/codex
 
 # --- pike's toolchain ---------------------------------------------------------
 # Go, copied from the official image rather than installed by hand, so the patch
-# level tracks the golang:1.25 tag. go.mod requires 1.25.5; CI pins 1.25.x.
-COPY --from=golang:1.25-bookworm /usr/local/go /usr/local/go
+# level tracks the golang:1.27 tag. CI pins 1.27.x.
+COPY --from=golang:1.27-bookworm /usr/local/go /usr/local/go
 ENV PATH="/usr/local/go/bin:/home/agent/go/bin:$PATH"
 
 # golangci-lint at the exact version .github/workflows/ci.yml pins, so the `lint`
 # gate fails here on precisely what would turn CI red — a newer release enabling
 # new checks would make the gate stricter than main and park clean work.
-ARG GOLANGCI_LINT_VERSION=v2.8.0
+ARG GOLANGCI_LINT_VERSION=v2.13.2
 RUN curl -fsSL https://raw.githubusercontent.com/golangci/golangci-lint/HEAD/install.sh \
   | sh -s -- -b /usr/local/bin "$GOLANGCI_LINT_VERSION"
 # ------------------------------------------------------------------------------

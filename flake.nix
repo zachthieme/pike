@@ -51,7 +51,10 @@
           };
         };
 
-        pike-src = pkgs.buildGoModule {
+        # buildGo127Module, not the default buildGoModule: nixpkgs' default is
+        # still Go 1.26, and go.mod requires 1.27.1. A nix build is sandboxed, so
+        # GOTOOLCHAIN cannot fetch a newer toolchain the way a local build would.
+        pike-src = pkgs.buildGo127Module {
           pname = "pike";
           version = pikeVersion;
 

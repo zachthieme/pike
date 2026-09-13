@@ -2,7 +2,7 @@
 
 ## What This Project Is
 
-Pike is a terminal task dashboard that reads markdown files for checkbox/tagged items and displays them in an interactive TUI. Written in Go 1.25.x using Bubble Tea.
+Pike is a terminal task dashboard that reads markdown files for checkbox/tagged items and displays them in an interactive TUI. Written in Go 1.27.x using Bubble Tea.
 
 ## Project Structure
 
