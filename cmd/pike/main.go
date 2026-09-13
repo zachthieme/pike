@@ -184,20 +184,20 @@ func run(args []string, stdout, stderr io.Writer) error {
 	}
 
 	if f.debug {
-		fmt.Fprintf(stderr, "pike %s\n", version)
-		fmt.Fprintf(stderr, "notes_dir: %s\n", notesDir)
-		fmt.Fprintf(stderr, "config: %s\n", f.config)
-		fmt.Fprintf(stderr, "TERM=%s COLORTERM=%s\n", os.Getenv("TERM"), os.Getenv("COLORTERM"))
-		fmt.Fprintf(stderr, "color_profile: %v\n", lipgloss.ColorProfile())
-		fmt.Fprintf(stderr, "dark_background: %v\n", lipgloss.HasDarkBackground())
-		fmt.Fprintf(stderr, "tasks: %d\n", len(tasks))
-		fmt.Fprintf(stderr, "views: %d\n", len(cfg.Views))
+		_, _ = fmt.Fprintf(stderr, "pike %s\n", version)
+		_, _ = fmt.Fprintf(stderr, "notes_dir: %s\n", notesDir)
+		_, _ = fmt.Fprintf(stderr, "config: %s\n", f.config)
+		_, _ = fmt.Fprintf(stderr, "TERM=%s COLORTERM=%s\n", os.Getenv("TERM"), os.Getenv("COLORTERM"))
+		_, _ = fmt.Fprintf(stderr, "color_profile: %v\n", lipgloss.ColorProfile())
+		_, _ = fmt.Fprintf(stderr, "dark_background: %v\n", lipgloss.HasDarkBackground())
+		_, _ = fmt.Fprintf(stderr, "tasks: %d\n", len(tasks))
+		_, _ = fmt.Fprintf(stderr, "views: %d\n", len(cfg.Views))
 		for _, v := range cfg.Views {
 			count := 0
 			if filtered, err := filter.Apply(tasks, v.Query, v.Sort, time.Now()); err == nil {
 				count = len(filtered)
 			}
-			fmt.Fprintf(stderr, "  %q (%s): %d tasks\n", v.Title, v.Query, count)
+			_, _ = fmt.Fprintf(stderr, "  %q (%s): %d tasks\n", v.Title, v.Query, count)
 		}
 	}
 
