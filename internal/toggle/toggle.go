@@ -23,6 +23,14 @@ var (
 var completedTagRe = regexp.MustCompile(`\s*@completed(\([^)]*\))?(?:\s|$)`)
 var hiddenTagRe = regexp.MustCompile(`\s*@hidden(?:\s|$)`)
 
+// tagTokenRe matches one @name or @name(value) token, mirroring the parser's
+// tag grammar so text rewrites keep exactly the tokens pike recognises.
+var tagTokenRe = regexp.MustCompile(`@\w+(?:\([^)]*\))?`)
+
+// taskPrefixRe matches a task line's leading marker: indentation, the bullet,
+// and an optional checkbox. The body (text and tags) is everything after it.
+var taskPrefixRe = regexp.MustCompile(`^\s*- (?:\[[ xX]\] )?`)
+
 // fileMutexMap provides type-safe per-file locking to prevent concurrent
 // mutations from racing. Each file path gets its own mutex so that operations
 // on different files proceed in parallel.
@@ -190,6 +198,33 @@ func (t *Toggler) AppendTag(ctx context.Context, filePath string, line int, want
 	})
 }
 
+// SetText rewrites a task line's text to newText while keeping its tags,
+// re-appending them at the end in their original order. The leading marker
+// (indentation, bullet, and checkbox state) is left untouched. wantText is the
+// task text the caller observed when it scanned the line; if the current line
+// no longer contains it, the line changed since the scan and SetText returns
+// [ErrStaleData] without writing, the same stale-line guard AppendTag uses.
+func SetText(ctx context.Context, filePath string, line int, wantText, newText string) error {
+	return defaultToggler.SetText(ctx, filePath, line, wantText, newText)
+}
+
+// SetText rewrites a task line's text keeping its tags, using this Toggler's
+// lock state.
+func (t *Toggler) SetText(ctx context.Context, filePath string, line int, wantText, newText string) error {
+	return t.mutateFile(ctx, filePath, line, func(l string) (string, error) {
+		if !strings.Contains(l, wantText) {
+			return "", fmt.Errorf("%w: line %d no longer contains %q", ErrStaleData, line, wantText)
+		}
+		prefix := taskPrefixRe.FindString(l)
+		body := l[len(prefix):]
+		newBody := newText
+		if tags := tagTokenRe.FindAllString(body, -1); len(tags) > 0 {
+			newBody = newText + " " + strings.Join(tags, " ")
+		}
+		return prefix + newBody, nil
+	})
+}
+
 // RemoveTag strips a single @name (or @name(value)) token from a task line,
 // collapsing the surrounding whitespace and leaving the rest of the line
 // unchanged. It is the supported way to un-link a Task from HEY. A line with no
@@ -215,6 +250,30 @@ func (t *Toggler) RemoveTag(ctx context.Context, filePath string, line int, name
 				return ""
 			})
 			return strings.TrimRight(l, " \t"), nil
+		default:
+			return "", fmt.Errorf("%w: line %d has %d @%s tags", ErrAmbiguousTag, line, len(matches), name)
+		}
+	})
+}
+
+// SetTagValue rewrites the value of a single @name tag in place, turning
+// @name(old) into @name(newValue) and leaving the rest of the line byte-for-byte
+// unchanged. It is how a Re-create moves a Link to a fresh Todo id. A line with
+// no such tag is treated as stale ([ErrStaleData]) and a line carrying two or
+// more is ambiguous ([ErrAmbiguousTag]); in both cases nothing is written.
+func SetTagValue(ctx context.Context, filePath string, line int, name, newValue string) error {
+	return defaultToggler.SetTagValue(ctx, filePath, line, name, newValue)
+}
+
+// SetTagValue rewrites a tag's value using this Toggler's lock state.
+func (t *Toggler) SetTagValue(ctx context.Context, filePath string, line int, name, newValue string) error {
+	re := regexp.MustCompile(`@` + regexp.QuoteMeta(name) + `(?:\([^)]*\))?`)
+	return t.mutateFile(ctx, filePath, line, func(l string) (string, error) {
+		switch matches := re.FindAllString(l, -1); len(matches) {
+		case 0:
+			return "", fmt.Errorf("%w: line %d has no @%s tag", ErrStaleData, line, name)
+		case 1:
+			return re.ReplaceAllString(l, "@"+name+"("+newValue+")"), nil
 		default:
 			return "", fmt.Errorf("%w: line %d has %d @%s tags", ErrAmbiguousTag, line, len(matches), name)
 		}

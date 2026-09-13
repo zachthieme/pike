@@ -59,6 +59,109 @@ func readFile(t *testing.T, path string) string {
 	return string(data)
 }
 
+func TestSetTextKeepsTags(t *testing.T) {
+	tests := []struct {
+		name     string
+		line     string
+		wantText string
+		newText  string
+		want     string
+	}{
+		{
+			name:     "tags at end preserved in order",
+			line:     "- [ ] Old title @hey(h1) @due(2026-01-01)",
+			wantText: "Old title @hey(h1) @due(2026-01-01)",
+			newText:  "New title",
+			want:     "- [ ] New title @hey(h1) @due(2026-01-01)\n",
+		},
+		{
+			name:     "interspersed tags moved to end in original order",
+			line:     "- [ ] Buy @urgent milk @hey(h1)",
+			wantText: "Buy @urgent milk @hey(h1)",
+			newText:  "Buy groceries",
+			want:     "- [ ] Buy groceries @urgent @hey(h1)\n",
+		},
+		{
+			name:     "completed checkbox untouched",
+			line:     "- [x] Old @hey(h1) @completed(2026-01-01)",
+			wantText: "Old @hey(h1) @completed(2026-01-01)",
+			newText:  "New",
+			want:     "- [x] New @hey(h1) @completed(2026-01-01)\n",
+		},
+		{
+			name:     "indentation preserved",
+			line:     "  - [ ] Old @hey(h1)",
+			wantText: "Old @hey(h1)",
+			newText:  "New name",
+			want:     "  - [ ] New name @hey(h1)\n",
+		},
+		{
+			name:     "no tags",
+			line:     "- [ ] Old title",
+			wantText: "Old title",
+			newText:  "New title",
+			want:     "- [ ] New title\n",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			p := writeFile(t, dir, "test.md", tt.line+"\n")
+			if err := SetText(context.Background(), p, 1, tt.wantText, tt.newText); err != nil {
+				t.Fatalf("SetText: %v", err)
+			}
+			if got := readFile(t, p); got != tt.want {
+				t.Errorf("got:\n%q\nwant:\n%q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestSetTextStaleWhenTextChanged(t *testing.T) {
+	dir := t.TempDir()
+	p := writeFile(t, dir, "test.md", "- [ ] Current text @hey(h1)\n")
+	err := SetText(context.Background(), p, 1, "Different text @hey(h1)", "New")
+	if !errors.Is(err, ErrStaleData) {
+		t.Fatalf("expected ErrStaleData, got: %v", err)
+	}
+	if got := readFile(t, p); got != "- [ ] Current text @hey(h1)\n" {
+		t.Errorf("file should be unchanged, got: %q", got)
+	}
+}
+
+func TestSetTagValueRewritesValue(t *testing.T) {
+	dir := t.TempDir()
+	p := writeFile(t, dir, "test.md", "- [ ] Task @hey(h1) @due(2026-01-01)\n")
+	if err := SetTagValue(context.Background(), p, 1, "hey", "h2"); err != nil {
+		t.Fatalf("SetTagValue: %v", err)
+	}
+	want := "- [ ] Task @hey(h2) @due(2026-01-01)\n"
+	if got := readFile(t, p); got != want {
+		t.Errorf("got:\n%q\nwant:\n%q", got, want)
+	}
+}
+
+func TestSetTagValueStaleWhenAbsent(t *testing.T) {
+	dir := t.TempDir()
+	p := writeFile(t, dir, "test.md", "- [ ] Task with no link\n")
+	err := SetTagValue(context.Background(), p, 1, "hey", "h2")
+	if !errors.Is(err, ErrStaleData) {
+		t.Fatalf("expected ErrStaleData, got: %v", err)
+	}
+}
+
+func TestSetTagValueAmbiguous(t *testing.T) {
+	dir := t.TempDir()
+	p := writeFile(t, dir, "test.md", "- [ ] Task @hey(h1) @hey(h9)\n")
+	err := SetTagValue(context.Background(), p, 1, "hey", "h2")
+	if !errors.Is(err, ErrAmbiguousTag) {
+		t.Fatalf("expected ErrAmbiguousTag, got: %v", err)
+	}
+	if got := readFile(t, p); got != "- [ ] Task @hey(h1) @hey(h9)\n" {
+		t.Errorf("file should be unchanged, got: %q", got)
+	}
+}
+
 func TestCompleteBasic(t *testing.T) {
 	dir := t.TempDir()
 	p := writeFile(t, dir, "test.md", "# Notes\n- [ ] Buy groceries\n- [ ] Clean house\n")
