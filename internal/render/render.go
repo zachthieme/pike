@@ -13,7 +13,7 @@ import (
 
 // FormatTask formats a single task for non-interactive output.
 func FormatTask(task model.Task, tagColors map[string]string, noColor bool) string {
-	text := task.Text
+	text := style.StripHeyTag(task.Text, task.Tags)
 	if !noColor && tagColors != nil {
 		text = style.ColorizeTags(text, task.Tags, tagColors, style.ANSIStyleFunc())
 	}

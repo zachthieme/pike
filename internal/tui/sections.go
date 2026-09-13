@@ -106,7 +106,7 @@ func (m Model) renderSection(title string, tasks []model.Task, color string, sec
 
 // formatTaskLine formats a single task line with colorized tags and styled links.
 func formatTaskLine(task model.Task, tagColors map[string]string, linkColor string, selected bool) string {
-	text := task.Text
+	text := style.StripHeyTag(task.Text, task.Tags)
 
 	if tagColors != nil {
 		text = style.ColorizeTags(text, task.Tags, tagColors, lipglossStyleFunc)

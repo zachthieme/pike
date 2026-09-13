@@ -190,6 +190,34 @@ func TestFormatTask(t *testing.T) {
 			want:      "- [ ] Plain task @today",
 		},
 		{
+			name: "hey link tag hidden with no doubled spaces",
+			task: model.Task{
+				Text:  "Ship release @hey(123456789) @risk",
+				State: model.Open,
+				File:  "work/tasks.md",
+				Line:  1,
+				Tags:        []model.Tag{{Name: "hey", Value: "123456789"}, {Name: "risk"}},
+				HasCheckbox: true,
+			},
+			tagColors: tagColors,
+			noColor:   true,
+			want:      "- [ ] Ship release @risk",
+		},
+		{
+			name: "hey link tag hidden but other tags still colorized",
+			task: model.Task{
+				Text:  "Ship release @hey(123456789) @risk",
+				State: model.Open,
+				File:  "work/tasks.md",
+				Line:  1,
+				Tags:        []model.Tag{{Name: "hey", Value: "123456789"}, {Name: "risk"}},
+				HasCheckbox: true,
+			},
+			tagColors: tagColors,
+			noColor:   false,
+			want:      fmt.Sprintf("- [ ] Ship release %s@risk%s", red, reset),
+		},
+		{
 			name: "plain bullet without checkbox",
 			task: model.Task{
 				Text:        "Review PR @risk",
@@ -419,6 +447,29 @@ func TestFormatJSON(t *testing.T) {
 	}
 	if len(parsed) != 4 {
 		t.Errorf("expected 4 JSON objects, got %d", len(parsed))
+	}
+}
+
+func TestFormatJSON_KeepsHeyTag(t *testing.T) {
+	tasks := []model.Task{
+		{
+			Text:        "Ship release @hey(123456789) @risk",
+			State:       model.Open,
+			File:        "work/tasks.md",
+			Line:        1,
+			Tags:        []model.Tag{{Name: "hey", Value: "123456789"}, {Name: "risk"}},
+			HasCheckbox: true,
+		},
+	}
+
+	var buf strings.Builder
+	if err := FormatJSON(&buf, tasks); err != nil {
+		t.Fatalf("FormatJSON() error: %v", err)
+	}
+	got := buf.String()
+
+	if !strings.Contains(got, `"@hey(123456789)"`) {
+		t.Errorf("FormatJSON() should keep @hey tag for scripting, output:\n%s", got)
 	}
 }
 

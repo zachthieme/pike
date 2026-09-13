@@ -179,7 +179,8 @@ func TestGoldenStyledANSI(t *testing.T) {
 		t.Run(baseName, func(t *testing.T) {
 			var lines []string
 			for _, task := range tasks {
-				text := style.ColorizeTags(task.Text, task.Tags, cfg.TagColors, sf)
+				text := style.StripHeyTag(task.Text, task.Tags)
+				text = style.ColorizeTags(text, task.Tags, cfg.TagColors, sf)
 				lines = append(lines, text)
 			}
 			actual := []byte(strings.Join(lines, "\n") + "\n")
@@ -199,7 +200,8 @@ func TestGoldenStyledPlain(t *testing.T) {
 		t.Run(baseName, func(t *testing.T) {
 			var lines []string
 			for _, task := range tasks {
-				text := style.ColorizeTags(task.Text, task.Tags, cfg.TagColors, sf)
+				text := style.StripHeyTag(task.Text, task.Tags)
+				text = style.ColorizeTags(text, task.Tags, cfg.TagColors, sf)
 				text = style.StripANSI(text)
 				lines = append(lines, text)
 			}

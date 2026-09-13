@@ -7,3 +7,4 @@
 - Research spike [38;2;243;139;168m@risk[0m
 - [ ] Hidden task [38;2;148;226;213m@hidden[0m
 - [ ] Multiple dates [38;2;243;139;168m@due([0m[38;2;243;139;168m2026-03-20[0m[38;2;243;139;168m)[0m with [38;2;243;139;168m@risk[0m
+- [ ] Linked to HEY [38;2;243;139;168m@risk[0m

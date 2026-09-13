@@ -25,6 +25,53 @@ func TestTagToken(t *testing.T) {
 	}
 }
 
+func TestStripHeyTag(t *testing.T) {
+	tests := []struct {
+		name string
+		text string
+		tags []model.Tag
+		want string
+	}{
+		{
+			name: "mid-line hey leaves no doubled space",
+			text: "Ship release @hey(123456789) @risk",
+			tags: []model.Tag{{Name: "hey", Value: "123456789"}, {Name: "risk"}},
+			want: "Ship release @risk",
+		},
+		{
+			name: "trailing hey trimmed",
+			text: "Ship release @hey(123456789)",
+			tags: []model.Tag{{Name: "hey", Value: "123456789"}},
+			want: "Ship release",
+		},
+		{
+			name: "leading hey trimmed",
+			text: "@hey(123456789) Ship release",
+			tags: []model.Tag{{Name: "hey", Value: "123456789"}},
+			want: "Ship release",
+		},
+		{
+			name: "no hey tag is unchanged",
+			text: "Ship release @risk",
+			tags: []model.Tag{{Name: "risk"}},
+			want: "Ship release @risk",
+		},
+		{
+			name: "hey substring in another tag is preserved",
+			text: "Talk to @heyfriend soon",
+			tags: []model.Tag{{Name: "heyfriend"}},
+			want: "Talk to @heyfriend soon",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := StripHeyTag(tt.text, tt.tags); got != tt.want {
+				t.Errorf("StripHeyTag() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestStripANSI(t *testing.T) {
 	tests := []struct {
 		name  string
