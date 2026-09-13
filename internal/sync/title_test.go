@@ -20,17 +20,21 @@ var errDeleteFailed = errors.New("hey delete failed")
 // assert what pike sent to HEY and in what sequence. A just-added Todo shows up
 // in the todo list, and Delete can be made to fail via deleteErr.
 type titleClient struct {
-	todos     []hey.Todo
-	calls     []string
-	week      time.Time
-	nextID    int
-	deleteErr error
+	todos       []hey.Todo
+	calls       []string
+	week        time.Time
+	nextID      int
+	deleteErr   error
+	lastAddDate time.Time // the date passed to the most recent Add, for reschedule assertions
 }
 
 func (c *titleClient) List(context.Context) ([]hey.Todo, error) { return c.todos, nil }
 
-func (c *titleClient) Add(_ context.Context, title string, _ *time.Time) (hey.Todo, error) {
+func (c *titleClient) Add(_ context.Context, title string, date *time.Time) (hey.Todo, error) {
 	c.calls = append(c.calls, "add:"+title)
+	if date != nil {
+		c.lastAddDate = *date
+	}
 	c.nextID++
 	td := hey.Todo{ID: "h_new" + strconv.Itoa(c.nextID), Title: title, WeekStart: c.week, Updated: c.week}
 	c.todos = append(c.todos, td)

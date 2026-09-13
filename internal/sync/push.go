@@ -83,13 +83,23 @@ func Push(ctx context.Context, opts Options) (*Report, []model.Warning, error) {
 	// Title reconciliation runs before completion so a Re-created Link (which
 	// moves to a fresh Todo id and is dropped from linkedTasks) is not also
 	// touched by the completion pass this Sync.
+	// Snapshot the Links before any reconciliation mutates them, so the Week pass
+	// can read each Link's recorded Title and Week as they stood at the last Sync.
+	origLinks := snapshotLinks(state)
+
 	titleDirty, titleWarnings := reconcileTitles(ctx, opts, linkedTasks, todos, state, rep)
 	warnings = append(warnings, titleWarnings...)
+
+	// Week reconciliation runs after titles (so a shared Re-create fires once) and
+	// before completion (so a Re-created Link, dropped from linkedTasks, is not
+	// also touched by the completion pass this Sync).
+	weekDirty, weekWarnings := reconcileWeeks(ctx, opts, linkedTasks, todos, origLinks, state, rep)
+	warnings = append(warnings, weekWarnings...)
 
 	completionDirty, completionWarnings := reconcileCompletions(ctx, opts, linkedTasks, todos, state, rep)
 	warnings = append(warnings, completionWarnings...)
 
-	if !opts.DryRun && (rep.Pushed > 0 || rep.Imported > 0 || titleDirty || completionDirty || orphanDirty) {
+	if !opts.DryRun && (rep.Pushed > 0 || rep.Imported > 0 || titleDirty || weekDirty || completionDirty || orphanDirty) {
 		if err := SaveState(opts.StatePath, state); err != nil {
 			warnings = append(warnings, model.Warning{Message: fmt.Sprintf("writing hey state: %v", err)})
 		}

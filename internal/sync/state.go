@@ -31,6 +31,17 @@ type State struct {
 	Links   map[string]Link `json:"links"`
 }
 
+// snapshotLinks returns a shallow copy of the state's Links map, capturing each
+// Link as it stands before reconciliation mutates the live state. Links are
+// value types, so copying the map is enough to freeze the recorded fields.
+func snapshotLinks(st *State) map[string]Link {
+	out := make(map[string]Link, len(st.Links))
+	for id, link := range st.Links {
+		out[id] = link
+	}
+	return out
+}
+
 // LoadState reads the sync state file. An absent file (or an empty path)
 // yields an empty State and no error; a present but unreadable or malformed
 // file is an error the caller reports as a Warning.

@@ -46,6 +46,13 @@ type Report struct {
 	// WouldRetitle and WouldRecreate are the dry-run equivalents.
 	WouldRetitle  int `json:"would_retitle"`
 	WouldRecreate int `json:"would_recreate"`
+	// Rescheduled is populated by a real (non-dry-run) Sync: the number of Links
+	// whose schedule was brought into agreement — either a Task's @due set to a
+	// Todo's changed Week's Saturday, or a Todo Re-created for a @due moved to a
+	// new Week in the notes.
+	Rescheduled int `json:"rescheduled"`
+	// WouldReschedule is the dry-run equivalent.
+	WouldReschedule int `json:"would_reschedule"`
 }
 
 // WriteText renders the Report as human-readable lines. A dry run reports what
@@ -53,13 +60,13 @@ type Report struct {
 func (r *Report) WriteText(w io.Writer) error {
 	if r.DryRun {
 		_, err := fmt.Fprintf(w,
-			"Sync (dry run — nothing written)\n  %d task(s) would push to HEY\n  %d todo(s) would import to the inbox\n  %d item(s) would complete\n  %d item(s) would uncomplete\n  %d task(s) would retitle\n  %d todo(s) would re-create\n  %d link(s) would unlink\n  %d orphan(s) would be reported\n  %d link(s) already exist\n",
-			r.WouldPush, r.WouldImport, r.WouldComplete, r.WouldUncomplete, r.WouldRetitle, r.WouldRecreate, r.WouldUnlink, r.WouldOrphan, r.ExistingLinks)
+			"Sync (dry run — nothing written)\n  %d task(s) would push to HEY\n  %d todo(s) would import to the inbox\n  %d item(s) would complete\n  %d item(s) would uncomplete\n  %d task(s) would retitle\n  %d todo(s) would re-create\n  %d item(s) would reschedule\n  %d link(s) would unlink\n  %d orphan(s) would be reported\n  %d link(s) already exist\n",
+			r.WouldPush, r.WouldImport, r.WouldComplete, r.WouldUncomplete, r.WouldRetitle, r.WouldRecreate, r.WouldReschedule, r.WouldUnlink, r.WouldOrphan, r.ExistingLinks)
 		return err
 	}
 	_, err := fmt.Fprintf(w,
-		"Sync\n  %d task(s) pushed to HEY\n  %d task(s) failed to push\n  %d todo(s) imported to the inbox\n  %d item(s) completed\n  %d item(s) uncompleted\n  %d task(s) retitled\n  %d todo(s) re-created\n  %d link(s) unlinked\n  %d orphan(s) reported\n  %d link(s) already exist\n",
-		r.Pushed, r.Failed, r.Imported, r.Completed, r.Uncompleted, r.Retitled, r.Recreated, r.Unlinked, r.Orphans, r.ExistingLinks)
+		"Sync\n  %d task(s) pushed to HEY\n  %d task(s) failed to push\n  %d todo(s) imported to the inbox\n  %d item(s) completed\n  %d item(s) uncompleted\n  %d task(s) retitled\n  %d todo(s) re-created\n  %d item(s) rescheduled\n  %d link(s) unlinked\n  %d orphan(s) reported\n  %d link(s) already exist\n",
+		r.Pushed, r.Failed, r.Imported, r.Completed, r.Uncompleted, r.Retitled, r.Recreated, r.Rescheduled, r.Unlinked, r.Orphans, r.ExistingLinks)
 	return err
 }
 

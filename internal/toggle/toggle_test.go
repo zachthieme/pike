@@ -162,6 +162,45 @@ func TestSetTagValueAmbiguous(t *testing.T) {
 	}
 }
 
+func TestSetDueReplacesExistingValue(t *testing.T) {
+	dir := t.TempDir()
+	p := writeFile(t, dir, "test.md", "- [ ] Task @hey(h1) @due(2026-01-01)\n")
+	date := time.Date(2026, 9, 19, 0, 0, 0, 0, time.UTC)
+	if err := SetDue(context.Background(), p, 1, date); err != nil {
+		t.Fatalf("SetDue: %v", err)
+	}
+	want := "- [ ] Task @hey(h1) @due(2026-09-19)\n"
+	if got := readFile(t, p); got != want {
+		t.Errorf("got:\n%q\nwant:\n%q", got, want)
+	}
+}
+
+func TestSetDueAppendsWhenAbsent(t *testing.T) {
+	dir := t.TempDir()
+	p := writeFile(t, dir, "test.md", "- [ ] Task @hey(h1)\n")
+	date := time.Date(2026, 9, 19, 0, 0, 0, 0, time.UTC)
+	if err := SetDue(context.Background(), p, 1, date); err != nil {
+		t.Fatalf("SetDue: %v", err)
+	}
+	want := "- [ ] Task @hey(h1) @due(2026-09-19)\n"
+	if got := readFile(t, p); got != want {
+		t.Errorf("got:\n%q\nwant:\n%q", got, want)
+	}
+}
+
+func TestSetDueAmbiguous(t *testing.T) {
+	dir := t.TempDir()
+	p := writeFile(t, dir, "test.md", "- [ ] Task @due(2026-01-01) @due(2026-02-02)\n")
+	date := time.Date(2026, 9, 19, 0, 0, 0, 0, time.UTC)
+	err := SetDue(context.Background(), p, 1, date)
+	if !errors.Is(err, ErrAmbiguousTag) {
+		t.Fatalf("expected ErrAmbiguousTag, got: %v", err)
+	}
+	if got := readFile(t, p); got != "- [ ] Task @due(2026-01-01) @due(2026-02-02)\n" {
+		t.Errorf("file should be unchanged, got: %q", got)
+	}
+}
+
 func TestCompleteBasic(t *testing.T) {
 	dir := t.TempDir()
 	p := writeFile(t, dir, "test.md", "# Notes\n- [ ] Buy groceries\n- [ ] Clean house\n")
