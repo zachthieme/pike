@@ -105,6 +105,7 @@
 **Added:**
 - [user] `--sync --dry-run` previews a HEY sync: with a `hey:` config block it reports how many eligible tasks would push, how many unlinked open todos would import, and how many links already exist — writing nothing (#4).
 - [user] `hey:` config block (`command`, `query`, `account`, `state_path`) enabling HEY sync; absent, all existing behaviour is unchanged (#4).
+- [user] `--sync` (without `--dry-run`) now performs a real HEY sync: it creates a Todo for every Eligible Task matching the Sync Query, appends an `@hey(id)` Link tag to the task's line, and records the link in the state file. Tasks with `@due` push on that date; the rest land in HEY's current week. The report counts tasks pushed and failures, per-task failures don't stop the run, and a second sync with no changes pushes nothing (#5).
 
 **Changed:**
 - [user] `--sync` conflicts with `--summary`, `--query`, `--scope`, and `--view`; `--dry-run` without `--sync` warns; `--sync --json` emits the report as JSON (#4).
