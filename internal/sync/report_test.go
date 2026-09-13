@@ -25,13 +25,13 @@ func TestReportWriteText_ShowsCountsAndDryRun(t *testing.T) {
 }
 
 func TestReportWriteText_RealRunShowsPushedAndFailures(t *testing.T) {
-	rep := &Report{Pushed: 2, Failed: 1, ExistingLinks: 4}
+	rep := &Report{Pushed: 2, Failed: 1, ExistingLinks: 4, Imported: 5}
 	var buf bytes.Buffer
 	if err := rep.WriteText(&buf); err != nil {
 		t.Fatalf("WriteText: %v", err)
 	}
 	out := strings.ToLower(buf.String())
-	for _, want := range []string{"2", "push", "1", "fail", "4", "link"} {
+	for _, want := range []string{"2", "push", "1", "fail", "4", "link", "5", "import"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("text report missing %q:\n%s", want, buf.String())
 		}

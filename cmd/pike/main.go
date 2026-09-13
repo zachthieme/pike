@@ -355,6 +355,7 @@ func runSync(ctx context.Context, stdout, stderr io.Writer, cfg *config.Config, 
 		Query:     cfg.Hey.Query,
 		StatePath: cfg.Hey.StatePath,
 		NotesDir:  cfg.NotesDir,
+		InboxFile: cfg.InboxFile,
 		Now:       now,
 		DryRun:    dryRun,
 	}

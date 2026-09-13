@@ -18,6 +18,9 @@ type Report struct {
 	// of Eligible Tasks turned into Todos, and the number whose push failed.
 	Pushed int `json:"pushed"`
 	Failed int `json:"failed"`
+	// Imported is populated by a real (non-dry-run) Sync: the number of unlinked
+	// open Todos appended to the Inbox as new Tasks.
+	Imported int `json:"imported"`
 }
 
 // WriteText renders the Report as human-readable lines. A dry run reports what
@@ -30,8 +33,8 @@ func (r *Report) WriteText(w io.Writer) error {
 		return err
 	}
 	_, err := fmt.Fprintf(w,
-		"Sync\n  %d task(s) pushed to HEY\n  %d task(s) failed to push\n  %d link(s) already exist\n",
-		r.Pushed, r.Failed, r.ExistingLinks)
+		"Sync\n  %d task(s) pushed to HEY\n  %d task(s) failed to push\n  %d todo(s) imported to the inbox\n  %d link(s) already exist\n",
+		r.Pushed, r.Failed, r.Imported, r.ExistingLinks)
 	return err
 }
 

@@ -20,6 +20,7 @@ type Options struct {
 	Query     string       // the Sync Query selecting Eligible Tasks to push
 	StatePath string       // path to the sync state file, may be empty or absent
 	NotesDir  string       // notes directory, joined with a Task's File to locate it
+	InboxFile string       // notes-relative Inbox file for imports; "" means inbox.md
 	Now       time.Time    // reference time for query evaluation
 	DryRun    bool         // when true, nothing is written on either side
 }

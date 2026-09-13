@@ -66,13 +66,9 @@ func Push(ctx context.Context, opts Options) (*Report, []model.Warning, error) {
 		}
 	}
 
-	for _, td := range todos {
-		if td.Completed == nil && !linkedIDs[td.ID] {
-			rep.WouldImport++
-		}
-	}
+	warnings = append(warnings, importTodos(ctx, opts, todos, linkedIDs, state, rep)...)
 
-	if !opts.DryRun && rep.Pushed > 0 {
+	if !opts.DryRun && (rep.Pushed > 0 || rep.Imported > 0) {
 		if err := SaveState(opts.StatePath, state); err != nil {
 			warnings = append(warnings, model.Warning{Message: fmt.Sprintf("writing hey state: %v", err)})
 		}
