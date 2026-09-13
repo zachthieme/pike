@@ -102,5 +102,17 @@
     "due": "2026-03-20",
     "has_checkbox": true,
     "indent": 0
+  },
+  {
+    "text": "Linked to HEY @hey(123456789) @risk",
+    "state": "open",
+    "file": "tags.md",
+    "line": 12,
+    "tags": [
+      "@hey(123456789)",
+      "@risk"
+    ],
+    "has_checkbox": true,
+    "indent": 0
   }
 ]

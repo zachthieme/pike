@@ -48,6 +48,33 @@ func TagToken(tag model.Tag) string {
 	return "@" + tag.Name
 }
 
+// heyTagName is the Link tag whose nine-digit HEY id is hidden from displayed
+// output. This is a fixed rule for the "hey" tag name, not a general
+// hidden-tags mechanism; see CONTEXT.md ("Link").
+const heyTagName = "hey"
+
+// StripHeyTag removes any @hey(id) Link tag token from text so the HEY id never
+// clutters the dashboard or --query text output. The tag remains in the parsed
+// Task's Tags and in --json output; this only affects displayed text. Adjacent
+// whitespace is collapsed so removing a mid-line tag leaves no doubled space.
+func StripHeyTag(text string, tags []model.Tag) string {
+	for _, tag := range tags {
+		if tag.Name != heyTagName {
+			continue
+		}
+		token := TagToken(tag)
+		switch {
+		case strings.Contains(text, " "+token):
+			text = strings.Replace(text, " "+token, "", 1)
+		case strings.Contains(text, token+" "):
+			text = strings.Replace(text, token+" ", "", 1)
+		default:
+			text = strings.Replace(text, token, "", 1)
+		}
+	}
+	return strings.TrimSpace(text)
+}
+
 // StripANSI removes all ANSI escape sequences from a string.
 func StripANSI(s string) string {
 	return ansiStripRe.ReplaceAllString(s, "")
