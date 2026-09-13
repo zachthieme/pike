@@ -80,10 +80,16 @@ func Push(ctx context.Context, opts Options) (*Report, []model.Warning, error) {
 
 	warnings = append(warnings, importTodos(ctx, opts, todos, linkedIDs, state, rep)...)
 
+	// Title reconciliation runs before completion so a Re-created Link (which
+	// moves to a fresh Todo id and is dropped from linkedTasks) is not also
+	// touched by the completion pass this Sync.
+	titleDirty, titleWarnings := reconcileTitles(ctx, opts, linkedTasks, todos, state, rep)
+	warnings = append(warnings, titleWarnings...)
+
 	completionDirty, completionWarnings := reconcileCompletions(ctx, opts, linkedTasks, todos, state, rep)
 	warnings = append(warnings, completionWarnings...)
 
-	if !opts.DryRun && (rep.Pushed > 0 || rep.Imported > 0 || completionDirty || orphanDirty) {
+	if !opts.DryRun && (rep.Pushed > 0 || rep.Imported > 0 || titleDirty || completionDirty || orphanDirty) {
 		if err := SaveState(opts.StatePath, state); err != nil {
 			warnings = append(warnings, model.Warning{Message: fmt.Sprintf("writing hey state: %v", err)})
 		}
