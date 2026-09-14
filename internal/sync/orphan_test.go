@@ -158,6 +158,10 @@ func TestOrphan_TwoHeyTagsAreSkippedWithWarning(t *testing.T) {
 	if rep.Unlinked != 0 {
 		t.Errorf("Unlinked = %d, want 0 — an ambiguous line must be skipped", rep.Unlinked)
 	}
+	// The skipped unlink write is a per-item failure and must be counted.
+	if rep.Failed != 1 {
+		t.Errorf("Failed = %d, want 1", rep.Failed)
+	}
 	if len(warnings) != 1 {
 		t.Fatalf("want exactly 1 Warning for the ambiguous line, got %d: %v", len(warnings), warnings)
 	}

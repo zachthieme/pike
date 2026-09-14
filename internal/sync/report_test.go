@@ -41,6 +41,23 @@ func TestReportWriteText_RealRunShowsPushedAndFailures(t *testing.T) {
 	}
 }
 
+func TestReportWriteText_FailedLabelIsGeneric(t *testing.T) {
+	// A failure count covers completion, unlink and reschedule write failures, not
+	// only pushes, so the label must be a generic "failed", never "failed to push".
+	rep := &Report{Failed: 3}
+	var buf bytes.Buffer
+	if err := rep.WriteText(&buf); err != nil {
+		t.Fatalf("WriteText: %v", err)
+	}
+	out := buf.String()
+	if !strings.Contains(out, "3 item(s) failed") {
+		t.Errorf("want a generic \"3 item(s) failed\" line:\n%s", out)
+	}
+	if strings.Contains(out, "failed to push") {
+		t.Errorf("failure label should not be push-specific:\n%s", out)
+	}
+}
+
 func TestReportWriteJSON_RoundTrips(t *testing.T) {
 	rep := &Report{DryRun: true, WouldPush: 2, WouldImport: 3, ExistingLinks: 4}
 	var buf bytes.Buffer

@@ -23,12 +23,13 @@ type addCall struct {
 // created Todos. It lets push tests assert what pike sent to HEY. A title listed
 // in addErr fails that one push without stopping the run.
 type recordingClient struct {
-	todos  []hey.Todo
-	listed int
-	added  []addCall
-	addErr map[string]error
-	week   time.Time
-	nextID int
+	todos     []hey.Todo
+	listed    int
+	added     []addCall
+	mutations []string // complete/uncomplete/delete verbs, in "verb:id" form
+	addErr    map[string]error
+	week      time.Time
+	nextID    int
 }
 
 func (c *recordingClient) List(context.Context) ([]hey.Todo, error) {
@@ -55,9 +56,18 @@ func (c *recordingClient) Add(_ context.Context, title string, date *time.Time) 
 	return todo, nil
 }
 
-func (c *recordingClient) Complete(context.Context, string) error   { return nil }
-func (c *recordingClient) Uncomplete(context.Context, string) error { return nil }
-func (c *recordingClient) Delete(context.Context, string) error     { return nil }
+func (c *recordingClient) Complete(_ context.Context, id string) error {
+	c.mutations = append(c.mutations, "complete:"+id)
+	return nil
+}
+func (c *recordingClient) Uncomplete(_ context.Context, id string) error {
+	c.mutations = append(c.mutations, "uncomplete:"+id)
+	return nil
+}
+func (c *recordingClient) Delete(_ context.Context, id string) error {
+	c.mutations = append(c.mutations, "delete:"+id)
+	return nil
+}
 
 // pushFixture writes a notes file and returns a Task pointing at its first line,
 // along with the notes dir and state path for a push.
@@ -124,8 +134,21 @@ func TestPush_CreatesTodoAppendsTagAndRecordsLink(t *testing.T) {
 	if !ok {
 		t.Fatalf("no link recorded for h_new1; state = %+v", st)
 	}
-	if link.Title != "Buy milk" || link.File != "notes.md" || link.Line != 1 {
-		t.Errorf("link = %+v, want Title=Buy milk File=notes.md Line=1", link)
+	// All six recorded fields are captured from the freshly-created Todo.
+	if link.Title != "Buy milk" {
+		t.Errorf("link.Title = %q, want %q", link.Title, "Buy milk")
+	}
+	if link.File != "notes.md" || link.Line != 1 {
+		t.Errorf("link.File/Line = %q/%d, want notes.md/1", link.File, link.Line)
+	}
+	if !link.WeekStart.Equal(now) {
+		t.Errorf("link.WeekStart = %v, want %v", link.WeekStart, now)
+	}
+	if link.Completed {
+		t.Errorf("link.Completed = true, want false for a fresh open Todo")
+	}
+	if !link.Updated.Equal(now) {
+		t.Errorf("link.Updated = %v, want %v", link.Updated, now)
 	}
 }
 
@@ -184,6 +207,7 @@ func TestPush_SecondRunPushesNothingAndWritesNothing(t *testing.T) {
 		t.Fatal(err)
 	}
 	addsBefore := len(client.added)
+	mutationsBefore := len(client.mutations)
 	listsBefore := client.listed
 
 	rep, warnings, err := Push(context.Background(), Options{
@@ -198,6 +222,10 @@ func TestPush_SecondRunPushesNothingAndWritesNothing(t *testing.T) {
 	}
 	if len(client.added) != addsBefore {
 		t.Errorf("second run made %d Add call(s); want none beyond list", len(client.added)-addsBefore)
+	}
+	// No complete, uncomplete, or delete either: a no-op Sync touches HEY only to list.
+	if got := client.mutations[mutationsBefore:]; len(got) != 0 {
+		t.Errorf("second run made mutating HEY calls beyond list: %v", got)
 	}
 	if client.listed != listsBefore+1 {
 		t.Errorf("second run made %d List calls, want exactly 1", client.listed-listsBefore)

@@ -261,6 +261,78 @@ func TestSyncWeek_HeyRenamedAndMovedWeek_RetitlesAndSetsDue(t *testing.T) {
 	}
 }
 
+func TestSyncWeek_HeyRenamedAndNotesMovedWeek_RecreateCarriesHeyTitle(t *testing.T) {
+	now := time.Now()
+	newDue := day(2026, 9, 23) // moved into W1 in the notes
+	dueStr := newDue.Format("2006-01-02")
+	// The notes still carry the old Title "Ship it" but moved @due into W1; HEY
+	// renamed the Todo to "Deploy it now" and left it in W0. The Title pass
+	// retitles the line to HEY's Title, then the Week pass Re-creates for the
+	// moved @due — and that Re-create must carry HEY's Title, not the pre-retitle
+	// one, or HEY, notes and state disagree and the next Sync churns.
+	task, notesDir, statePath := linkFixture(t,
+		"h1", weekLine("h1", newDue), weekLinkTask("h1", newDue),
+		&State{Links: map[string]Link{"h1": {Title: "Ship it", WeekStart: day(2026, 9, 13), File: "notes.md", Line: 1}}},
+	)
+	client := &titleClient{todos: []hey.Todo{
+		{ID: "h1", Title: "Deploy it now", WeekStart: day(2026, 9, 13), WeekEnd: day(2026, 9, 19)},
+	}, week: now}
+
+	rep, warnings, err := Push(context.Background(), Options{
+		Tasks: []model.Task{task}, Client: client, Query: "@today",
+		StatePath: statePath, NotesDir: notesDir, Now: now,
+	})
+	if err != nil || len(warnings) != 0 {
+		t.Fatalf("Push: err=%v warnings=%v", err, warnings)
+	}
+	if rep.Retitled != 1 || rep.Rescheduled != 1 {
+		t.Errorf("Retitled=%d Rescheduled=%d, want 1/1", rep.Retitled, rep.Rescheduled)
+	}
+	// One Re-create carrying HEY's Title and the new date, then a delete.
+	want := []string{"add:Deploy it now", "delete:h1"}
+	if len(client.calls) != 2 || client.calls[0] != want[0] || client.calls[1] != want[1] {
+		t.Errorf("calls=%v, want %v", client.calls, want)
+	}
+	if !client.lastAddDate.Equal(newDue) {
+		t.Errorf("Add date=%v, want %v", client.lastAddDate, newDue)
+	}
+	// The notes carry HEY's Title and point at the new Todo.
+	got, _ := os.ReadFile(filepath.Join(notesDir, "notes.md"))
+	wantLine := "- [ ] Deploy it now @hey(h_new1) @due(" + dueStr + ")\n"
+	if string(got) != wantLine {
+		t.Errorf("notes line\n got: %q\nwant: %q", string(got), wantLine)
+	}
+	// State holds HEY's Title under the new id; the old link is gone.
+	st, _ := LoadState(statePath)
+	if _, stillOld := st.Links["h1"]; stillOld {
+		t.Errorf("old link h1 should be gone; state=%+v", st.Links)
+	}
+	if st.Links["h_new1"].Title != "Deploy it now" {
+		t.Errorf("state Title=%q, want %q", st.Links["h_new1"].Title, "Deploy it now")
+	}
+
+	// A second Sync, re-scanning the retitled+relinked line against a HEY list
+	// that now agrees, must make no HEY calls beyond the list.
+	relinked := model.TaskWith(model.Task{
+		Text: "Deploy it now @hey(h_new1) @due(" + dueStr + ")", Raw: wantLine[:len(wantLine)-1],
+		State: model.Open, HasCheckbox: true, Due: &newDue,
+		Tags: []model.Tag{{Name: "hey", Value: "h_new1"}, {Name: "due", Value: dueStr}},
+		File: "notes.md", Line: 1,
+	})
+	client2 := &titleClient{todos: []hey.Todo{
+		{ID: "h_new1", Title: "Deploy it now", WeekStart: day(2026, 9, 20), WeekEnd: day(2026, 9, 26)},
+	}, week: now}
+	if _, w2, err := Push(context.Background(), Options{
+		Tasks: []model.Task{relinked}, Client: client2, Query: "@today",
+		StatePath: statePath, NotesDir: notesDir, Now: now,
+	}); err != nil || len(w2) != 0 {
+		t.Fatalf("second Push: err=%v warnings=%v", err, w2)
+	}
+	if len(client2.calls) != 0 {
+		t.Errorf("second Sync made HEY calls beyond list: %v", client2.calls)
+	}
+}
+
 func TestSyncWeek_TaskWithoutDue_WeekIgnored(t *testing.T) {
 	now := time.Now()
 	task, notesDir, statePath := linkFixture(t,

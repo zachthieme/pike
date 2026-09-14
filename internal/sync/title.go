@@ -39,7 +39,8 @@ const (
 // both sides changed — and is propagated to HEY by Re-creating the Todo; a
 // HEY-only change is propagated to the notes by Retitling the Task. Without a
 // base (a missing or unreadable state file, or a Link the snapshot never
-// recorded) neither side's change can be identified, so nothing is done.
+// recorded) neither side's change can be identified, so the notes win on text
+// and the Todo is Re-created.
 func resolveTitle(notesTitle, heyTitle, baseTitle string, hasBase, todoCompleted bool) titleAction {
 	if todoCompleted {
 		return titleNone
@@ -48,7 +49,10 @@ func resolveTitle(notesTitle, heyTitle, baseTitle string, hasBase, todoCompleted
 		return titleNone
 	}
 	if !hasBase {
-		return titleNone
+		// No snapshot (missing or unreadable state, or a Link never recorded):
+		// neither side's change can be identified, so the notes win on text and
+		// the Todo is Re-created to carry the notes' Title.
+		return titleRecreate
 	}
 	if notesTitle != baseTitle {
 		return titleRecreate
