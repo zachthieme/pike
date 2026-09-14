@@ -146,15 +146,17 @@ func reconcileWeeks(ctx context.Context, opts Options, linkedTasks map[string]*m
 				rep.WouldReschedule++
 				continue
 			}
-			w, changed := applyRecreate(ctx, opts, id, t, notesTitle, state, linkedTasks)
+			w, changed, changedState := applyRecreate(ctx, opts, id, t, notesTitle, state, linkedTasks)
 			if w != nil {
 				warnings = append(warnings, *w)
 			}
 			if changed {
 				rep.Rescheduled++
-				dirty = true
 			} else {
 				rep.Failed++
+			}
+			if changedState {
+				dirty = true
 			}
 		}
 	}

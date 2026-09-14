@@ -53,7 +53,19 @@ func (c *titleClient) Uncomplete(_ context.Context, id string) error {
 
 func (c *titleClient) Delete(_ context.Context, id string) error {
 	c.calls = append(c.calls, "delete:"+id)
-	return c.deleteErr
+	if c.deleteErr != nil {
+		return c.deleteErr
+	}
+	// A deleted Todo leaves HEY's list, as it would for real, so a later List no
+	// longer returns it — the difference between a Todo pike rolled back cleanly
+	// and one it left behind for the next Sync to retry.
+	for i, td := range c.todos {
+		if td.ID == id {
+			c.todos = append(c.todos[:i], c.todos[i+1:]...)
+			break
+		}
+	}
+	return nil
 }
 
 func TestResolveTitle_DecisionMatrix(t *testing.T) {
