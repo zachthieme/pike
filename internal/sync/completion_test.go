@@ -18,10 +18,12 @@ type verbCall struct {
 }
 
 // completionClient records every mutating verb and hands back a fixed todo
-// list, so completion-sync tests can assert what pike sent to HEY.
+// list, so completion-sync tests can assert what pike sent to HEY. completeErr,
+// when set, makes the Complete verb fail so a write failure can be exercised.
 type completionClient struct {
-	todos []hey.Todo
-	calls []verbCall
+	todos       []hey.Todo
+	calls       []verbCall
+	completeErr error
 }
 
 func (c *completionClient) List(context.Context) ([]hey.Todo, error) { return c.todos, nil }
@@ -30,7 +32,7 @@ func (c *completionClient) Add(_ context.Context, title string, _ *time.Time) (h
 }
 func (c *completionClient) Complete(_ context.Context, id string) error {
 	c.calls = append(c.calls, verbCall{"complete", id})
-	return nil
+	return c.completeErr
 }
 func (c *completionClient) Uncomplete(_ context.Context, id string) error {
 	c.calls = append(c.calls, verbCall{"uncomplete", id})
@@ -277,6 +279,40 @@ func TestSyncCompletion_NoStateFile_CompletedWinsAndStateRebuilt(t *testing.T) {
 	}
 	if !st.Links["h1"].Completed {
 		t.Errorf("state should be rebuilt with h1 completed; state=%+v", st.Links)
+	}
+}
+
+func TestSyncCompletion_HeySideWriteFails_CountedAndWarned(t *testing.T) {
+	now := time.Now()
+	completed := now
+	// The Task was completed since the last Sync, so the Todo would be completed
+	// in HEY — but the HEY write fails. The failure is counted, not applied.
+	task, notesDir, statePath := linkFixture(t,
+		"h1", "- [x] Ship it @hey(h1) @completed(2026-09-12)",
+		model.Task{Text: "Ship it @hey(h1) @completed(2026-09-12)", State: model.Completed, HasCheckbox: true,
+			Completed: &completed, Tags: []model.Tag{{Name: "hey", Value: "h1"}, {Name: "completed", Value: "2026-09-12"}}},
+		&State{Links: map[string]Link{"h1": {Title: "Ship it", Completed: false, File: "notes.md", Line: 1}}},
+	)
+	client := &completionClient{
+		todos:       []hey.Todo{{ID: "h1", Title: "Ship it", WeekStart: now, WeekEnd: now}},
+		completeErr: context.DeadlineExceeded,
+	}
+
+	rep, warnings, err := Push(context.Background(), Options{
+		Tasks: []model.Task{task}, Client: client, Query: "@today",
+		StatePath: statePath, NotesDir: notesDir, Now: now,
+	})
+	if err != nil {
+		t.Fatalf("Push: %v", err)
+	}
+	if rep.Failed != 1 {
+		t.Errorf("Failed=%d, want 1", rep.Failed)
+	}
+	if rep.Completed != 0 {
+		t.Errorf("Completed=%d, want 0 — the write failed", rep.Completed)
+	}
+	if len(warnings) != 1 {
+		t.Fatalf("want 1 Warning for the failed write, got %d: %v", len(warnings), warnings)
 	}
 }
 

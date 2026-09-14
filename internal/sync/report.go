@@ -14,8 +14,10 @@ type Report struct {
 	WouldPush     int  `json:"would_push"`
 	WouldImport   int  `json:"would_import"`
 	ExistingLinks int  `json:"existing_links"`
-	// Pushed and Failed are populated by a real (non-dry-run) Sync: the number
-	// of Eligible Tasks turned into Todos, and the number whose push failed.
+	// Pushed is populated by a real (non-dry-run) Sync: the number of Eligible
+	// Tasks turned into Todos. Failed is the number of per-item write failures
+	// across every reconciliation pass — a failed push, completion, reschedule,
+	// retitle, re-create, or unlink — each counted once.
 	Pushed int `json:"pushed"`
 	Failed int `json:"failed"`
 	// Imported is populated by a real (non-dry-run) Sync: the number of unlinked
@@ -65,7 +67,7 @@ func (r *Report) WriteText(w io.Writer) error {
 		return err
 	}
 	_, err := fmt.Fprintf(w,
-		"Sync\n  %d task(s) pushed to HEY\n  %d task(s) failed to push\n  %d todo(s) imported to the inbox\n  %d item(s) completed\n  %d item(s) uncompleted\n  %d task(s) retitled\n  %d todo(s) re-created\n  %d item(s) rescheduled\n  %d link(s) unlinked\n  %d orphan(s) reported\n  %d link(s) already exist\n",
+		"Sync\n  %d task(s) pushed to HEY\n  %d item(s) failed\n  %d todo(s) imported to the inbox\n  %d item(s) completed\n  %d item(s) uncompleted\n  %d task(s) retitled\n  %d todo(s) re-created\n  %d item(s) rescheduled\n  %d link(s) unlinked\n  %d orphan(s) reported\n  %d link(s) already exist\n",
 		r.Pushed, r.Failed, r.Imported, r.Completed, r.Uncompleted, r.Retitled, r.Recreated, r.Rescheduled, r.Unlinked, r.Orphans, r.ExistingLinks)
 	return err
 }
