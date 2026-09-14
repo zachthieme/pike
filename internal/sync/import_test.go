@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -110,6 +111,76 @@ func weekTodo(id, title string, weekEnd time.Time) hey.Todo {
 		WeekStart: weekEnd.AddDate(0, 0, -6),
 		WeekEnd:   weekEnd,
 		Updated:   weekEnd,
+	}
+}
+
+func TestImport_TitleWithAtSigns_RoundTripsWithoutRecreate(t *testing.T) {
+	// A HEY Title carrying @ tokens must be imported so the new line parses with
+	// no tags other than the @due and @hey pike appends, and the Title pike then
+	// computes from that line equals the HEY Title — so the next Sync sees no
+	// Title change and never Re-creates the Todo.
+	tests := []struct {
+		name  string
+		title string
+	}{
+		{"address and tag-like word", "Email bob@example.com re @rent"},
+		{"embedded due token", "Pay rent @due(2026-01-01)"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			now := time.Now()
+			notesDir := t.TempDir()
+			statePath := filepath.Join(notesDir, "hey-state.json")
+			weekEnd := time.Date(2026, 9, 19, 0, 0, 0, 0, time.UTC)
+			client := &recordingClient{week: now, todos: []hey.Todo{weekTodo("h1", tt.title, weekEnd)}}
+			opts := Options{Client: client, Query: "@due or @today", StatePath: statePath, NotesDir: notesDir, Now: now}
+
+			if _, _, err := Push(context.Background(), opts); err != nil {
+				t.Fatalf("first Push: %v", err)
+			}
+
+			raw, err := os.ReadFile(filepath.Join(notesDir, "inbox.md"))
+			if err != nil {
+				t.Fatalf("reading inbox: %v", err)
+			}
+			line := strings.TrimSuffix(string(raw), "\n")
+			task, _ := parser.ParseLine(line, "inbox.md", 1)
+			if task == nil {
+				t.Fatalf("imported line did not parse: %q", line)
+			}
+
+			// The only tags on the imported line are the ones pike appended.
+			var names []string
+			for _, tag := range task.Tags {
+				names = append(names, tag.Name)
+			}
+			if len(names) != 2 || names[0] != "due" || names[1] != "hey" {
+				t.Errorf("imported line has tags %v, want only [due hey]; line=%q", names, line)
+			}
+
+			// The Title pike computes from the line equals the HEY Title.
+			if got := titleOf(task.Text); got != tt.title {
+				t.Errorf("titleOf(imported line) = %q, want HEY title %q", got, tt.title)
+			}
+
+			// A second Sync sees no Title change: no add and no delete.
+			addsBefore := len(client.added)
+			mutationsBefore := len(client.mutations)
+			opts.Tasks = []model.Task{*task}
+			rep, warnings, err := Push(context.Background(), opts)
+			if err != nil || len(warnings) != 0 {
+				t.Fatalf("second Push: err=%v warnings=%v", err, warnings)
+			}
+			if rep.Recreated != 0 || rep.Retitled != 0 {
+				t.Errorf("second Sync Recreated=%d Retitled=%d, want 0/0", rep.Recreated, rep.Retitled)
+			}
+			if len(client.added) != addsBefore {
+				t.Errorf("second Sync made %d Add call(s), want 0", len(client.added)-addsBefore)
+			}
+			if got := client.mutations[mutationsBefore:]; len(got) != 0 {
+				t.Errorf("second Sync made HEY mutations, want none: %v", got)
+			}
+		})
 	}
 }
 

@@ -7,6 +7,8 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
+	"regexp"
+	"strings"
 
 	"github.com/zachthieme/pike/internal/hey"
 	"github.com/zachthieme/pike/internal/model"
@@ -64,11 +66,47 @@ func importTodo(ctx context.Context, opts Options, td hey.Todo, state *State, re
 }
 
 // importText is the Inbox line body for a Todo, without the "- [ ] " checkbox
-// prefix the append path adds: the Title, an @due tag on the Week's Saturday,
-// and an @hey Link tag. The date is HEY's WeekEnd taken verbatim, no zone
-// conversion.
+// prefix the append path adds: the encoded Title, an @due tag on the Week's
+// Saturday, and an @hey Link tag. The date is HEY's WeekEnd taken verbatim, no
+// zone conversion. The Title is run through encodeTitle so a HEY Title
+// containing "@" text (an email address, a "@rent", an "@due(...)") does not
+// plant a stray tag on the line and trigger a spurious Re-create next Sync.
 func importText(td hey.Todo) string {
-	return fmt.Sprintf("%s @due(%s) @hey(%s)", td.Title, td.WeekEnd.Format("2006-01-02"), td.ID)
+	return fmt.Sprintf("%s @due(%s) @hey(%s)", encodeTitle(td.Title), td.WeekEnd.Format("2006-01-02"), td.ID)
+}
+
+// heyTagBreak is a zero-width space (U+200B) pike inserts between an "@" and the
+// word character that follows it when importing a HEY Title, so the parser reads
+// no tag there. ParseLine's tag grammar is an "@" immediately followed by a word
+// character; a zero-width space breaks that adjacency without changing how the
+// Title reads, and is not itself whitespace to strings.Fields. titleOf strips it
+// back out, so the Title pike computes from the imported line equals the HEY
+// Title verbatim and the next Sync sees no Title change. This encoding is chosen
+// so ParseLine's grammar is left untouched.
+const heyTagBreak = "\u200b"
+
+// atTagStartRe matches an "@" that would begin a tag: one immediately followed
+// by a word character. encodeTitle breaks exactly these, so an imported Title
+// like "Email bob@example.com re @rent" parses with no @example or @rent tag,
+// and a Title carrying "@due(...)" does not give the line a second @due tag.
+var atTagStartRe = regexp.MustCompile(`@(\w)`)
+
+// encodeTitle renders a HEY Title safe to write on a Task line: every "@" that
+// would otherwise start a tag is broken with a zero-width space so the parser
+// reads no tag from the Title itself. decodeTitle (applied by titleOf) is the
+// inverse, so the round trip is lossless.
+func encodeTitle(title string) string {
+	return atTagStartRe.ReplaceAllString(title, "@"+heyTagBreak+"$1")
+}
+
+// decodeTitle removes the zero-width tag breaks encodeTitle inserts, recovering
+// the original Title. Any Title never touched by encodeTitle — every
+// human-written Task — carries no such break, so decoding it is the identity.
+func decodeTitle(s string) string {
+	if !strings.Contains(s, heyTagBreak) {
+		return s
+	}
+	return strings.ReplaceAll(s, heyTagBreak, "")
 }
 
 // inboxFile resolves the Inbox file, defaulting to inbox.md when unconfigured.

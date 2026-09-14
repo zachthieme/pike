@@ -161,9 +161,12 @@ func refreshScannedLine(t *model.Task, path string) {
 	}
 }
 
-// titleOf derives a Todo Title from a Task's text: every @tag removed and
-// surrounding whitespace collapsed to single spaces.
+// titleOf derives a Todo Title from a Task's text: every @tag removed, any
+// zero-width tag breaks an import inserted into the Title decoded away, and
+// surrounding whitespace collapsed to single spaces. Decoding makes the Title
+// pike computes from an imported line equal the HEY Title verbatim; a Task never
+// touched by import carries no breaks, so decoding is the identity there.
 func titleOf(text string) string {
 	stripped := tagRe.ReplaceAllString(text, "")
-	return strings.Join(strings.Fields(stripped), " ")
+	return strings.Join(strings.Fields(decodeTitle(stripped)), " ")
 }
