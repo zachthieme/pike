@@ -507,6 +507,36 @@ func TestAppendTask(t *testing.T) {
 		}
 	})
 
+	t.Run("appends a CRLF line to a CRLF file", func(t *testing.T) {
+		dir := t.TempDir()
+		path := filepath.Join(dir, "tasks.md")
+		os.WriteFile(path, []byte("# Notes\r\n- [ ] existing task\r\n"), 0o644) //nolint:errcheck // test setup
+
+		if err := AppendTask(context.Background(), path, "buy milk @today"); err != nil {
+			t.Fatalf("AppendTask error: %v", err)
+		}
+
+		want := "# Notes\r\n- [ ] existing task\r\n- [ ] buy milk @today\r\n"
+		if got := readFile(t, path); got != want {
+			t.Errorf("file content\n got: %q\nwant: %q", got, want)
+		}
+	})
+
+	t.Run("appends an LF line to an LF file", func(t *testing.T) {
+		dir := t.TempDir()
+		path := filepath.Join(dir, "tasks.md")
+		os.WriteFile(path, []byte("- [ ] existing task\n"), 0o644) //nolint:errcheck // test setup
+
+		if err := AppendTask(context.Background(), path, "buy milk @today"); err != nil {
+			t.Fatalf("AppendTask error: %v", err)
+		}
+
+		want := "- [ ] existing task\n- [ ] buy milk @today\n"
+		if got := readFile(t, path); got != want {
+			t.Errorf("file content\n got: %q\nwant: %q", got, want)
+		}
+	})
+
 	t.Run("empty text returns error", func(t *testing.T) {
 		dir := t.TempDir()
 		path := filepath.Join(dir, "tasks.md")
@@ -613,6 +643,92 @@ func TestLineVerifyingMutations_ByteForByteGuard(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+// TestLineVerifyingMutations_CRLF runs every Sync mutation against a file whose
+// lines end in CRLF. The scanned line the caller passes has no trailing \r (the
+// scanner's bufio.Scanner drops it), so the write must both match the line by its
+// content and preserve the \r\n ending, changing only that line's content.
+func TestLineVerifyingMutations_CRLF(t *testing.T) {
+	ctx := context.Background()
+	muts := []struct {
+		name    string
+		scanned string                                          // the full line as scanned (no \r)
+		run     func(p string, line int, wantLine string) error // invoke the mutation
+		success string                                          // that line's content after a write (no \r)
+	}{
+		{
+			name:    "AppendTag",
+			scanned: "- [ ] Buy milk @today",
+			run:     func(p string, line int, w string) error { return AppendTag(ctx, p, line, w, "@hey(h1)") },
+			success: "- [ ] Buy milk @today @hey(h1)",
+		},
+		{
+			name:    "RemoveTag",
+			scanned: "- [ ] Buy milk @hey(h1)",
+			run:     func(p string, line int, w string) error { return RemoveTag(ctx, p, line, w, "hey") },
+			success: "- [ ] Buy milk",
+		},
+		{
+			name:    "SetTagValue",
+			scanned: "- [ ] Buy milk @hey(h1)",
+			run:     func(p string, line int, w string) error { return SetTagValue(ctx, p, line, w, "hey", "h2") },
+			success: "- [ ] Buy milk @hey(h2)",
+		},
+		{
+			name:    "SetText",
+			scanned: "- [ ] Old title @hey(h1)",
+			run:     func(p string, line int, w string) error { return SetText(ctx, p, line, w, "New title") },
+			success: "- [ ] New title @hey(h1)",
+		},
+		{
+			name:    "SetDue",
+			scanned: "- [ ] Buy milk @hey(h1)",
+			run:     func(p string, line int, w string) error { return SetDue(ctx, p, line, w, dueDate) },
+			success: "- [ ] Buy milk @hey(h1) @due(2026-09-01)",
+		},
+		{
+			name:    "CompleteLine",
+			scanned: "- [ ] Buy milk @hey(h1)",
+			run:     func(p string, line int, w string) error { return CompleteLine(ctx, p, line, w, dueDate) },
+			success: "- [x] Buy milk @hey(h1) @completed(2026-09-01)",
+		},
+		{
+			name:    "UncompleteLine",
+			scanned: "- [x] Buy milk @hey(h1) @completed(2026-01-01)",
+			run:     func(p string, line int, w string) error { return UncompleteLine(ctx, p, line, w) },
+			success: "- [ ] Buy milk @hey(h1)",
+		},
+	}
+
+	for _, mt := range muts {
+		t.Run(mt.name+"/unchanged CRLF line is written, \\r\\n preserved", func(t *testing.T) {
+			dir := t.TempDir()
+			// A three-line CRLF file so a neighbour's ending is checked too.
+			file := "# Notes\r\n" + mt.scanned + "\r\n- [ ] Another\r\n"
+			p := writeFile(t, dir, "test.md", file)
+			if err := mt.run(p, 2, mt.scanned); err != nil {
+				t.Fatalf("%s on unchanged CRLF line: %v", mt.name, err)
+			}
+			want := "# Notes\r\n" + mt.success + "\r\n- [ ] Another\r\n"
+			if got := readFile(t, p); got != want {
+				t.Errorf("got:\n%q\nwant:\n%q", got, want)
+			}
+		})
+
+		t.Run(mt.name+"/stale CRLF line refused when it really changed", func(t *testing.T) {
+			dir := t.TempDir()
+			file := "# Notes\r\n- [ ] Something entirely different @hey(h9)\r\n- [ ] Another\r\n"
+			p := writeFile(t, dir, "test.md", file)
+			err := mt.run(p, 2, mt.scanned)
+			if !errors.Is(err, ErrStaleData) {
+				t.Fatalf("%s: expected ErrStaleData, got: %v", mt.name, err)
+			}
+			if got := readFile(t, p); got != file {
+				t.Errorf("stale CRLF line must be left byte-for-byte unchanged\n got: %q\nwant: %q", got, file)
+			}
+		})
 	}
 }
 
