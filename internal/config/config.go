@@ -355,14 +355,22 @@ func applyDefaults(raw *rawConfig) (*Config, error) {
 	// Hey: only populated when a hey: block is present, so its absence leaves
 	// all existing behaviour untouched. A present-but-null value (every child
 	// commented out) enables the feature with defaults, the same as `hey: {}`.
-	if raw.Hey.Kind != 0 {
+	// Any other value (boolean, string, number, sequence) is a mistake — most
+	// dangerously `hey: false`, which a user would reasonably expect to switch
+	// sync off — so reject it rather than silently enabling defaults.
+	switch {
+	case raw.Hey.Kind == 0:
+		// absent: sync stays disabled.
+	case raw.Hey.Kind == yaml.MappingNode:
 		var rh rawHey
-		if raw.Hey.Kind == yaml.MappingNode {
-			if err := raw.Hey.Decode(&rh); err != nil {
-				return nil, err
-			}
+		if err := raw.Hey.Decode(&rh); err != nil {
+			return nil, err
 		}
 		cfg.Hey = applyHeyDefaults(&rh)
+	case raw.Hey.Kind == yaml.ScalarNode && raw.Hey.Tag == "!!null":
+		cfg.Hey = applyHeyDefaults(&rawHey{})
+	default:
+		return nil, fmt.Errorf("hey: must be a mapping (or removed to disable sync), got %q", raw.Hey.Value)
 	}
 
 	keybindings, customBindings, err := parseKeybindings(raw.Keybindings)

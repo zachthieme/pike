@@ -12,7 +12,15 @@ set -euo pipefail
 echo "warning: no keyring backend available; storing credentials in plaintext" >&2
 
 if [ -n "${PIKE_STUB_AUTH:-}" ]; then
-  echo '{"ok":false,"error":"not authenticated; run `hey login`","code":"auth","hint":"run: hey login"}' >&2
+  # hey-cli 1.4.1 pretty-prints its error envelope across several lines.
+  cat >&2 <<'JSON'
+{
+  "ok": false,
+  "error": "not authenticated; run `hey login`",
+  "code": "auth",
+  "hint": "run: hey login"
+}
+JSON
   exit 3
 fi
 

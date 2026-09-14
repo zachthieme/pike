@@ -829,6 +829,29 @@ func TestLoadBytes_HeyNull(t *testing.T) {
 	}
 }
 
+func TestLoadBytes_HeyNonMappingRejected(t *testing.T) {
+	// Any non-mapping, non-null hey: value is a config error. Silently enabling
+	// defaults would let `hey: false` (a user trying to switch sync off) turn
+	// sync on instead.
+	cases := map[string]string{
+		"boolean":  "hey: false\n",
+		"string":   "hey: \"x\"\n",
+		"number":   "hey: 3\n",
+		"sequence": "hey: [1]\n",
+	}
+	for name, yamlDoc := range cases {
+		t.Run(name, func(t *testing.T) {
+			_, err := LoadBytes([]byte(yamlDoc))
+			if err == nil {
+				t.Fatalf("expected an error for %s hey: value", name)
+			}
+			if !strings.Contains(err.Error(), "hey") {
+				t.Errorf("error should name the hey: block, got: %v", err)
+			}
+		})
+	}
+}
+
 func TestLoadBytes_HeyStatePathXDG(t *testing.T) {
 	t.Setenv("XDG_DATA_HOME", "/tmp/xdgdata")
 	cfg, err := LoadBytes([]byte("hey: {}\n"))

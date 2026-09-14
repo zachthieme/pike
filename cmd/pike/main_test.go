@@ -837,7 +837,9 @@ func TestSyncUnauthenticatedExitsNonZero(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected a non-zero exit when HEY reports an auth error")
 	}
-	if !strings.Contains(err.Error(), "not authenticated") {
+	// Assert HEY's own fixture message survives the pretty-printed envelope,
+	// not just pike's ErrUnauthenticated wording.
+	if !strings.Contains(err.Error(), "not authenticated; run `hey login`") {
 		t.Errorf("error should carry HEY's message, got: %v", err)
 	}
 }
