@@ -97,6 +97,17 @@
 
 - `--scope <file>` flag: filter open tasks to those referencing the given file (by wiki-link, filename, or display name). Composes with `--query`, `--view`, `--json`, `--count`, and `--sort`.
 
+### Collected changes — September 14, 2026
+
+**Bug fixes:**
+- [user] `--sync` now verifies every note line it writes still holds exactly the task that was scanned, and writes nothing otherwise. A line completed, retitled, rescheduled, replaced by another task, or shifted by an edit between the scan and the write is skipped with a warning naming the file, line, and HEY id, and counted as a failure — so Sync no longer completes the wrong task or overwrites another task's `@hey` link when the notes are open in an editor or another Sync (#13).
+- [user] Sync's `@due` and `@hey` tag rewrites now respect tag boundaries: `@duedate` is never mistaken for `@due`, and `@heybot` alongside `@hey(1)` reads as a single link (#13).
+- [user] The dashboard's sync key (`S`) now scans the notes before reconciling, so a link written by a cron `pike --sync` since the last refresh is seen and the task is not pushed to HEY again (#13).
+
+**Fixed:**
+- [user] `pike --sync` now works against the real `hey` CLI (hey-cli 1.4.1): the adapter parses hey's actual todo shape (numeric `id`, `starts_at`/`ends_at` week boundaries, `completed_at`), where before every sync failed immediately on the numeric id. Authentication failures (`code: auth` or exit status 3) now surface HEY's own message and hint and exit non-zero, and the default state file's parent directory (`~/.local/share/pike`) is created on a fresh machine (#14).
+- [user] A `hey:` config key with all its children commented out (loading as YAML null) now enables HEY sync with defaults, the same as `hey: {}` (#14).
+
 ### Collected changes — September 13, 2026
 
 **Features:**
