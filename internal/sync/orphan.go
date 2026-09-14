@@ -42,8 +42,9 @@ func reconcileOrphans(ctx context.Context, opts Options, linkedTasks map[string]
 			continue
 		}
 		path := filepath.Join(opts.NotesDir, t.File)
-		if err := toggle.RemoveTag(ctx, path, t.Line, "hey"); err != nil {
+		if err := toggle.RemoveTag(ctx, path, t.Line, t.Raw, "hey"); err != nil {
 			warnings = append(warnings, unlinkWarning(t, id, err))
+			rep.Failed++
 			continue
 		}
 		delete(state.Links, id)

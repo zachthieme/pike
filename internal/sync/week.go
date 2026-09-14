@@ -121,6 +121,7 @@ func reconcileWeeks(ctx context.Context, opts Options, linkedTasks map[string]*m
 			}
 			if w := applySetDue(ctx, opts, id, t, td, state); w != nil {
 				warnings = append(warnings, *w)
+				rep.Failed++
 				continue
 			}
 			rep.Rescheduled++
@@ -137,6 +138,8 @@ func reconcileWeeks(ctx context.Context, opts Options, linkedTasks map[string]*m
 			if changed {
 				rep.Rescheduled++
 				dirty = true
+			} else {
+				rep.Failed++
 			}
 		}
 	}
@@ -148,13 +151,16 @@ func reconcileWeeks(ctx context.Context, opts Options, linkedTasks map[string]*m
 // fails; the rest of the line is left untouched.
 func applySetDue(ctx context.Context, opts Options, id string, t *model.Task, td hey.Todo, state *State) *model.Warning {
 	path := filepath.Join(opts.NotesDir, t.File)
-	if err := toggle.SetDue(ctx, path, t.Line, td.WeekEnd); err != nil {
-		msg := fmt.Sprintf("rescheduling task %s:%d: %v", t.File, t.Line, err)
+	if err := toggle.SetDue(ctx, path, t.Line, t.Raw, td.WeekEnd); err != nil {
+		msg := fmt.Sprintf("rescheduling task %s:%d (hey %s): %v", t.File, t.Line, id, err)
 		if errors.Is(err, toggle.ErrStaleData) {
-			msg = fmt.Sprintf("rescheduling task %s:%d: line changed since scan; skipped", t.File, t.Line)
+			msg = fmt.Sprintf("rescheduling task %s:%d (hey %s): line changed since scan; skipped", t.File, t.Line, id)
 		}
 		return &model.Warning{File: t.File, Line: t.Line, Message: msg}
 	}
+	// Keep t.Raw abreast of the write so a completion later this Sync verifies
+	// against the rescheduled line, not the line as first scanned.
+	refreshScannedLine(t, path)
 	link := state.Links[id]
 	link.WeekStart = td.WeekStart
 	link.Updated = td.Updated

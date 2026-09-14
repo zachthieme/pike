@@ -1735,6 +1735,7 @@ type fakeHeyClient struct {
 
 func (c *fakeHeyClient) List(context.Context) ([]hey.Todo, error) { return c.todos, nil }
 func (c *fakeHeyClient) Add(_ context.Context, title string, _ *time.Time) (hey.Todo, error) {
+	c.calls = append(c.calls, "add:"+title)
 	return hey.Todo{ID: "h_add", Title: title}, nil
 }
 func (c *fakeHeyClient) Complete(_ context.Context, id string) error {
@@ -2074,6 +2075,67 @@ func TestSyncKeyRunsSyncAndShowsSummary(t *testing.T) {
 	}
 	if refreshCmd == nil {
 		t.Error("expected a refresh command after sync")
+	}
+}
+
+func TestSyncKeyScansBeforeReconciling(t *testing.T) {
+	// A cron `pike --sync` linked this Task on disk after the dashboard's last
+	// scan, so the on-screen snapshot still shows it unlinked. Pressing S must
+	// scan the notes fresh, see the Link, and not push the Task again.
+	dir := t.TempDir()
+	path := filepath.Join(dir, "notes.md")
+	if err := os.WriteFile(path, []byte("- [ ] Ship it @today @hey(h1)\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	statePath := filepath.Join(dir, "state.json")
+
+	// The stale snapshot the dashboard is still holding: no @hey tag yet.
+	stale := []model.Task{model.TaskWith(model.Task{
+		Text: "Ship it @today", Raw: "- [ ] Ship it @today", State: model.Open,
+		File: "notes.md", Line: 1, HasCheckbox: true, ParentIndex: -1,
+		Tags: []model.Tag{{Name: "today"}},
+	})}
+	// What a fresh scan of disk now returns: the Task is already Linked.
+	fresh := []model.Task{model.TaskWith(model.Task{
+		Text: "Ship it @today @hey(h1)", Raw: "- [ ] Ship it @today @hey(h1)", State: model.Open,
+		File: "notes.md", Line: 1, HasCheckbox: true, ParentIndex: -1,
+		Tags: []model.Tag{{Name: "today"}, {Name: "hey", Value: "h1"}},
+	})}
+
+	cfg := &config.Config{
+		NotesDir: dir, Editor: "vi",
+		Views: []config.ViewConfig{{Title: "All", Query: "open or completed", Sort: "file", Order: 1}},
+		Hey:   &config.HeyConfig{Command: "hey", Query: "@today", StatePath: statePath},
+	}
+	client := &fakeHeyClient{todos: []hey.Todo{{ID: "h1", Title: "Ship it"}}}
+	scanFunc := func() ([]model.Task, error) { return fresh, nil }
+	m := NewModel(cfg, stale, scanFunc, nil, client)
+	m.now = func() time.Time { return testNow }
+	m.width, m.height = 80, 40
+	m.nav.SetHeight(40)
+
+	_, cmd := sendKey(m, "S")
+	if cmd == nil {
+		t.Fatal("expected a sync cmd from S")
+	}
+	msg := cmd()
+
+	res, ok := msg.(syncResultMsg)
+	if !ok {
+		t.Fatalf("expected syncResultMsg, got %T", msg)
+	}
+	if res.Err != nil {
+		t.Fatalf("unexpected sync error: %v", res.Err)
+	}
+	for _, c := range client.calls {
+		if c == "add:Ship it" {
+			t.Errorf("S must not re-push an already-Linked Task; calls=%v", client.calls)
+		}
+	}
+	// The already-Linked line on disk is left byte-for-byte unchanged.
+	got, _ := os.ReadFile(path)
+	if string(got) != "- [ ] Ship it @today @hey(h1)\n" {
+		t.Errorf("notes line should be untouched; got %q", string(got))
 	}
 }
 

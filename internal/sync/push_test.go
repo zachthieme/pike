@@ -68,7 +68,7 @@ func pushFixture(t *testing.T, line string, tags ...model.Tag) (task model.Task,
 		t.Fatal(err)
 	}
 	statePath = filepath.Join(notesDir, "hey-state.json")
-	task = model.TaskWith(model.Task{Text: line, State: model.Open, HasCheckbox: true, Tags: tags, File: "notes.md", Line: 1})
+	task = model.TaskWith(model.Task{Text: line, Raw: "- [ ] " + line, State: model.Open, HasCheckbox: true, Tags: tags, File: "notes.md", Line: 1})
 	return task, notesDir, statePath
 }
 
@@ -248,8 +248,8 @@ func TestPush_PerTaskFailureDoesNotStopRun(t *testing.T) {
 		t.Fatal(err)
 	}
 	statePath := filepath.Join(notesDir, "hey-state.json")
-	first := model.TaskWith(model.Task{Text: "First @today", State: model.Open, HasCheckbox: true, Tags: []model.Tag{{Name: "today"}}, File: "notes.md", Line: 1})
-	second := model.TaskWith(model.Task{Text: "Second @today", State: model.Open, HasCheckbox: true, Tags: []model.Tag{{Name: "today"}}, File: "notes.md", Line: 2})
+	first := model.TaskWith(model.Task{Text: "First @today", Raw: "- [ ] First @today", State: model.Open, HasCheckbox: true, Tags: []model.Tag{{Name: "today"}}, File: "notes.md", Line: 1})
+	second := model.TaskWith(model.Task{Text: "Second @today", Raw: "- [ ] Second @today", State: model.Open, HasCheckbox: true, Tags: []model.Tag{{Name: "today"}}, File: "notes.md", Line: 2})
 	client := &recordingClient{week: now, addErr: map[string]error{"First": context.DeadlineExceeded}}
 
 	rep, warnings, err := Push(context.Background(), Options{

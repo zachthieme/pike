@@ -20,6 +20,13 @@ var (
 	ErrAmbiguousTag   = errors.New("ambiguous tag: line carries more than one")
 )
 
+// staleLine reports that the line at a scanned position no longer matches the
+// full line the caller scanned, so a Sync mutation writes nothing. Every
+// line-verifying mutation returns this when its byte-for-byte guard fails.
+func staleLine(line int) error {
+	return fmt.Errorf("%w: line %d no longer matches the scanned task", ErrStaleData, line)
+}
+
 var completedTagRe = regexp.MustCompile(`\s*@completed(\([^)]*\))?(?:\s|$)`)
 var hiddenTagRe = regexp.MustCompile(`\s*@hidden(?:\s|$)`)
 
@@ -113,36 +120,87 @@ func (t *Toggler) mutateFile(ctx context.Context, filePath string, line int, mut
 
 // Complete marks an open checkbox task as completed by modifying the source file.
 // Replaces - [ ] with - [x] and appends @completed(YYYY-MM-DD).
-// Returns an error if the line doesn't contain - [ ] (stale data).
+// Returns an error if the line doesn't contain - [ ] (stale data). This is the
+// TUI's own toggle: it trusts the line number and its checkbox marker, so a Task
+// toggled in the dashboard completes exactly the line under the cursor.
 func (t *Toggler) Complete(ctx context.Context, filePath string, line int, date time.Time) error {
 	return t.mutateFile(ctx, filePath, line, func(l string) (string, error) {
 		if !strings.Contains(l, "- [ ]") {
 			return "", fmt.Errorf("%w: line %d does not contain '- [ ]'", ErrStaleData, line)
 		}
-		l = strings.Replace(l, "- [ ]", "- [x]", 1)
-		l += fmt.Sprintf(" @completed(%s)", date.Format("2006-01-02"))
-		return l, nil
+		return completeLine(l, date), nil
 	})
 }
 
 // Uncomplete marks a completed checkbox task as open by modifying the source file.
 // Replaces - [x]/- [X] with - [ ] and removes @completed(...) tag.
-// Returns an error if the line doesn't contain - [x] or - [X] (stale data).
+// Returns an error if the line doesn't contain - [x] or - [X] (stale data). Like
+// [Toggler.Complete], this is the TUI's own toggle and trusts the line number.
 func (t *Toggler) Uncomplete(ctx context.Context, filePath string, line int) error {
 	return t.mutateFile(ctx, filePath, line, func(l string) (string, error) {
 		if !strings.Contains(l, "- [x]") && !strings.Contains(l, "- [X]") {
 			return "", fmt.Errorf("%w: line %d does not contain '- [x]'", ErrStaleData, line)
 		}
-		l = strings.Replace(l, "- [x]", "- [ ]", 1)
-		l = strings.Replace(l, "- [X]", "- [ ]", 1)
-		l = completedTagRe.ReplaceAllStringFunc(l, func(match string) string {
-			if strings.HasSuffix(match, " ") || strings.HasSuffix(match, "\t") {
-				return " "
-			}
-			return ""
-		})
-		l = strings.TrimRight(l, " \t")
-		return l, nil
+		return uncompleteLine(l), nil
+	})
+}
+
+// completeLine turns an open checkbox line into a completed one: it swaps the
+// marker and appends @completed(date).
+func completeLine(l string, date time.Time) string {
+	l = strings.Replace(l, "- [ ]", "- [x]", 1)
+	return l + fmt.Sprintf(" @completed(%s)", date.Format("2006-01-02"))
+}
+
+// uncompleteLine turns a completed checkbox line into an open one: it swaps the
+// marker and strips the @completed tag, collapsing the surrounding whitespace.
+func uncompleteLine(l string) string {
+	l = strings.Replace(l, "- [x]", "- [ ]", 1)
+	l = strings.Replace(l, "- [X]", "- [ ]", 1)
+	l = completedTagRe.ReplaceAllStringFunc(l, func(match string) string {
+		if strings.HasSuffix(match, " ") || strings.HasSuffix(match, "\t") {
+			return " "
+		}
+		return ""
+	})
+	return strings.TrimRight(l, " \t")
+}
+
+// CompleteLine marks an open checkbox task as completed, but only when the line
+// at the given position is still byte-for-byte equal to wantLine — the full line
+// the caller scanned. Otherwise the line changed since the scan and CompleteLine
+// returns [ErrStaleData] without writing. This is the guarded completion a Sync
+// uses so it never completes a line that has become a different Task.
+func CompleteLine(ctx context.Context, filePath string, line int, wantLine string, date time.Time) error {
+	return defaultToggler.CompleteLine(ctx, filePath, line, wantLine, date)
+}
+
+// CompleteLine marks an open checkbox task as completed using this Toggler's lock state.
+func (t *Toggler) CompleteLine(ctx context.Context, filePath string, line int, wantLine string, date time.Time) error {
+	return t.mutateFile(ctx, filePath, line, func(l string) (string, error) {
+		if l != wantLine {
+			return "", staleLine(line)
+		}
+		return completeLine(l, date), nil
+	})
+}
+
+// UncompleteLine reopens a completed checkbox task, but only when the line at the
+// given position is still byte-for-byte equal to wantLine — the full line the
+// caller scanned. Otherwise the line changed since the scan and UncompleteLine
+// returns [ErrStaleData] without writing. This is the guarded reopen a Sync uses
+// so it never un-links or reopens a line that has become a different Task.
+func UncompleteLine(ctx context.Context, filePath string, line int, wantLine string) error {
+	return defaultToggler.UncompleteLine(ctx, filePath, line, wantLine)
+}
+
+// UncompleteLine reopens a completed checkbox task using this Toggler's lock state.
+func (t *Toggler) UncompleteLine(ctx context.Context, filePath string, line int, wantLine string) error {
+	return t.mutateFile(ctx, filePath, line, func(l string) (string, error) {
+		if l != wantLine {
+			return "", staleLine(line)
+		}
+		return uncompleteLine(l), nil
 	})
 }
 
@@ -180,19 +238,20 @@ func ToggleHidden(ctx context.Context, filePath string, line int) error {
 }
 
 // AppendTag appends a tag (e.g. "@hey(h1)") to a task line, leaving the rest
-// of the line byte-for-byte unchanged. wantText is the task text the caller
-// observed when it scanned the line; if the current line no longer contains it,
-// the line changed since the scan and AppendTag returns [ErrStaleData] without
-// writing. This is the same stale-line guard Complete and Uncomplete rely on.
-func AppendTag(ctx context.Context, filePath string, line int, wantText, tag string) error {
-	return defaultToggler.AppendTag(ctx, filePath, line, wantText, tag)
+// of the line byte-for-byte unchanged. wantLine is the full line the caller
+// observed when it scanned the task; unless the line at that position is still
+// byte-for-byte equal to it, the line changed since the scan and AppendTag
+// returns [ErrStaleData] without writing. This is the stale-line guard every
+// Sync mutation shares.
+func AppendTag(ctx context.Context, filePath string, line int, wantLine, tag string) error {
+	return defaultToggler.AppendTag(ctx, filePath, line, wantLine, tag)
 }
 
 // AppendTag appends a tag to a task line using this Toggler's lock state.
-func (t *Toggler) AppendTag(ctx context.Context, filePath string, line int, wantText, tag string) error {
+func (t *Toggler) AppendTag(ctx context.Context, filePath string, line int, wantLine, tag string) error {
 	return t.mutateFile(ctx, filePath, line, func(l string) (string, error) {
-		if !strings.Contains(l, wantText) {
-			return "", fmt.Errorf("%w: line %d no longer contains %q", ErrStaleData, line, wantText)
+		if l != wantLine {
+			return "", staleLine(line)
 		}
 		return l + " " + tag, nil
 	})
@@ -200,20 +259,21 @@ func (t *Toggler) AppendTag(ctx context.Context, filePath string, line int, want
 
 // SetText rewrites a task line's text to newText while keeping its tags,
 // re-appending them at the end in their original order. The leading marker
-// (indentation, bullet, and checkbox state) is left untouched. wantText is the
-// task text the caller observed when it scanned the line; if the current line
-// no longer contains it, the line changed since the scan and SetText returns
-// [ErrStaleData] without writing, the same stale-line guard AppendTag uses.
-func SetText(ctx context.Context, filePath string, line int, wantText, newText string) error {
-	return defaultToggler.SetText(ctx, filePath, line, wantText, newText)
+// (indentation, bullet, and checkbox state) is left untouched. wantLine is the
+// full line the caller observed when it scanned the task; unless the line at
+// that position is still byte-for-byte equal to it, the line changed since the
+// scan and SetText returns [ErrStaleData] without writing, the same stale-line
+// guard AppendTag uses.
+func SetText(ctx context.Context, filePath string, line int, wantLine, newText string) error {
+	return defaultToggler.SetText(ctx, filePath, line, wantLine, newText)
 }
 
 // SetText rewrites a task line's text keeping its tags, using this Toggler's
 // lock state.
-func (t *Toggler) SetText(ctx context.Context, filePath string, line int, wantText, newText string) error {
+func (t *Toggler) SetText(ctx context.Context, filePath string, line int, wantLine, newText string) error {
 	return t.mutateFile(ctx, filePath, line, func(l string) (string, error) {
-		if !strings.Contains(l, wantText) {
-			return "", fmt.Errorf("%w: line %d no longer contains %q", ErrStaleData, line, wantText)
+		if l != wantLine {
+			return "", staleLine(line)
 		}
 		prefix := taskPrefixRe.FindString(l)
 		body := l[len(prefix):]
@@ -227,17 +287,24 @@ func (t *Toggler) SetText(ctx context.Context, filePath string, line int, wantTe
 
 // RemoveTag strips a single @name (or @name(value)) token from a task line,
 // collapsing the surrounding whitespace and leaving the rest of the line
-// unchanged. It is the supported way to un-link a Task from HEY. A line with no
-// such tag is treated as stale ([ErrStaleData]) and a line carrying two or more
-// is ambiguous ([ErrAmbiguousTag]); in both cases nothing is written.
-func RemoveTag(ctx context.Context, filePath string, line int, name string) error {
-	return defaultToggler.RemoveTag(ctx, filePath, line, name)
+// unchanged. It is the supported way to un-link a Task from HEY. wantLine is the
+// full line the caller scanned; unless the line at that position is still
+// byte-for-byte equal to it — which verifies the exact @name(value) being
+// stripped — the line changed since the scan and RemoveTag returns
+// [ErrStaleData] without writing. A line with no such tag is likewise stale, and
+// a line carrying two or more is ambiguous ([ErrAmbiguousTag]); in every case
+// nothing is written.
+func RemoveTag(ctx context.Context, filePath string, line int, wantLine, name string) error {
+	return defaultToggler.RemoveTag(ctx, filePath, line, wantLine, name)
 }
 
 // RemoveTag strips a tag from a task line using this Toggler's lock state.
-func (t *Toggler) RemoveTag(ctx context.Context, filePath string, line int, name string) error {
+func (t *Toggler) RemoveTag(ctx context.Context, filePath string, line int, wantLine, name string) error {
 	re := tagRemovalRe(name)
 	return t.mutateFile(ctx, filePath, line, func(l string) (string, error) {
+		if l != wantLine {
+			return "", staleLine(line)
+		}
 		matches := re.FindAllString(l, -1)
 		switch len(matches) {
 		case 0:
@@ -258,17 +325,24 @@ func (t *Toggler) RemoveTag(ctx context.Context, filePath string, line int, name
 
 // SetTagValue rewrites the value of a single @name tag in place, turning
 // @name(old) into @name(newValue) and leaving the rest of the line byte-for-byte
-// unchanged. It is how a Re-create moves a Link to a fresh Todo id. A line with
-// no such tag is treated as stale ([ErrStaleData]) and a line carrying two or
-// more is ambiguous ([ErrAmbiguousTag]); in both cases nothing is written.
-func SetTagValue(ctx context.Context, filePath string, line int, name, newValue string) error {
-	return defaultToggler.SetTagValue(ctx, filePath, line, name, newValue)
+// unchanged. It is how a Re-create moves a Link to a fresh Todo id. wantLine is
+// the full line the caller scanned; unless the line at that position is still
+// byte-for-byte equal to it — which verifies the exact @name(old) being
+// replaced — the line changed since the scan and SetTagValue returns
+// [ErrStaleData] without writing. A line with no such tag is likewise stale, and
+// a line carrying two or more is ambiguous ([ErrAmbiguousTag]); in every case
+// nothing is written.
+func SetTagValue(ctx context.Context, filePath string, line int, wantLine, name, newValue string) error {
+	return defaultToggler.SetTagValue(ctx, filePath, line, wantLine, name, newValue)
 }
 
 // SetTagValue rewrites a tag's value using this Toggler's lock state.
-func (t *Toggler) SetTagValue(ctx context.Context, filePath string, line int, name, newValue string) error {
-	re := regexp.MustCompile(`@` + regexp.QuoteMeta(name) + `(?:\([^)]*\))?`)
+func (t *Toggler) SetTagValue(ctx context.Context, filePath string, line int, wantLine, name, newValue string) error {
+	re := regexp.MustCompile(`@` + regexp.QuoteMeta(name) + `\b(?:\([^)]*\))?`)
 	return t.mutateFile(ctx, filePath, line, func(l string) (string, error) {
+		if l != wantLine {
+			return "", staleLine(line)
+		}
 		switch matches := re.FindAllString(l, -1); len(matches) {
 		case 0:
 			return "", fmt.Errorf("%w: line %d has no @%s tag", ErrStaleData, line, name)
@@ -281,22 +355,30 @@ func (t *Toggler) SetTagValue(ctx context.Context, filePath string, line int, na
 }
 
 // dueTagRe matches an @due token with or without a value, mirroring the parser's
-// tag grammar so a "set or replace" leaves exactly one @due token behind.
-var dueTagRe = regexp.MustCompile(`@due(?:\([^)]*\))?`)
+// tag grammar so a "set or replace" leaves exactly one @due token behind. The
+// trailing \b keeps @due from matching the "@due" inside a longer name like
+// @duedate, which the parser reads as the distinct tag "duedate".
+var dueTagRe = regexp.MustCompile(`@due\b(?:\([^)]*\))?`)
 
 // SetDue sets the task line's @due tag to date (formatted YYYY-MM-DD): it
 // rewrites an existing @due value in place, or appends @due(date) when the line
-// has none, leaving the rest of the line unchanged. A line carrying two or more
-// @due tags is ambiguous ([ErrAmbiguousTag]) and nothing is written. This is the
-// atomic line-write path a Sync uses to reschedule a Task from HEY's Week.
-func SetDue(ctx context.Context, filePath string, line int, date time.Time) error {
-	return defaultToggler.SetDue(ctx, filePath, line, date)
+// has none, leaving the rest of the line unchanged. wantLine is the full line
+// the caller scanned; unless the line at that position is still byte-for-byte
+// equal to it, the line changed since the scan and SetDue returns [ErrStaleData]
+// without writing. A line carrying two or more @due tags is ambiguous
+// ([ErrAmbiguousTag]) and nothing is written. This is the atomic line-write path
+// a Sync uses to reschedule a Task from HEY's Week.
+func SetDue(ctx context.Context, filePath string, line int, wantLine string, date time.Time) error {
+	return defaultToggler.SetDue(ctx, filePath, line, wantLine, date)
 }
 
 // SetDue sets a task line's @due tag using this Toggler's lock state.
-func (t *Toggler) SetDue(ctx context.Context, filePath string, line int, date time.Time) error {
+func (t *Toggler) SetDue(ctx context.Context, filePath string, line int, wantLine string, date time.Time) error {
 	value := date.Format("2006-01-02")
 	return t.mutateFile(ctx, filePath, line, func(l string) (string, error) {
+		if l != wantLine {
+			return "", staleLine(line)
+		}
 		switch matches := dueTagRe.FindAllString(l, -1); len(matches) {
 		case 0:
 			return l + " @due(" + value + ")", nil

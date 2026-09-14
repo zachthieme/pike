@@ -63,6 +63,7 @@ func linkFixture(t *testing.T, id, rawLine string, task model.Task, prior *State
 	}
 	task.File = "notes.md"
 	task.Line = 1
+	task.Raw = rawLine
 	return model.TaskWith(task), dir, statePath
 }
 
