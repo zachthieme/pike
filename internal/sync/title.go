@@ -115,15 +115,17 @@ func reconcileTitles(ctx context.Context, opts Options, linkedTasks map[string]*
 				rep.WouldRecreate++
 				continue
 			}
-			w, changed := applyRecreate(ctx, opts, id, t, notesTitle, state, linkedTasks)
+			w, changed, changedState := applyRecreate(ctx, opts, id, t, notesTitle, state, linkedTasks)
 			if w != nil {
 				warnings = append(warnings, *w)
 			}
 			if changed {
 				rep.Recreated++
-				dirty = true
 			} else {
 				rep.Failed++
+			}
+			if changedState {
+				dirty = true
 			}
 		}
 	}

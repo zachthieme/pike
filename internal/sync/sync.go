@@ -47,7 +47,7 @@ func Plan(ctx context.Context, opts Options) (*Report, []model.Warning, error) {
 	}
 
 	rep := &Report{DryRun: opts.DryRun}
-	linkedIDs, linkedTasks, toPush, classifyWarnings := classifyTasks(opts.Tasks, node, opts.Now, rep)
+	linkedIDs, linkedTasks, ambiguousIDs, toPush, classifyWarnings := classifyTasks(opts.Tasks, node, opts.Now, rep)
 	warnings = append(warnings, classifyWarnings...)
 	rep.WouldPush += len(toPush)
 
@@ -65,7 +65,7 @@ func Plan(ctx context.Context, opts Options) (*Report, []model.Warning, error) {
 		}
 	}
 
-	_, orphanWarnings := reconcileOrphans(ctx, opts, linkedTasks, todos, state, rep)
+	_, orphanWarnings := reconcileOrphans(ctx, opts, linkedTasks, ambiguousIDs, todos, state, rep)
 	warnings = append(warnings, orphanWarnings...)
 
 	origLinks := snapshotLinks(state)
@@ -89,12 +89,15 @@ func Plan(ctx context.Context, opts Options) (*Report, []model.Warning, error) {
 //
 // A line carrying more than one @hey tag is ambiguous: pike cannot tell which id
 // the line means, so it is skipped by every pass (it is left out of linkedTasks)
-// while every id on it still counts as Linked (so neither Todo is imported), and
-// one Warning per such line is returned. Ambiguous and singly-Linked Tasks both
-// count as ExistingLinks, so a Plan and a Push classify identically.
-func classifyTasks(tasks []model.Task, node query.Node, now time.Time, rep *Report) (linkedIDs map[string]bool, linkedTasks map[string]*model.Task, toPush []*model.Task, warnings []model.Warning) {
+// while every id on it still counts as Linked (so neither Todo is imported) and
+// as having a Task line (recorded in ambiguousIDs, so Orphan detection never
+// mistakes such an id's state entry for one whose line is gone). One Warning per
+// such line is returned. Ambiguous and singly-Linked Tasks both count as
+// ExistingLinks, so a Plan and a Push classify identically.
+func classifyTasks(tasks []model.Task, node query.Node, now time.Time, rep *Report) (linkedIDs map[string]bool, linkedTasks map[string]*model.Task, ambiguousIDs map[string]bool, toPush []*model.Task, warnings []model.Warning) {
 	linkedIDs = make(map[string]bool)
 	linkedTasks = make(map[string]*model.Task)
+	ambiguousIDs = make(map[string]bool)
 	for i := range tasks {
 		t := &tasks[i]
 		ids := linkIDs(t)
@@ -103,6 +106,7 @@ func classifyTasks(tasks []model.Task, node query.Node, now time.Time, rep *Repo
 			rep.ExistingLinks++
 			for _, id := range ids {
 				linkedIDs[id] = true
+				ambiguousIDs[id] = true
 			}
 			warnings = append(warnings, ambiguousLinkWarning(t, ids))
 		case len(ids) == 1:
@@ -118,7 +122,7 @@ func classifyTasks(tasks []model.Task, node query.Node, now time.Time, rep *Repo
 			}
 		}
 	}
-	return linkedIDs, linkedTasks, toPush, warnings
+	return linkedIDs, linkedTasks, ambiguousIDs, toPush, warnings
 }
 
 // ambiguousLinkWarning reports a Task line carrying more than one @hey tag. Such
