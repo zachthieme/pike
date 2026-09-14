@@ -1954,6 +1954,71 @@ func TestToggleLastChildPushesParent(t *testing.T) {
 	}
 }
 
+func TestToggleLastChildStaleParentNotPushed(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "tasks.md")
+	// On disk the parent line is already completed, so the auto-complete cascade's
+	// write returns ErrStaleData. The in-memory snapshot still thinks it is Open.
+	content := "- [x] Parent @hey(hp)\n  - [x] Child one @completed(2026-03-10)\n  - [ ] Child two @hey(hc)\n"
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	statePath := filepath.Join(dir, "state.json")
+	if err := heysync.SaveState(statePath, &heysync.State{Links: map[string]heysync.Link{
+		"hp": {Title: "Parent", File: "tasks.md", Line: 1},
+		"hc": {Title: "Child two", File: "tasks.md", Line: 3},
+	}}); err != nil {
+		t.Fatal(err)
+	}
+
+	tasks := []model.Task{
+		model.TaskWith(model.Task{Text: "Parent @hey(hp)", State: model.Open,
+			File: "tasks.md", Line: 1, Indent: 0, HasCheckbox: true,
+			Tags: []model.Tag{{Name: "hey", Value: "hp"}}}),
+		model.TaskWith(model.Task{Text: "Child one @completed(2026-03-10)", State: model.Completed,
+			File: "tasks.md", Line: 2, Indent: 2, HasCheckbox: true,
+			Tags: []model.Tag{{Name: "completed", Value: "2026-03-10"}}}),
+		model.TaskWith(model.Task{Text: "Child two @hey(hc)", State: model.Open,
+			File: "tasks.md", Line: 3, Indent: 2, HasCheckbox: true,
+			Tags: []model.Tag{{Name: "hey", Value: "hc"}}}),
+	}
+	cfg := &config.Config{
+		NotesDir: dir, Editor: "vi",
+		Views: []config.ViewConfig{{Title: "All", Query: "open or completed", Sort: "file", Order: 1}},
+		Hey:   &config.HeyConfig{Command: "hey", Query: "@today", StatePath: statePath},
+	}
+	client := &fakeHeyClient{}
+	m := NewModel(cfg, tasks, nil, nil, client)
+	m.now = func() time.Time { return testNow }
+	m.width, m.height = 80, 40
+	m.nav.SetHeight(40)
+	m.expanded["tasks.md:1"] = true
+	m.rebuildSections()
+	m.nav.SetCursor(2) // child two
+
+	_, cmd := m.toggleTask()
+	if cmd == nil {
+		t.Fatal("expected toggle cmd")
+	}
+	cmd()
+
+	// The child's own write and push both happened.
+	if !client.called("complete:hc") {
+		t.Errorf("expected complete:hc; calls=%v", client.calls)
+	}
+	// The parent's write failed (stale), so the parent must not be pushed.
+	if client.called("complete:hp") {
+		t.Errorf("stale parent must not be pushed; calls=%v", client.calls)
+	}
+	st, _ := heysync.LoadState(statePath)
+	if st.Links["hp"].Completed {
+		t.Errorf("state for stale parent should be unchanged; got %+v", st.Links["hp"])
+	}
+	if !st.Links["hc"].Completed {
+		t.Errorf("child should be recorded completed; got %+v", st.Links["hc"])
+	}
+}
+
 func TestTogglePushErrorShowsStatusNoRevert(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "notes.md")
@@ -1996,8 +2061,8 @@ func TestTogglePushErrorShowsStatusNoRevert(t *testing.T) {
 	// Feeding the result sets a status message and still refreshes.
 	updated, refreshCmd := m.Update(msg)
 	m2 := updated.(Model)
-	if m2.status == "" {
-		t.Error("expected a status message on push error")
+	if !strings.Contains(m2.status, "hey unreachable") {
+		t.Errorf("status should carry the client's error text; got %q", m2.status)
 	}
 	if m2.err != nil {
 		t.Errorf("push error must not become a fatal error: %v", m2.err)
@@ -2025,6 +2090,66 @@ func TestStatusClearsOnKeyPress(t *testing.T) {
 	}
 }
 
+func TestSyncSummaryLine(t *testing.T) {
+	tests := []struct {
+		name     string
+		rep      *heysync.Report
+		warnings []model.Warning
+		want     string
+	}{
+		{
+			name: "no changes reads up to date",
+			rep:  &heysync.Report{},
+			want: "sync: up to date",
+		},
+		{
+			name: "lists only non-zero counts",
+			rep:  &heysync.Report{Pushed: 2, Imported: 1},
+			want: "sync: 2 pushed, 1 imported",
+		},
+		{
+			name: "retitle-only run is not hidden",
+			rep:  &heysync.Report{Retitled: 1},
+			want: "sync: 1 retitled",
+		},
+		{
+			name: "reschedule, re-create, unlink and orphans all appear",
+			rep:  &heysync.Report{Rescheduled: 1, Recreated: 2, Unlinked: 1, Orphans: 3},
+			want: "sync: 2 re-created, 1 rescheduled, 1 unlinked, 3 orphans",
+		},
+		{
+			name:     "retitle plus one warning shows both",
+			rep:      &heysync.Report{Retitled: 1},
+			warnings: []model.Warning{{Message: "boom"}},
+			want:     "sync: 1 retitled — boom",
+		},
+		{
+			name:     "extra warnings are counted",
+			rep:      &heysync.Report{Retitled: 1},
+			warnings: []model.Warning{{Message: "boom"}, {Message: "second"}, {Message: "third"}},
+			want:     "sync: 1 retitled — boom (+2 more)",
+		},
+		{
+			name:     "up to date still surfaces a warning",
+			rep:      &heysync.Report{},
+			warnings: []model.Warning{{Message: "boom"}},
+			want:     "sync: up to date — boom",
+		},
+		{
+			name: "failures are reported",
+			rep:  &heysync.Report{Pushed: 1, Failed: 2},
+			want: "sync: 1 pushed, 2 failed",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := syncSummaryLine(tt.rep, tt.warnings); got != tt.want {
+				t.Errorf("syncSummaryLine() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestSyncKeyRunsSyncAndShowsSummary(t *testing.T) {
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "inbox.md"), []byte("# Inbox\n"), 0o644); err != nil {
@@ -2043,7 +2168,22 @@ func TestSyncKeyRunsSyncAndShowsSummary(t *testing.T) {
 		Views: []config.ViewConfig{{Title: "All", Query: "open or completed", Sort: "file", Order: 1}},
 		Hey:   &config.HeyConfig{Command: "hey", Query: "@today", StatePath: statePath},
 	}
-	m := NewModel(cfg, nil, nil, nil, client)
+	// The sync scans before reconciling (call 1: nothing linked yet, so the todo
+	// imports); the post-sync refresh (call 2) sees the imported Task on disk.
+	imported := model.TaskWith(model.Task{
+		Text: "Call plumber @hey(n1)", State: model.Open, File: "inbox.md", Line: 2,
+		HasCheckbox: true, ParentIndex: -1,
+		Tags: []model.Tag{{Name: "hey", Value: "n1"}},
+	})
+	scanCalls := 0
+	scanFunc := func() ([]model.Task, error) {
+		scanCalls++
+		if scanCalls == 1 {
+			return nil, nil
+		}
+		return []model.Task{imported}, nil
+	}
+	m := NewModel(cfg, nil, scanFunc, nil, client)
 	m.now = func() time.Time { return testNow }
 	m.width, m.height = 80, 40
 	m.nav.SetHeight(40)
@@ -2067,14 +2207,35 @@ func TestSyncKeyRunsSyncAndShowsSummary(t *testing.T) {
 	if res.Err != nil {
 		t.Fatalf("unexpected sync error: %v", res.Err)
 	}
-	// Feeding the result sets a summary status and refreshes the list.
+	// Feeding the result sets a summary status naming the import and refreshes.
 	_ = updated
 	updated2, refreshCmd := m.Update(res)
-	if updated2.(Model).status == "" {
-		t.Error("expected a summary status after sync")
+	m2 := updated2.(Model)
+	if !strings.Contains(m2.status, "1 imported") {
+		t.Errorf("summary status should name the import; got %q", m2.status)
 	}
 	if refreshCmd == nil {
-		t.Error("expected a refresh command after sync")
+		t.Fatal("expected a refresh command after sync")
+	}
+
+	// Drive the refresh: RefreshMsg launches an async scan whose result rebuilds
+	// the list, which must now include the imported Task.
+	refreshMsg := refreshCmd()
+	updated3, scanCmd := m2.Update(refreshMsg)
+	m3 := updated3.(Model)
+	if scanCmd != nil {
+		updated4, _ := m3.Update(scanCmd())
+		m3 = updated4.(Model)
+	}
+	found := false
+	for _, task := range flatTasks(m3.displaySections()) {
+		if strings.Contains(task.Text, "Call plumber") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("refreshed list should include the imported Task")
 	}
 }
 
@@ -2148,6 +2309,62 @@ func TestSyncKeyDisabledIsNoOp(t *testing.T) {
 	}
 	if updated.(Model).status != "" {
 		t.Errorf("S should not set status when disabled; got %q", updated.(Model).status)
+	}
+}
+
+func TestConfigReloadRebuildsHeyClient(t *testing.T) {
+	dir := t.TempDir()
+	statePath := filepath.Join(dir, "state.json")
+
+	// Start with no hey: block and no client — HEY integration disabled.
+	cfg := &config.Config{
+		NotesDir: dir, Editor: "vi",
+		Views: []config.ViewConfig{{Title: "All", Query: "open or completed", Sort: "file", Order: 1}},
+	}
+	m := NewModel(cfg, testTasks(), nil, nil, nil)
+	m.now = func() time.Time { return testNow }
+	m.width, m.height = 80, 40
+	m.nav.SetHeight(40)
+
+	if m.heyEnabled() {
+		t.Fatal("HEY should start disabled without a hey: block")
+	}
+	// S is a no-op while disabled.
+	if _, cmd := sendKey(m, "S"); cmd != nil {
+		t.Fatal("S should be a no-op before a hey: block is configured")
+	}
+
+	// The client factory the model uses to rebuild on config reload.
+	built := &fakeHeyClient{}
+	m.SetClientFunc(func(c *config.Config) hey.Client {
+		if c.Hey == nil {
+			return nil
+		}
+		return built
+	})
+
+	// Config reload adds a hey: block.
+	newCfg := &config.Config{
+		NotesDir: dir, Editor: "vi",
+		Views: []config.ViewConfig{{Title: "All", Query: "open or completed", Sort: "file", Order: 1}},
+		Hey:   &config.HeyConfig{Command: "hey", Query: "@today", StatePath: statePath},
+	}
+	updated, _ := m.Update(scanResultMsg{Config: newCfg})
+	m2 := updated.(Model)
+
+	if !m2.heyEnabled() {
+		t.Fatal("HEY should be enabled after reloading a config with a hey: block")
+	}
+	if m2.heyClient != built {
+		t.Error("reload should install the client built from the new config")
+	}
+	// S now runs a sync using the rebuilt client.
+	_, cmd := sendKey(m2, "S")
+	if cmd == nil {
+		t.Fatal("S should run a sync once a hey: block is loaded")
+	}
+	if msg := cmd(); func() bool { _, ok := msg.(syncResultMsg); return !ok }() {
+		t.Fatalf("expected syncResultMsg from S, got %T", msg)
 	}
 }
 

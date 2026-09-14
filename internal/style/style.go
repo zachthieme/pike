@@ -62,17 +62,45 @@ func StripHeyTag(text string, tags []model.Tag) string {
 		if tag.Name != heyTagName {
 			continue
 		}
-		token := TagToken(tag)
-		switch {
-		case strings.Contains(text, " "+token):
-			text = strings.Replace(text, " "+token, "", 1)
-		case strings.Contains(text, token+" "):
-			text = strings.Replace(text, token+" ", "", 1)
-		default:
-			text = strings.Replace(text, token, "", 1)
-		}
+		text = stripHeyToken(text, TagToken(tag))
 	}
 	return strings.TrimSpace(text)
+}
+
+// stripHeyToken removes the first whole-token occurrence of token from text,
+// collapsing one adjacent space so no doubled space is left. A match is only
+// whole when the token is not immediately followed by a tag-name character, so a
+// bare @hey does not match the @hey prefix of a longer tag like @heyday.
+func stripHeyToken(text, token string) string {
+	for from := 0; ; {
+		i := strings.Index(text[from:], token)
+		if i < 0 {
+			return text
+		}
+		i += from
+		end := i + len(token)
+		if end < len(text) && isTagNameByte(text[end]) {
+			from = i + 1 // token is a prefix of a longer tag; keep looking.
+			continue
+		}
+		switch {
+		case i > 0 && text[i-1] == ' ':
+			return text[:i-1] + text[end:]
+		case end < len(text) && text[end] == ' ':
+			return text[:i] + text[end+1:]
+		default:
+			return text[:i] + text[end:]
+		}
+	}
+}
+
+// isTagNameByte reports whether b can appear in a tag name (matching the
+// parser's @(\w+) rule): a letter, digit, or underscore.
+func isTagNameByte(b byte) bool {
+	return b == '_' ||
+		(b >= '0' && b <= '9') ||
+		(b >= 'a' && b <= 'z') ||
+		(b >= 'A' && b <= 'Z')
 }
 
 // StripANSI removes all ANSI escape sequences from a string.
