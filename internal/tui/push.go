@@ -35,15 +35,28 @@ func heyLinkID(t model.Task) (string, bool) {
 // Tasks, imports unlinked open Todos, and reconciles completion in both
 // directions, then reports a one-line summary. It is a no-op (nil command) when
 // HEY is disabled, so the sync key does nothing without a hey: block.
+//
+// It scans the notes fresh before reconciling rather than reusing the Tasks from
+// the last dashboard scan: a cron `pike --sync` may have written a Link since
+// then, and reconciling against a stale snapshot would push that Task again.
 func (m Model) runSync() tea.Cmd {
 	if !m.heyEnabled() {
 		return nil
 	}
 	client := m.heyClient
 	cfg := m.config
-	tasks := m.allTasks
+	scan := m.scanFunc
+	fallback := m.allTasks
 	now := m.nowFunc()
 	return func() tea.Msg {
+		tasks := fallback
+		if scan != nil {
+			scanned, err := scan()
+			if err != nil {
+				return syncResultMsg{Err: err}
+			}
+			tasks = scanned
+		}
 		rep, warnings, err := heysync.Push(context.Background(), heysync.Options{
 			Tasks:     tasks,
 			Client:    client,

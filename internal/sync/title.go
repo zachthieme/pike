@@ -101,6 +101,7 @@ func reconcileTitles(ctx context.Context, opts Options, linkedTasks map[string]*
 			}
 			if w := applyRetitle(ctx, opts, id, t, heyTitle, td, state); w != nil {
 				warnings = append(warnings, *w)
+				rep.Failed++
 				continue
 			}
 			rep.Retitled++
@@ -117,6 +118,8 @@ func reconcileTitles(ctx context.Context, opts Options, linkedTasks map[string]*
 			if changed {
 				rep.Recreated++
 				dirty = true
+			} else {
+				rep.Failed++
 			}
 		}
 	}
@@ -128,13 +131,16 @@ func reconcileTitles(ctx context.Context, opts Options, linkedTasks map[string]*
 // fails; the checkbox state is left untouched.
 func applyRetitle(ctx context.Context, opts Options, id string, t *model.Task, newTitle string, td hey.Todo, state *State) *model.Warning {
 	path := filepath.Join(opts.NotesDir, t.File)
-	if err := toggle.SetText(ctx, path, t.Line, t.Text, newTitle); err != nil {
-		msg := fmt.Sprintf("retitling task %s:%d: %v", t.File, t.Line, err)
+	if err := toggle.SetText(ctx, path, t.Line, t.Raw, newTitle); err != nil {
+		msg := fmt.Sprintf("retitling task %s:%d (hey %s): %v", t.File, t.Line, id, err)
 		if errors.Is(err, toggle.ErrStaleData) {
-			msg = fmt.Sprintf("retitling task %s:%d: line changed since scan; skipped", t.File, t.Line)
+			msg = fmt.Sprintf("retitling task %s:%d (hey %s): line changed since scan; skipped", t.File, t.Line, id)
 		}
 		return &model.Warning{File: t.File, Line: t.Line, Message: msg}
 	}
+	// Keep t.Raw abreast of the write so a reschedule or completion later this
+	// Sync verifies against the retitled line, not the line as first scanned.
+	refreshScannedLine(t, path)
 	link := state.Links[id]
 	link.Title = newTitle
 	link.WeekStart = td.WeekStart

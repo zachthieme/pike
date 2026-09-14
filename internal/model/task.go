@@ -39,6 +39,7 @@ type Tag struct {
 // derived fields (LowerText, tagSet) stay consistent.
 type Task struct {
 	Text        string          // Full line text after "- [ ] " / "- [x] " or "- "
+	Raw         string          // The exact source line as scanned, marker and all; the stale-check target for Sync writes
 	LowerText   string          // Pre-lowered Text for efficient case-insensitive matching
 	State       TaskState       // Open or Completed
 	File        string          // Relative path from notes_dir
@@ -82,6 +83,7 @@ func TaskWith(partial Task) Task {
 	t.Due = partial.Due
 	t.Completed = partial.Completed
 	t.Indent = partial.Indent
+	t.Raw = partial.Raw
 	return *t
 }
 

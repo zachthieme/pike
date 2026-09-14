@@ -113,6 +113,7 @@ func reconcileLink(ctx context.Context, opts Options, id string, t *model.Task, 
 	}
 
 	if w := applyAction(ctx, opts, act, id, t, td); w != nil {
+		rep.Failed++
 		return false, w
 	}
 	switch act {
@@ -167,13 +168,13 @@ func applyAction(ctx context.Context, opts Options, act action, id string, t *mo
 		}
 	case actCompleteTask:
 		path := filepath.Join(opts.NotesDir, t.File)
-		if err := toggle.Complete(ctx, path, t.Line, completedDate(td, opts.Now)); err != nil {
-			return completionWarning(t, "completing", err)
+		if err := toggle.CompleteLine(ctx, path, t.Line, t.Raw, completedDate(td, opts.Now)); err != nil {
+			return completionWarning(t, "completing", id, err)
 		}
 	case actUncompleteTask:
 		path := filepath.Join(opts.NotesDir, t.File)
-		if err := toggle.Uncomplete(ctx, path, t.Line); err != nil {
-			return completionWarning(t, "reopening", err)
+		if err := toggle.UncompleteLine(ctx, path, t.Line, t.Raw); err != nil {
+			return completionWarning(t, "reopening", id, err)
 		}
 	}
 	return nil
@@ -189,12 +190,12 @@ func completedDate(td hey.Todo, now time.Time) time.Time {
 	return td.Completed.In(now.Location())
 }
 
-// completionWarning wraps a Task-side mutation failure, downgrading a stale-line
-// error to a clearer message.
-func completionWarning(t *model.Task, verb string, err error) *model.Warning {
-	msg := fmt.Sprintf("%s task %s:%d: %v", verb, t.File, t.Line, err)
+// completionWarning wraps a Task-side mutation failure, naming the HEY id and
+// downgrading a stale-line error to a clearer message.
+func completionWarning(t *model.Task, verb, id string, err error) *model.Warning {
+	msg := fmt.Sprintf("%s task %s:%d (hey %s): %v", verb, t.File, t.Line, id, err)
 	if errors.Is(err, toggle.ErrStaleData) {
-		msg = fmt.Sprintf("%s task %s:%d: line changed since scan", verb, t.File, t.Line)
+		msg = fmt.Sprintf("%s task %s:%d (hey %s): line changed since scan; skipped", verb, t.File, t.Line, id)
 	}
 	return &model.Warning{File: t.File, Line: t.Line, Message: msg}
 }

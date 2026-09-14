@@ -6,6 +6,7 @@ package sync
 import (
 	"context"
 	"fmt"
+	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -126,7 +127,7 @@ func pushTask(ctx context.Context, opts Options, t *model.Task, state *State, re
 	}
 
 	path := filepath.Join(opts.NotesDir, t.File)
-	if err := toggle.AppendTag(ctx, path, t.Line, t.Text, "@hey("+todo.ID+")"); err != nil {
+	if err := toggle.AppendTag(ctx, path, t.Line, t.Raw, "@hey("+todo.ID+")"); err != nil {
 		rep.Failed++
 		return &model.Warning{File: t.File, Line: t.Line, Message: fmt.Sprintf("linking %q: %v", title, err)}
 	}
@@ -141,6 +142,23 @@ func pushTask(ctx context.Context, opts Options, t *model.Task, state *State, re
 	}
 	rep.Pushed++
 	return nil
+}
+
+// refreshScannedLine re-reads the Task's line from disk into t.Raw after a
+// successful write, so a later mutation in the same Sync verifies against the
+// line as this write left it rather than the line as first scanned. Two HEY-side
+// changes to one line — a Retitle then a reschedule — both land this way. A read
+// error or a line now out of range leaves t.Raw unchanged; the next mutation's
+// stale guard then skips, which is the safe outcome.
+func refreshScannedLine(t *model.Task, path string) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return
+	}
+	lines := strings.Split(strings.TrimSuffix(string(data), "\n"), "\n")
+	if t.Line >= 1 && t.Line <= len(lines) {
+		t.Raw = lines[t.Line-1]
+	}
 }
 
 // titleOf derives a Todo Title from a Task's text: every @tag removed and

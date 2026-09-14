@@ -150,6 +150,7 @@ func ParseLine(line string, file string, lineNum int) (*model.Task, []model.Warn
 	}
 
 	task := model.NewTask(lm.text, file, lineNum, state, lm.hasCheckbox)
+	task.Raw = line
 	task.Indent = len(line) - len(strings.TrimLeft(line, " \t"))
 	warnings := extractTags(task, file, lineNum)
 	return task, warnings

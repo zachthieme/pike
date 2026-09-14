@@ -61,53 +61,47 @@ func readFile(t *testing.T, path string) string {
 
 func TestSetTextKeepsTags(t *testing.T) {
 	tests := []struct {
-		name     string
-		line     string
-		wantText string
-		newText  string
-		want     string
+		name    string
+		line    string
+		newText string
+		want    string
 	}{
 		{
-			name:     "tags at end preserved in order",
-			line:     "- [ ] Old title @hey(h1) @due(2026-01-01)",
-			wantText: "Old title @hey(h1) @due(2026-01-01)",
-			newText:  "New title",
-			want:     "- [ ] New title @hey(h1) @due(2026-01-01)\n",
+			name:    "tags at end preserved in order",
+			line:    "- [ ] Old title @hey(h1) @due(2026-01-01)",
+			newText: "New title",
+			want:    "- [ ] New title @hey(h1) @due(2026-01-01)\n",
 		},
 		{
-			name:     "interspersed tags moved to end in original order",
-			line:     "- [ ] Buy @urgent milk @hey(h1)",
-			wantText: "Buy @urgent milk @hey(h1)",
-			newText:  "Buy groceries",
-			want:     "- [ ] Buy groceries @urgent @hey(h1)\n",
+			name:    "interspersed tags moved to end in original order",
+			line:    "- [ ] Buy @urgent milk @hey(h1)",
+			newText: "Buy groceries",
+			want:    "- [ ] Buy groceries @urgent @hey(h1)\n",
 		},
 		{
-			name:     "completed checkbox untouched",
-			line:     "- [x] Old @hey(h1) @completed(2026-01-01)",
-			wantText: "Old @hey(h1) @completed(2026-01-01)",
-			newText:  "New",
-			want:     "- [x] New @hey(h1) @completed(2026-01-01)\n",
+			name:    "completed checkbox untouched",
+			line:    "- [x] Old @hey(h1) @completed(2026-01-01)",
+			newText: "New",
+			want:    "- [x] New @hey(h1) @completed(2026-01-01)\n",
 		},
 		{
-			name:     "indentation preserved",
-			line:     "  - [ ] Old @hey(h1)",
-			wantText: "Old @hey(h1)",
-			newText:  "New name",
-			want:     "  - [ ] New name @hey(h1)\n",
+			name:    "indentation preserved",
+			line:    "  - [ ] Old @hey(h1)",
+			newText: "New name",
+			want:    "  - [ ] New name @hey(h1)\n",
 		},
 		{
-			name:     "no tags",
-			line:     "- [ ] Old title",
-			wantText: "Old title",
-			newText:  "New title",
-			want:     "- [ ] New title\n",
+			name:    "no tags",
+			line:    "- [ ] Old title",
+			newText: "New title",
+			want:    "- [ ] New title\n",
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			dir := t.TempDir()
 			p := writeFile(t, dir, "test.md", tt.line+"\n")
-			if err := SetText(context.Background(), p, 1, tt.wantText, tt.newText); err != nil {
+			if err := SetText(context.Background(), p, 1, tt.line, tt.newText); err != nil {
 				t.Fatalf("SetText: %v", err)
 			}
 			if got := readFile(t, p); got != tt.want {
@@ -120,7 +114,7 @@ func TestSetTextKeepsTags(t *testing.T) {
 func TestSetTextStaleWhenTextChanged(t *testing.T) {
 	dir := t.TempDir()
 	p := writeFile(t, dir, "test.md", "- [ ] Current text @hey(h1)\n")
-	err := SetText(context.Background(), p, 1, "Different text @hey(h1)", "New")
+	err := SetText(context.Background(), p, 1, "- [ ] Different text @hey(h1)", "New")
 	if !errors.Is(err, ErrStaleData) {
 		t.Fatalf("expected ErrStaleData, got: %v", err)
 	}
@@ -132,7 +126,7 @@ func TestSetTextStaleWhenTextChanged(t *testing.T) {
 func TestSetTagValueRewritesValue(t *testing.T) {
 	dir := t.TempDir()
 	p := writeFile(t, dir, "test.md", "- [ ] Task @hey(h1) @due(2026-01-01)\n")
-	if err := SetTagValue(context.Background(), p, 1, "hey", "h2"); err != nil {
+	if err := SetTagValue(context.Background(), p, 1, "- [ ] Task @hey(h1) @due(2026-01-01)", "hey", "h2"); err != nil {
 		t.Fatalf("SetTagValue: %v", err)
 	}
 	want := "- [ ] Task @hey(h2) @due(2026-01-01)\n"
@@ -144,7 +138,7 @@ func TestSetTagValueRewritesValue(t *testing.T) {
 func TestSetTagValueStaleWhenAbsent(t *testing.T) {
 	dir := t.TempDir()
 	p := writeFile(t, dir, "test.md", "- [ ] Task with no link\n")
-	err := SetTagValue(context.Background(), p, 1, "hey", "h2")
+	err := SetTagValue(context.Background(), p, 1, "- [ ] Task with no link", "hey", "h2")
 	if !errors.Is(err, ErrStaleData) {
 		t.Fatalf("expected ErrStaleData, got: %v", err)
 	}
@@ -153,7 +147,7 @@ func TestSetTagValueStaleWhenAbsent(t *testing.T) {
 func TestSetTagValueAmbiguous(t *testing.T) {
 	dir := t.TempDir()
 	p := writeFile(t, dir, "test.md", "- [ ] Task @hey(h1) @hey(h9)\n")
-	err := SetTagValue(context.Background(), p, 1, "hey", "h2")
+	err := SetTagValue(context.Background(), p, 1, "- [ ] Task @hey(h1) @hey(h9)", "hey", "h2")
 	if !errors.Is(err, ErrAmbiguousTag) {
 		t.Fatalf("expected ErrAmbiguousTag, got: %v", err)
 	}
@@ -166,7 +160,7 @@ func TestSetDueReplacesExistingValue(t *testing.T) {
 	dir := t.TempDir()
 	p := writeFile(t, dir, "test.md", "- [ ] Task @hey(h1) @due(2026-01-01)\n")
 	date := time.Date(2026, 9, 19, 0, 0, 0, 0, time.UTC)
-	if err := SetDue(context.Background(), p, 1, date); err != nil {
+	if err := SetDue(context.Background(), p, 1, "- [ ] Task @hey(h1) @due(2026-01-01)", date); err != nil {
 		t.Fatalf("SetDue: %v", err)
 	}
 	want := "- [ ] Task @hey(h1) @due(2026-09-19)\n"
@@ -179,7 +173,7 @@ func TestSetDueAppendsWhenAbsent(t *testing.T) {
 	dir := t.TempDir()
 	p := writeFile(t, dir, "test.md", "- [ ] Task @hey(h1)\n")
 	date := time.Date(2026, 9, 19, 0, 0, 0, 0, time.UTC)
-	if err := SetDue(context.Background(), p, 1, date); err != nil {
+	if err := SetDue(context.Background(), p, 1, "- [ ] Task @hey(h1)", date); err != nil {
 		t.Fatalf("SetDue: %v", err)
 	}
 	want := "- [ ] Task @hey(h1) @due(2026-09-19)\n"
@@ -192,7 +186,7 @@ func TestSetDueAmbiguous(t *testing.T) {
 	dir := t.TempDir()
 	p := writeFile(t, dir, "test.md", "- [ ] Task @due(2026-01-01) @due(2026-02-02)\n")
 	date := time.Date(2026, 9, 19, 0, 0, 0, 0, time.UTC)
-	err := SetDue(context.Background(), p, 1, date)
+	err := SetDue(context.Background(), p, 1, "- [ ] Task @due(2026-01-01) @due(2026-02-02)", date)
 	if !errors.Is(err, ErrAmbiguousTag) {
 		t.Fatalf("expected ErrAmbiguousTag, got: %v", err)
 	}
@@ -333,7 +327,7 @@ func TestAppendTagAppendsLeavingRestUnchanged(t *testing.T) {
 	dir := t.TempDir()
 	p := writeFile(t, dir, "test.md", "- [ ] Buy milk @today\nother line\n")
 
-	if err := AppendTag(context.Background(), p, 1, "Buy milk @today", "@hey(h1)"); err != nil {
+	if err := AppendTag(context.Background(), p, 1, "- [ ] Buy milk @today", "@hey(h1)"); err != nil {
 		t.Fatalf("AppendTag: %v", err)
 	}
 
@@ -348,8 +342,8 @@ func TestAppendTagStaleLineIsSkipped(t *testing.T) {
 	dir := t.TempDir()
 	p := writeFile(t, dir, "test.md", "- [ ] Reworded since scan\n")
 
-	// The scan saw "Buy milk @today"; the line has since been edited.
-	err := AppendTag(context.Background(), p, 1, "Buy milk @today", "@hey(h1)")
+	// The scan saw "- [ ] Buy milk @today"; the line has since been edited.
+	err := AppendTag(context.Background(), p, 1, "- [ ] Buy milk @today", "@hey(h1)")
 	if !errors.Is(err, ErrStaleData) {
 		t.Fatalf("expected ErrStaleData, got: %v", err)
 	}
@@ -524,11 +518,140 @@ func TestAppendTask(t *testing.T) {
 	})
 }
 
+// dueDate is a fixed date the line-verifying mutation tests reschedule to.
+var dueDate = time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)
+
+// TestLineVerifyingMutations_ByteForByteGuard exercises every Sync mutation
+// against the four ways a line can drift between scan and write. An unchanged
+// line is written; a line edited to still contain the scanned text, a line
+// replaced by another Task, and a line shifted down by an insertion above it
+// each return ErrStaleData and leave the file byte-for-byte unchanged.
+func TestLineVerifyingMutations_ByteForByteGuard(t *testing.T) {
+	ctx := context.Background()
+	muts := []struct {
+		name    string
+		scanned string                                          // the full line as scanned
+		run     func(p string, line int, wantLine string) error // invoke the mutation
+		success string                                          // file content after a write on the unchanged line
+	}{
+		{
+			name:    "AppendTag",
+			scanned: "- [ ] Buy milk @today",
+			run:     func(p string, line int, w string) error { return AppendTag(ctx, p, line, w, "@hey(h1)") },
+			success: "- [ ] Buy milk @today @hey(h1)\n",
+		},
+		{
+			name:    "RemoveTag",
+			scanned: "- [ ] Buy milk @hey(h1)",
+			run:     func(p string, line int, w string) error { return RemoveTag(ctx, p, line, w, "hey") },
+			success: "- [ ] Buy milk\n",
+		},
+		{
+			name:    "SetTagValue",
+			scanned: "- [ ] Buy milk @hey(h1)",
+			run:     func(p string, line int, w string) error { return SetTagValue(ctx, p, line, w, "hey", "h2") },
+			success: "- [ ] Buy milk @hey(h2)\n",
+		},
+		{
+			name:    "SetText",
+			scanned: "- [ ] Old title @hey(h1)",
+			run:     func(p string, line int, w string) error { return SetText(ctx, p, line, w, "New title") },
+			success: "- [ ] New title @hey(h1)\n",
+		},
+		{
+			name:    "SetDue",
+			scanned: "- [ ] Buy milk @hey(h1)",
+			run:     func(p string, line int, w string) error { return SetDue(ctx, p, line, w, dueDate) },
+			success: "- [ ] Buy milk @hey(h1) @due(2026-09-01)\n",
+		},
+		{
+			name:    "CompleteLine",
+			scanned: "- [ ] Buy milk @hey(h1)",
+			run:     func(p string, line int, w string) error { return CompleteLine(ctx, p, line, w, dueDate) },
+			success: "- [x] Buy milk @hey(h1) @completed(2026-09-01)\n",
+		},
+		{
+			name:    "UncompleteLine",
+			scanned: "- [x] Buy milk @hey(h1) @completed(2026-01-01)",
+			run:     func(p string, line int, w string) error { return UncompleteLine(ctx, p, line, w) },
+			success: "- [ ] Buy milk @hey(h1)\n",
+		},
+	}
+
+	for _, mt := range muts {
+		t.Run(mt.name+"/unchanged line is written", func(t *testing.T) {
+			dir := t.TempDir()
+			p := writeFile(t, dir, "test.md", mt.scanned+"\n")
+			if err := mt.run(p, 1, mt.scanned); err != nil {
+				t.Fatalf("%s on unchanged line: %v", mt.name, err)
+			}
+			if got := readFile(t, p); got != mt.success {
+				t.Errorf("got:\n%q\nwant:\n%q", got, mt.success)
+			}
+		})
+
+		// Each stale case pairs a file the mutation now finds with the scanned
+		// line it still believes it is acting on; every one must be skipped.
+		stale := []struct {
+			name string
+			file string
+		}{
+			{"edited to still contain old text", mt.scanned + " @urgent\n"},
+			{"replaced by another task", "- [ ] Something entirely different @hey(h9)\n"},
+			{"shifted down by an insertion", "- [ ] Inserted above\n" + mt.scanned + "\n"},
+		}
+		for _, sc := range stale {
+			t.Run(mt.name+"/"+sc.name, func(t *testing.T) {
+				dir := t.TempDir()
+				p := writeFile(t, dir, "test.md", sc.file)
+				err := mt.run(p, 1, mt.scanned)
+				if !errors.Is(err, ErrStaleData) {
+					t.Fatalf("%s: expected ErrStaleData, got: %v", mt.name, err)
+				}
+				if got := readFile(t, p); got != sc.file {
+					t.Errorf("stale line must be left byte-for-byte unchanged\n got: %q\nwant: %q", got, sc.file)
+				}
+			})
+		}
+	}
+}
+
+// TestSetDue_RespectsTagBoundary confirms @due never matches the "@due" inside
+// a longer tag like @duedate: only the real @due(...) token is rewritten.
+func TestSetDue_RespectsTagBoundary(t *testing.T) {
+	dir := t.TempDir()
+	line := "- [ ] x @duedate @due(2026-09-01)"
+	p := writeFile(t, dir, "test.md", line+"\n")
+	if err := SetDue(context.Background(), p, 1, line, time.Date(2026, 12, 25, 0, 0, 0, 0, time.UTC)); err != nil {
+		t.Fatalf("SetDue: %v", err)
+	}
+	want := "- [ ] x @duedate @due(2026-12-25)\n"
+	if got := readFile(t, p); got != want {
+		t.Errorf("only @due(...) should change\n got: %q\nwant: %q", got, want)
+	}
+}
+
+// TestSetTagValue_RespectsTagBoundary confirms a line carrying @heybot alongside
+// @hey(1) holds exactly one Link: only the real @hey token is rewritten, so the
+// mutation is unambiguous rather than seeing two @hey tags.
+func TestSetTagValue_RespectsTagBoundary(t *testing.T) {
+	dir := t.TempDir()
+	line := "- [ ] Task @heybot @hey(1)"
+	p := writeFile(t, dir, "test.md", line+"\n")
+	if err := SetTagValue(context.Background(), p, 1, line, "hey", "h2"); err != nil {
+		t.Fatalf("SetTagValue: %v", err)
+	}
+	want := "- [ ] Task @heybot @hey(h2)\n"
+	if got := readFile(t, p); got != want {
+		t.Errorf("only @hey(...) should change\n got: %q\nwant: %q", got, want)
+	}
+}
+
 func TestRemoveTagStripsTagLeavingRestUnchanged(t *testing.T) {
 	dir := t.TempDir()
 	p := writeFile(t, dir, "test.md", "- [ ] Buy milk @hey(h1) @due(2026-01-01)\nother line\n")
 
-	if err := RemoveTag(context.Background(), p, 1, "hey"); err != nil {
+	if err := RemoveTag(context.Background(), p, 1, "- [ ] Buy milk @hey(h1) @due(2026-01-01)", "hey"); err != nil {
 		t.Fatalf("RemoveTag: %v", err)
 	}
 
@@ -543,7 +666,7 @@ func TestRemoveTagAtEndOfLine(t *testing.T) {
 	dir := t.TempDir()
 	p := writeFile(t, dir, "test.md", "- [ ] Buy milk @today @hey(h1)\n")
 
-	if err := RemoveTag(context.Background(), p, 1, "hey"); err != nil {
+	if err := RemoveTag(context.Background(), p, 1, "- [ ] Buy milk @today @hey(h1)", "hey"); err != nil {
 		t.Fatalf("RemoveTag: %v", err)
 	}
 
@@ -558,7 +681,7 @@ func TestRemoveTagMissingTagIsStale(t *testing.T) {
 	dir := t.TempDir()
 	p := writeFile(t, dir, "test.md", "- [ ] Buy milk @today\n")
 
-	err := RemoveTag(context.Background(), p, 1, "hey")
+	err := RemoveTag(context.Background(), p, 1, "- [ ] Buy milk @today", "hey")
 	if !errors.Is(err, ErrStaleData) {
 		t.Fatalf("expected ErrStaleData when the tag is absent, got: %v", err)
 	}
@@ -571,7 +694,7 @@ func TestRemoveTagTwoTagsIsAmbiguousAndWritesNothing(t *testing.T) {
 	dir := t.TempDir()
 	p := writeFile(t, dir, "test.md", "- [ ] Buy milk @hey(h1) @hey(h2)\n")
 
-	err := RemoveTag(context.Background(), p, 1, "hey")
+	err := RemoveTag(context.Background(), p, 1, "- [ ] Buy milk @hey(h1) @hey(h2)", "hey")
 	if !errors.Is(err, ErrAmbiguousTag) {
 		t.Fatalf("expected ErrAmbiguousTag for two @hey tags, got: %v", err)
 	}

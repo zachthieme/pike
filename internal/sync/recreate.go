@@ -31,10 +31,10 @@ func applyRecreate(ctx context.Context, opts Options, id string, t *model.Task, 
 	// Move the Link before deleting the old Todo, so a failure here leaves the
 	// old Todo reachable rather than orphaning the freshly-added one silently.
 	path := filepath.Join(opts.NotesDir, t.File)
-	if err := toggle.SetTagValue(ctx, path, t.Line, "hey", newTodo.ID); err != nil {
-		msg := fmt.Sprintf("re-linking task %s:%d to HEY todo %s: %v", t.File, t.Line, newTodo.ID, err)
+	if err := toggle.SetTagValue(ctx, path, t.Line, t.Raw, "hey", newTodo.ID); err != nil {
+		msg := fmt.Sprintf("re-linking task %s:%d (hey %s) to new HEY todo %s: %v", t.File, t.Line, id, newTodo.ID, err)
 		if errors.Is(err, toggle.ErrStaleData) {
-			msg = fmt.Sprintf("re-linking task %s:%d to HEY todo %s: line changed since scan; skipped", t.File, t.Line, newTodo.ID)
+			msg = fmt.Sprintf("re-linking task %s:%d (hey %s) to new HEY todo %s: line changed since scan; skipped", t.File, t.Line, id, newTodo.ID)
 		}
 		return &model.Warning{File: t.File, Line: t.Line, Message: msg}, false
 	}
