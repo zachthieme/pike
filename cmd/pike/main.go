@@ -570,7 +570,9 @@ func runTUI(_ io.Writer, cfg *config.Config, tasks []model.Task, sc *scanner.Sca
 		return tasks, err
 	}
 	warningsGetter := func() []model.Warning {
-		return sc.Warnings
+		// Read through Warns so a warnings refresh on the TUI loop cannot race
+		// a concurrent background scan publishing new warnings.
+		return sc.Warns()
 	}
 	// A hey: block enables Push on toggle and the sync action; without one the
 	// client is nil and HEY integration is disabled. newHeyClient rebuilds the
@@ -585,7 +587,7 @@ func runTUI(_ io.Writer, cfg *config.Config, tasks []model.Task, sc *scanner.Sca
 	m := tui.NewModel(cfg, tasks, scanRefresh, configReload, newHeyClient(cfg))
 	m.SetClientFunc(newHeyClient)
 	m.SetVersion(version)
-	m.SetWarnings(sc.Warnings)
+	m.SetWarnings(sc.Warns())
 	m.SetWarningsFunc(warningsGetter)
 
 	// If --view flag is set, find and focus that section.

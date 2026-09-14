@@ -2,9 +2,11 @@ package scanner
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
+	"sync"
 	"testing"
 	"time"
 
@@ -301,7 +303,154 @@ func TestScanCollectsWarnings(t *testing.T) {
 	}
 }
 
+// TestConcurrentRefreshStableFiles runs many Refresh calls at once against an
+// unchanging file set. It must not data-race (run under -race) and every caller
+// must see the same complete list a single sequential Refresh returns.
+func TestConcurrentRefreshStableFiles(t *testing.T) {
+	dir := t.TempDir()
+	for i := range 20 {
+		name := fileName(i)
+		writeFile(t, dir, filepath.Join("notes", name),
+			fmt.Sprintf("- [ ] task %s\n- [x] done %s\n", name, name))
+	}
+
+	s := newScanner(t, dir, []string{"**/*.md"}, nil)
+	if _, err := s.Scan(ctx); err != nil {
+		t.Fatalf("Scan() error: %v", err)
+	}
+
+	// Independent sequential reference over the same files.
+	want := sequentialTasks(t, dir)
+
+	const goroutines = 32
+	var wg sync.WaitGroup
+	errs := make(chan error, goroutines)
+	for range goroutines {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			got, err := s.Refresh(ctx)
+			if err != nil {
+				errs <- err
+				return
+			}
+			if !tasksEqual(got, want) {
+				errs <- fmt.Errorf("concurrent Refresh returned %d tasks, want %d (torn or inconsistent)", len(got), len(want))
+			}
+		}()
+	}
+	wg.Wait()
+	close(errs)
+	for err := range errs {
+		t.Error(err)
+	}
+}
+
+// TestConcurrentRefreshWithChurn runs many Refresh calls while files are added,
+// modified and removed. It must not data-race or panic, and once the churn
+// settles a final Refresh must match a fresh sequential scan of the final files.
+func TestConcurrentRefreshWithChurn(t *testing.T) {
+	dir := t.TempDir()
+	for i := range 30 {
+		writeFile(t, dir, fileName(i), "- [ ] initial "+fileName(i)+"\n")
+	}
+
+	s := newScanner(t, dir, []string{"**/*.md"}, nil)
+	if _, err := s.Scan(ctx); err != nil {
+		t.Fatalf("Scan() error: %v", err)
+	}
+
+	var wg sync.WaitGroup
+	errs := make(chan error, 64)
+
+	// Churn: modify, remove and add files concurrently.
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for i := range 15 {
+			// modify an existing file
+			writeFile(t, dir, fileName(i), "- [ ] changed "+fileName(i)+"\n- [ ] extra\n")
+			// remove another
+			_ = os.Remove(filepath.Join(dir, fileName(i+15)))
+			// add a new one
+			writeFile(t, dir, fileName(100+i), "- [ ] added "+fileName(100+i)+"\n")
+		}
+	}()
+
+	for range 32 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			got, err := s.Refresh(ctx)
+			if err != nil {
+				errs <- err
+				return
+			}
+			// Each caller must see an internally consistent, well-formed list:
+			// sorted by file, no torn per-file state.
+			if !isSortedByFile(got) {
+				errs <- fmt.Errorf("concurrent Refresh returned tasks not sorted by file")
+			}
+		}()
+	}
+	wg.Wait()
+	close(errs)
+	for err := range errs {
+		t.Error(err)
+	}
+
+	// After the churn, the cache must be consistent with the final files.
+	got, err := s.Refresh(ctx)
+	if err != nil {
+		t.Fatalf("final Refresh() error: %v", err)
+	}
+	want := sequentialTasks(t, dir)
+	if !tasksEqual(got, want) {
+		t.Errorf("final Refresh returned %d tasks, want %d (cache diverged from disk)", len(got), len(want))
+	}
+}
+
 // --- helpers ---
+
+func fileName(i int) string {
+	return fmt.Sprintf("note_%02d.md", i)
+}
+
+// sequentialTasks scans dir with a brand-new Scanner, giving an independent
+// reference result unaffected by any shared cache.
+func sequentialTasks(t *testing.T, dir string) []model.Task {
+	t.Helper()
+	ref, err := New(dir, []string{"**/*.md"}, nil)
+	if err != nil {
+		t.Fatalf("New() reference scanner: %v", err)
+	}
+	tasks, err := ref.Scan(ctx)
+	if err != nil {
+		t.Fatalf("reference Scan(): %v", err)
+	}
+	return tasks
+}
+
+func tasksEqual(a, b []model.Task) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i].File != b[i].File || a[i].Line != b[i].Line ||
+			a[i].Text != b[i].Text || a[i].State != b[i].State {
+			return false
+		}
+	}
+	return true
+}
+
+func isSortedByFile(tasks []model.Task) bool {
+	files := make([]string, len(tasks))
+	for i, task := range tasks {
+		files[i] = task.File
+	}
+	return sort.StringsAreSorted(files)
+}
 
 func newScanner(t *testing.T, root string, include, exclude []string) *Scanner {
 	t.Helper()
