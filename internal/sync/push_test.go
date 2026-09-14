@@ -28,6 +28,7 @@ type recordingClient struct {
 	added     []addCall
 	mutations []string // complete/uncomplete/delete verbs, in "verb:id" form
 	addErr    map[string]error
+	deleteErr error // when set, Delete fails and leaves the Todo in HEY
 	week      time.Time
 	nextID    int
 }
@@ -66,6 +67,18 @@ func (c *recordingClient) Uncomplete(_ context.Context, id string) error {
 }
 func (c *recordingClient) Delete(_ context.Context, id string) error {
 	c.mutations = append(c.mutations, "delete:"+id)
+	if c.deleteErr != nil {
+		return c.deleteErr
+	}
+	// A successful delete removes the Todo from HEY, so a later List no longer
+	// returns it — matching the real client. Without this a rolled-back Todo
+	// would keep showing up and look importable.
+	for i, td := range c.todos {
+		if td.ID == id {
+			c.todos = append(c.todos[:i], c.todos[i+1:]...)
+			break
+		}
+	}
 	return nil
 }
 
@@ -266,6 +279,151 @@ func TestPush_StaleLineSkippedWithWarningNotCorrupted(t *testing.T) {
 	if got, _ := os.ReadFile(filepath.Join(notesDir, "notes.md")); string(got) != reworded {
 		t.Errorf("stale line corrupted:\n%s", string(got))
 	}
+}
+
+func TestPush_TagWriteFails_RollsBackAddedTodo(t *testing.T) {
+	now := time.Now()
+	task, notesDir, statePath := pushFixture(t, "Buy milk @today", model.Tag{Name: "today"})
+	// The scan saw "Buy milk @today"; the file has since been edited, so the
+	// @hey tag append is refused (stale line) after the Add succeeds.
+	if err := os.WriteFile(filepath.Join(notesDir, "notes.md"), []byte("- [ ] Totally different wording\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	client := &recordingClient{week: now}
+
+	rep, warnings, err := Push(context.Background(), Options{
+		Tasks: []model.Task{task}, Client: client, Query: "@due or @today",
+		StatePath: statePath, NotesDir: notesDir, Now: now,
+	})
+	if err != nil {
+		t.Fatalf("Push: %v", err)
+	}
+	if rep.Failed != 1 || rep.Pushed != 0 {
+		t.Errorf("Failed=%d Pushed=%d, want 1/0", rep.Failed, rep.Pushed)
+	}
+	if len(warnings) != 1 {
+		t.Fatalf("want 1 warning, got %d: %v", len(warnings), warnings)
+	}
+	// The Todo pike added is deleted in the same run: add then delete, same id.
+	if len(client.added) != 1 {
+		t.Fatalf("Add called %d times, want 1", len(client.added))
+	}
+	if len(client.mutations) != 1 || client.mutations[0] != "delete:h_new1" {
+		t.Errorf("mutations=%v, want [delete:h_new1] (roll back the added Todo)", client.mutations)
+	}
+	// The rolled-back Todo is gone from HEY and left no state entry, so a second
+	// Sync imports nothing.
+	if _, ok := findTodo(client.todos, "h_new1"); ok {
+		t.Errorf("rolled-back Todo h_new1 should be gone from HEY; todos=%v", client.todos)
+	}
+	st, _ := LoadState(statePath)
+	if _, ok := st.Links["h_new1"]; ok {
+		t.Errorf("no state entry expected after a clean rollback; state=%+v", st.Links)
+	}
+	rep2, _, err := Push(context.Background(), Options{
+		Tasks: nil, Client: client, Query: "@due or @today",
+		StatePath: statePath, NotesDir: notesDir, Now: now,
+	})
+	if err != nil {
+		t.Fatalf("second Push: %v", err)
+	}
+	if rep2.Imported != 0 {
+		t.Errorf("second Sync Imported=%d, want 0", rep2.Imported)
+	}
+}
+
+func TestPush_TagWriteFails_RollbackDeleteAlsoFails_RetriedNextSync(t *testing.T) {
+	now := time.Now()
+	task, notesDir, statePath := pushFixture(t, "Buy milk @today", model.Tag{Name: "today"})
+	if err := os.WriteFile(filepath.Join(notesDir, "notes.md"), []byte("- [ ] Totally different wording\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// Both the tag write (stale line) and the rollback delete fail this run.
+	client := &recordingClient{week: now, deleteErr: errDeleteFailed}
+
+	rep, warnings, err := Push(context.Background(), Options{
+		Tasks: []model.Task{task}, Client: client, Query: "@due or @today",
+		StatePath: statePath, NotesDir: notesDir, Now: now,
+	})
+	if err != nil {
+		t.Fatalf("Push: %v", err)
+	}
+	if rep.Failed != 1 || len(warnings) != 1 {
+		t.Errorf("Failed=%d warnings=%d, want 1/1", rep.Failed, len(warnings))
+	}
+	// The undeletable Todo is recorded so it is never imported.
+	st, _ := LoadState(statePath)
+	link, ok := st.Links["h_new1"]
+	if !ok || !link.PendingDelete {
+		t.Fatalf("h_new1 should be recorded as a pending delete; state=%+v", st.Links)
+	}
+
+	// It is never imported while it lingers in HEY.
+	rep2, _, err := Push(context.Background(), Options{
+		Tasks: nil, Client: client, Query: "@due or @today",
+		StatePath: statePath, NotesDir: notesDir, Now: now,
+	})
+	if err != nil {
+		t.Fatalf("second Push: %v", err)
+	}
+	if rep2.Imported != 0 {
+		t.Errorf("second Sync Imported=%d, want 0 (pending delete is never imported)", rep2.Imported)
+	}
+	// The next Sync retries the delete. This one succeeds, so the Todo leaves HEY.
+	// Nothing is imported, and the entry is kept until a later List confirms the
+	// Todo is gone (dropping it now would let the import pass re-add it).
+	client.deleteErr = nil
+	rep3, _, err := Push(context.Background(), Options{
+		Tasks: nil, Client: client, Query: "@due or @today",
+		StatePath: statePath, NotesDir: notesDir, Now: now,
+	})
+	if err != nil {
+		t.Fatalf("third Push: %v", err)
+	}
+	if rep3.Imported != 0 {
+		t.Errorf("third Sync Imported=%d, want 0", rep3.Imported)
+	}
+	if got := lastN(client.mutations, 1); len(got) == 0 || got[0] != "delete:h_new1" {
+		t.Errorf("expected a retried delete of h_new1; mutations=%v", client.mutations)
+	}
+	if _, ok := findTodo(client.todos, "h_new1"); ok {
+		t.Errorf("h_new1 should be gone from HEY after the retried delete; todos=%v", client.todos)
+	}
+
+	// Once the Todo is absent from HEY's list, the pending-delete entry is dropped
+	// and still nothing is imported.
+	rep4, _, err := Push(context.Background(), Options{
+		Tasks: nil, Client: client, Query: "@due or @today",
+		StatePath: statePath, NotesDir: notesDir, Now: now,
+	})
+	if err != nil {
+		t.Fatalf("fourth Push: %v", err)
+	}
+	if rep4.Imported != 0 {
+		t.Errorf("fourth Sync Imported=%d, want 0", rep4.Imported)
+	}
+	st, _ = LoadState(statePath)
+	if _, ok := st.Links["h_new1"]; ok {
+		t.Errorf("pending-delete entry should be dropped once the Todo is gone; state=%+v", st.Links)
+	}
+}
+
+// lastN returns the final n elements of s (or all of them when fewer).
+func lastN(s []string, n int) []string {
+	if len(s) <= n {
+		return s
+	}
+	return s[len(s)-n:]
+}
+
+// findTodo returns the Todo with the given id from a list, if present.
+func findTodo(todos []hey.Todo, id string) (hey.Todo, bool) {
+	for _, td := range todos {
+		if td.ID == id {
+			return td, true
+		}
+	}
+	return hey.Todo{}, false
 }
 
 func TestPush_PerTaskFailureDoesNotStopRun(t *testing.T) {

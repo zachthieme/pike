@@ -25,16 +25,16 @@ import (
 // it only counts. It returns whether state changed and any Warnings; a failed
 // tag strip is a Warning that does not stop the run.
 func reconcileOrphans(ctx context.Context, opts Options, linkedTasks map[string]*model.Task, todos []hey.Todo, state *State, rep *Report) (bool, []model.Warning) {
-	live := make(map[string]bool, len(todos))
+	byID := make(map[string]hey.Todo, len(todos))
 	for _, td := range todos {
-		live[td.ID] = true
+		byID[td.ID] = td
 	}
 	var warnings []model.Warning
 	dirty := false
 
 	// Unlink: a Linked Task whose Todo has vanished from HEY.
 	for id, t := range linkedTasks {
-		if live[id] {
+		if _, live := byID[id]; live {
 			continue
 		}
 		if opts.DryRun {
@@ -52,23 +52,89 @@ func reconcileOrphans(ctx context.Context, opts Options, linkedTasks map[string]
 		rep.Unlinked++
 	}
 
-	// Orphan: a state entry whose Task line can no longer be found in the notes.
+	// State entries with no live linked Task fall into two kinds: a PendingDelete
+	// pike is still clearing, and an Orphan whose Task line is gone but whose Todo
+	// survives in HEY.
 	for id, link := range state.Links {
 		if _, found := linkedTasks[id]; found {
 			continue
 		}
+		td, inHey := byID[id]
+
+		if link.PendingDelete {
+			if retryPendingDelete(ctx, opts, id, td, inHey, state) {
+				dirty = true
+			}
+			continue
+		}
+
+		if orphanDropped(opts, id, td, inHey, state) {
+			dirty = true
+			continue
+		}
 		if opts.DryRun {
 			rep.WouldOrphan++
-		} else {
-			rep.Orphans++
+			if !link.Orphaned {
+				warnings = append(warnings, orphanWarning(id, link))
+			}
+			continue
 		}
-		warnings = append(warnings, model.Warning{
-			File:    link.File,
-			Line:    link.Line,
-			Message: fmt.Sprintf("orphaned link: HEY todo %s %q has no task in the notes; left in place", id, link.Title),
-		})
+		rep.Orphans++
+		if !link.Orphaned {
+			warnings = append(warnings, orphanWarning(id, link))
+			link.Orphaned = true
+			state.Links[id] = link
+			dirty = true
+		}
 	}
 	return dirty, warnings
+}
+
+// retryPendingDelete re-attempts the delete of a Todo pike created or replaced
+// but could not remove — a rolled-back push add or a superseded Re-create. It is
+// silent (a repeating Warning is the very thing #2 forbids) and never imports
+// the Todo. The entry is dropped, reporting dirty, once the Todo is gone from
+// HEY or completed; while the Todo is still listed the delete is retried but the
+// entry is kept, because this Sync's Todo list — captured before the delete —
+// still contains the Todo, and dropping the entry now would let the import pass
+// re-add it. A dry run touches nothing. It reports whether it dropped the entry
+// (state changed).
+func retryPendingDelete(ctx context.Context, opts Options, id string, td hey.Todo, inHey bool, state *State) bool {
+	if opts.DryRun {
+		return false
+	}
+	if !inHey || td.Completed != nil {
+		delete(state.Links, id)
+		return true
+	}
+	// Best-effort: a failure just means the next Sync retries. Either way the
+	// entry stays until a later List confirms the Todo is gone.
+	_ = opts.Client.Delete(ctx, id) //nolint:errcheck // retried next Sync; kept until the Todo leaves HEY's list
+	return false
+}
+
+// orphanDropped drops an Orphan's state entry once its surviving Todo is gone
+// from HEY or completed, so the Orphan Warning stops. It reports whether it
+// dropped the entry. A dry run never mutates state, so it drops nothing.
+func orphanDropped(opts Options, id string, td hey.Todo, inHey bool, state *State) bool {
+	if inHey && td.Completed == nil {
+		return false
+	}
+	if opts.DryRun {
+		return false
+	}
+	delete(state.Links, id)
+	return true
+}
+
+// orphanWarning is the Warning reported for an Orphan: a Link whose Task line is
+// gone from the notes while its Todo survives in HEY.
+func orphanWarning(id string, link Link) model.Warning {
+	return model.Warning{
+		File:    link.File,
+		Line:    link.Line,
+		Message: fmt.Sprintf("orphaned link: HEY todo %s %q has no task in the notes; left in place", id, link.Title),
+	}
 }
 
 // unlinkWarning wraps a failed @hey tag strip. An ambiguous line (two @hey tags)
