@@ -89,7 +89,7 @@ func (t *Toggler) mutateFile(ctx context.Context, filePath string, line int, mut
 	mu := t.locks.lock(filePath)
 	defer mu.Unlock()
 
-	lines, err := readLines(filePath)
+	lines, endings, err := readLines(filePath)
 	if err != nil {
 		return err
 	}
@@ -115,7 +115,7 @@ func (t *Toggler) mutateFile(ctx context.Context, filePath string, line int, mut
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	return writeLines(filePath, lines, info.Mode())
+	return writeLines(filePath, lines, endings, info.Mode())
 }
 
 // Complete marks an open checkbox task as completed by modifying the source file.
@@ -418,21 +418,24 @@ func (t *Toggler) AppendTask(ctx context.Context, filePath string, text string) 
 
 	line := "- [ ] " + text
 
-	var lines []string
+	var lines, endings []string
 	data, err := os.ReadFile(filePath)
-	if err != nil {
-		if !os.IsNotExist(err) {
-			return fmt.Errorf("read file: %w", err)
-		}
-		lines = []string{line}
-	} else {
-		content := strings.TrimSuffix(string(data), "\n")
-		if content == "" {
-			lines = []string{line}
-		} else {
-			lines = append(strings.Split(content, "\n"), line)
-		}
+	if err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("read file: %w", err)
 	}
+	if err == nil {
+		lines, endings = parseLines(string(data))
+	}
+
+	// The appended line — and the previous last line, if it lacked one — takes the
+	// file's own ending: CRLF when the existing lines use it, LF otherwise
+	// (including for a new or empty file).
+	ending := fileEnding(endings)
+	if n := len(endings); n > 0 && endings[n-1] == "" {
+		endings[n-1] = ending
+	}
+	lines = append(lines, line)
+	endings = append(endings, ending)
 
 	info, err := os.Stat(filePath)
 	perm := os.FileMode(0o644)
@@ -440,14 +443,26 @@ func (t *Toggler) AppendTask(ctx context.Context, filePath string, text string) 
 		perm = info.Mode()
 	}
 
-	return writeLines(filePath, lines, perm)
+	return writeLines(filePath, lines, endings, perm)
+}
+
+// fileEnding reports the newline a pike-appended line should use: "\r\n" when the
+// file's existing lines end in "\r\n", and "\n" otherwise (mixed-ending files are
+// out of scope, and a new or empty file has no endings and gets "\n").
+func fileEnding(endings []string) string {
+	for _, e := range endings {
+		if e == "\r\n" {
+			return "\r\n"
+		}
+	}
+	return "\n"
 }
 
 // verifyUnmodified re-reads the file and checks that the target line hasn't
 // been modified by an external process since we first read it. This narrows
 // the TOCTOU window to just the time between our two reads.
 func verifyUnmodified(path string, lineNum int, originalLine string) error {
-	lines, err := readLines(path)
+	lines, _, err := readLines(path)
 	if err != nil {
 		return fmt.Errorf("re-read for verification: %w", err)
 	}
@@ -460,18 +475,64 @@ func verifyUnmodified(path string, lineNum int, originalLine string) error {
 	return nil
 }
 
-func readLines(path string) ([]string, error) {
+// readLines reads a file and splits it into lines, returning each line's content
+// (with its trailing "\r" stripped, if any) alongside the exact ending that
+// followed it: "\r\n", "\n", or "" for a final line with no trailing newline. The
+// scanner reads lines the same way (bufio drops the "\r"), so a line's content
+// compares equal whether the file uses LF or CRLF, while the endings let a write
+// reconstruct the file byte-for-byte.
+func readLines(path string) (lines, endings []string, err error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	s := strings.TrimSuffix(string(data), "\n")
-	return strings.Split(s, "\n"), nil
+	lines, endings = parseLines(string(data))
+	return lines, endings, nil
 }
 
-// writeLines writes lines atomically using write-to-temp + rename.
-func writeLines(path string, lines []string, perm os.FileMode) error {
-	content := strings.Join(lines, "\n") + "\n"
+// parseLines splits raw file content into per-line content and per-line endings.
+// endings[i] is the terminator of lines[i]: "\r\n", "\n", or "" (only the final
+// line, and only when the file has no trailing newline). Concatenating each
+// lines[i]+endings[i] reproduces s exactly. An empty file yields no lines.
+func parseLines(s string) (lines, endings []string) {
+	if s == "" {
+		return nil, nil
+	}
+	// Drop exactly one trailing newline so a file ending in "\n" does not yield a
+	// phantom empty final line — matching the scanner, which emits no token after
+	// a final newline. The "\r" of a "\r\n" ending is left on the last piece and
+	// recovered by the per-line split below.
+	trailingNewline := strings.HasSuffix(s, "\n")
+	if trailingNewline {
+		s = s[:len(s)-1]
+	}
+	parts := strings.Split(s, "\n")
+	lines = make([]string, len(parts))
+	endings = make([]string, len(parts))
+	for i, p := range parts {
+		if i == len(parts)-1 && !trailingNewline {
+			// Final line with no trailing newline: any trailing "\r" is content.
+			lines[i], endings[i] = p, ""
+			continue
+		}
+		if strings.HasSuffix(p, "\r") {
+			lines[i], endings[i] = p[:len(p)-1], "\r\n"
+		} else {
+			lines[i], endings[i] = p, "\n"
+		}
+	}
+	return lines, endings
+}
+
+// writeLines writes lines atomically using write-to-temp + rename, re-attaching
+// each line's own ending so a file's CRLF or LF endings survive a write unchanged.
+func writeLines(path string, lines, endings []string, perm os.FileMode) error {
+	var b strings.Builder
+	for i, l := range lines {
+		b.WriteString(l)
+		b.WriteString(endings[i])
+	}
+	content := b.String()
 	dir := filepath.Dir(path)
 	tmp, err := os.CreateTemp(dir, ".pike-tmp-*")
 	if err != nil {
