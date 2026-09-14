@@ -356,6 +356,86 @@ func TestSync_TwoHeyTags_OneWarningSkippedNoImportSameInDryRun(t *testing.T) {
 	}
 }
 
+// TestOrphan_TwoHeyTags_IdInState_NotOrphaned covers an ambiguous line whose
+// first id already has a state entry with both Todos open in HEY: the line is
+// still only its single ambiguous-line Warning, never an Orphan, and the state
+// file is left byte-for-byte unchanged — the same in a real Sync and a dry run.
+// Without the fix the ambiguous-line skip leaves the Task out of linkedTasks, so
+// Orphan detection treats h1's entry as having no Task line and falsely reports
+// it as an Orphan, marking the entry orphaned in state.
+func TestOrphan_TwoHeyTags_IdInState_NotOrphaned(t *testing.T) {
+	now := time.Now()
+	line := "- [ ] Buy milk @today @hey(h1) @hey(h2)\n"
+	task := model.TaskWith(model.Task{
+		Text: "Buy milk @today @hey(h1) @hey(h2)", State: model.Open, HasCheckbox: true,
+		Tags: []model.Tag{{Name: "today"}, {Name: "hey", Value: "h1"}, {Name: "hey", Value: "h2"}},
+		File: "notes.md", Line: 1,
+	})
+
+	run := func(t *testing.T, dry bool, todos []hey.Todo) {
+		t.Helper()
+		notesDir := t.TempDir()
+		if err := os.WriteFile(filepath.Join(notesDir, "notes.md"), []byte(line), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		statePath := filepath.Join(notesDir, "hey-state.json")
+		// h1 already has a state entry from a Sync before the second @hey tag was
+		// added by hand.
+		if err := SaveState(statePath, &State{Links: map[string]Link{
+			"h1": {Title: "Buy milk", File: "notes.md", Line: 1},
+		}}); err != nil {
+			t.Fatal(err)
+		}
+		stateBefore, _ := os.ReadFile(statePath)
+		client := &noDeleteClient{t: t, todos: todos}
+		opts := Options{Tasks: []model.Task{task}, Client: client, Query: "@today",
+			StatePath: statePath, NotesDir: notesDir, Now: now, DryRun: dry}
+
+		var rep *Report
+		var warnings []model.Warning
+		var err error
+		if dry {
+			rep, warnings, err = Plan(context.Background(), opts)
+		} else {
+			rep, warnings, err = Push(context.Background(), opts)
+		}
+		if err != nil {
+			t.Fatalf("run (dry=%v): %v", dry, err)
+		}
+		if len(warnings) != 1 {
+			t.Fatalf("want exactly 1 Warning (the ambiguous line, dry=%v), got %d: %v", dry, len(warnings), warnings)
+		}
+		if !strings.Contains(warnings[0].Message, "@hey") {
+			t.Errorf("Warning should describe the @hey ambiguity, got: %q", warnings[0].Message)
+		}
+		if rep.Orphans != 0 || rep.WouldOrphan != 0 {
+			t.Errorf("Orphans=%d WouldOrphan=%d (dry=%v), want 0/0 — an ambiguous id is never an Orphan", rep.Orphans, rep.WouldOrphan, dry)
+		}
+		// h1's entry survives untouched: never marked, rewritten, or dropped.
+		if got, _ := os.ReadFile(statePath); string(got) != string(stateBefore) {
+			t.Errorf("state changed (dry=%v):\n got: %s\nwant: %s", dry, string(got), string(stateBefore))
+		}
+	}
+
+	bothOpen := []hey.Todo{openTodo("h1", "Buy milk"), openTodo("h2", "two")}
+	t.Run("both todos open", func(t *testing.T) {
+		run(t, false, append([]hey.Todo(nil), bothOpen...))
+		run(t, true, append([]hey.Todo(nil), bothOpen...))
+	})
+
+	// Even after h1 is completed in HEY (which for a live Link would drop the
+	// entry), an ambiguous line's entry is left in place.
+	completedAt := now
+	h1done := []hey.Todo{
+		{ID: "h1", Title: "Buy milk", WeekStart: now, WeekEnd: now, Completed: &completedAt},
+		openTodo("h2", "two"),
+	}
+	t.Run("h1 completed in hey", func(t *testing.T) {
+		run(t, false, append([]hey.Todo(nil), h1done...))
+		run(t, true, append([]hey.Todo(nil), h1done...))
+	})
+}
+
 // TestOrphan_DryRunReportsBothCasesWritesNothing covers the planning pass: a
 // dry run counts both an unlink and an Orphan and touches nothing on either side
 // or in the state file.

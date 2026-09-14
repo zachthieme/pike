@@ -18,13 +18,17 @@ import (
 )
 
 // reconcileOrphans handles both Orphan cases. linkedTasks maps a HEY id to the
-// live Task that Links to it; todos is HEY's current list. It strips the @hey
-// tag and drops the state entry for every Linked Task whose Todo is gone from
-// HEY (an unlink), and reports a Warning for every state entry whose Task can no
-// longer be found (an Orphan), never deleting the surviving side. On a dry run
-// it only counts. It returns whether state changed and any Warnings; a failed
-// tag strip is a Warning that does not stop the run.
-func reconcileOrphans(ctx context.Context, opts Options, linkedTasks map[string]*model.Task, todos []hey.Todo, state *State, rep *Report) (bool, []model.Warning) {
+// live Task that Links to it; ambiguousIDs holds every id on a multi-@hey line
+// (skipped by every pass, but whose id still has a Task line in the notes);
+// todos is HEY's current list. It strips the @hey tag and drops the state entry
+// for every Linked Task whose Todo is gone from HEY (an unlink), and reports a
+// Warning for every state entry whose Task can no longer be found (an Orphan),
+// never deleting the surviving side. An id that sits on an ambiguous line is
+// never an Orphan and its state entry is never marked, rewritten, or dropped
+// while the line stays ambiguous. On a dry run it only counts. It returns
+// whether state changed and any Warnings; a failed tag strip is a Warning that
+// does not stop the run.
+func reconcileOrphans(ctx context.Context, opts Options, linkedTasks map[string]*model.Task, ambiguousIDs map[string]bool, todos []hey.Todo, state *State, rep *Report) (bool, []model.Warning) {
 	byID := make(map[string]hey.Todo, len(todos))
 	for _, td := range todos {
 		byID[td.ID] = td
@@ -56,6 +60,13 @@ func reconcileOrphans(ctx context.Context, opts Options, linkedTasks map[string]
 	// pike is still clearing, and an Orphan whose Task line is gone but whose Todo
 	// survives in HEY.
 	for id, link := range state.Links {
+		if ambiguousIDs[id] {
+			// The id sits on a multi-@hey line, skipped by every pass. Its Task line
+			// exists, so it is not an Orphan; leave the entry exactly as it stands —
+			// never mark, rewrite, or drop it while the line stays ambiguous, even
+			// when its Todo is completed or gone from HEY.
+			continue
+		}
 		if _, found := linkedTasks[id]; found {
 			// The Link is live again (its Task line was restored). Clear a stale
 			// Orphaned mark so a later disappearance warns afresh rather than being

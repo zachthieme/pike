@@ -48,12 +48,12 @@ func Push(ctx context.Context, opts Options) (*Report, []model.Warning, error) {
 	}
 
 	rep := &Report{DryRun: opts.DryRun}
-	linkedIDs, linkedTasks, toPush, classifyWarnings := classifyTasks(opts.Tasks, node, opts.Now, rep)
+	linkedIDs, linkedTasks, ambiguousIDs, toPush, classifyWarnings := classifyTasks(opts.Tasks, node, opts.Now, rep)
 	warnings = append(warnings, classifyWarnings...)
 
 	// Orphan reconciliation runs against the state as loaded, before any push
 	// mutates it, so a Task pushed this run is never mistaken for an Orphan.
-	orphanDirty, orphanWarnings := reconcileOrphans(ctx, opts, linkedTasks, todos, state, rep)
+	orphanDirty, orphanWarnings := reconcileOrphans(ctx, opts, linkedTasks, ambiguousIDs, todos, state, rep)
 	warnings = append(warnings, orphanWarnings...)
 
 	pushDirty := false
