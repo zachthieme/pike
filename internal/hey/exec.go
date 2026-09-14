@@ -176,24 +176,27 @@ func mapRunError(err error) error {
 	if ee.exitCode == 3 {
 		return fmt.Errorf("%w: %s", ErrUnauthenticated, ee.Error())
 	}
+	if trimmed := bytes.TrimSpace(ee.stderr); len(trimmed) > 0 {
+		return fmt.Errorf("hey: %s: %s", ee.Error(), trimmed)
+	}
 	return fmt.Errorf("hey: %s", ee.Error())
 }
 
-// parseErrorEnvelope finds HEY's JSON error envelope among the lines of stderr,
-// which may be preceded by unrelated warning lines (e.g. a keyring warning).
+// parseErrorEnvelope finds HEY's JSON error envelope in stderr, which may be
+// preceded by unrelated warning lines (e.g. a keyring warning) and may be
+// pretty-printed across several lines (as hey-cli 1.4.1 does). It decodes the
+// first JSON object starting at the first '{'; warning lines carry no brace.
 func parseErrorEnvelope(stderr []byte) (errorEnvelope, bool) {
-	for _, line := range bytes.Split(stderr, []byte("\n")) {
-		trimmed := bytes.TrimSpace(line)
-		if len(trimmed) == 0 || trimmed[0] != '{' {
-			continue
-		}
-		var env errorEnvelope
-		if err := json.Unmarshal(trimmed, &env); err != nil {
-			continue
-		}
-		if env.Error != "" || (env.OK != nil && !*env.OK) {
-			return env, true
-		}
+	idx := bytes.IndexByte(stderr, '{')
+	if idx < 0 {
+		return errorEnvelope{}, false
+	}
+	var env errorEnvelope
+	if err := json.NewDecoder(bytes.NewReader(stderr[idx:])).Decode(&env); err != nil {
+		return errorEnvelope{}, false
+	}
+	if env.Error != "" || (env.OK != nil && !*env.OK) {
+		return env, true
 	}
 	return errorEnvelope{}, false
 }

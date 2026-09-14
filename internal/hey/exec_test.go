@@ -118,8 +118,30 @@ func TestExecList_AuthErrorEnvelope(t *testing.T) {
 	if !errors.Is(err, ErrUnauthenticated) {
 		t.Errorf("expected ErrUnauthenticated, got %v", err)
 	}
-	if !strings.Contains(err.Error(), "not authenticated") {
+	// Assert HEY's own message and hint text from the fixture, not pike's
+	// ErrUnauthenticated wording — the latter would pass even if both were lost.
+	if !strings.Contains(err.Error(), "not authenticated; run `hey login`") {
 		t.Errorf("error should carry HEY's message, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "run: hey login") {
+		t.Errorf("error should carry HEY's hint, got: %v", err)
+	}
+}
+
+func TestExecList_NonZeroExitNonJSONStderr(t *testing.T) {
+	// A non-zero exit with no parseable envelope still surfaces stderr's text
+	// alongside the exit status, rather than dropping it.
+	run := func(_ context.Context, _ []string) ([]byte, error) {
+		return nil, &execError{exitCode: 7, stderr: []byte("panic: something went very wrong\n")}
+	}
+	c := &ExecClient{command: "hey", run: run}
+
+	_, err := c.List(context.Background())
+	if err == nil {
+		t.Fatal("expected an error from a non-zero exit")
+	}
+	if !strings.Contains(err.Error(), "something went very wrong") {
+		t.Errorf("error should carry stderr's text, got: %v", err)
 	}
 }
 
