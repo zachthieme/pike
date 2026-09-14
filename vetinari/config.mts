@@ -3,7 +3,7 @@
 // Machine-local state (logs, parked tasks, secrets) lives in .vetinari.local/,
 // which is gitignored and never committed.
 import { resolve } from "node:path";
-import { defineConfig, githubBlockedBy, githubFetchTask, githubIssuesByLabel } from "vetinari";
+import { defineConfig, githubBlockedBy, githubFetchTask, githubIssuesByLabel, githubMarkPendingVerify } from "vetinari";
 
 export default defineConfig({
   project: "pike",
@@ -52,6 +52,11 @@ export default defineConfig({
 
   // Lets `campaign <label>` select its issue set from the tracker.
   listByLabel: githubIssuesByLabel("zachthieme/pike"),
+
+  // After a wave merges an issue's green and the merged-base gate passes, advance it
+  // to the first hop of merge→pending-verify→close: add `pending-verify`, drop
+  // `ready-for-agent`. Best-effort — a failed label write never fails the run.
+  onIssueMerged: githubMarkPendingVerify("zachthieme/pike"),
 
   // Sandcastle writes safe.directory host-side and needs a writable global git
   // config; this machine's real one (~/.config/git/config) is a read-only nix
