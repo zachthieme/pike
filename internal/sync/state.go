@@ -22,6 +22,18 @@ type Link struct {
 	Updated   time.Time `json:"updated_at"` // HEY's updated_at for the Todo
 	File      string    `json:"file"`       // notes-relative file of the linked Task
 	Line      int       `json:"line"`       // 1-based line hint for the Task
+	// PendingDelete marks a Todo pike created or replaced this run but could not
+	// delete: a push whose @hey tag write was refused after the Add (unlinked by
+	// pike), or a Re-create whose delete failed (the old Todo, superseded by the
+	// new one). Such an entry is never imported and is skipped by every
+	// reconciliation pass; each later Sync retries the delete and drops the entry
+	// once the Todo is gone from HEY or completed.
+	PendingDelete bool `json:"pending_delete,omitempty"`
+	// Orphaned marks a Link whose Task line can no longer be found while its Todo
+	// survives in HEY. It is set the first time a Sync reports the Orphan Warning,
+	// so later Syncs still count the Orphan but do not repeat the Warning. The
+	// entry is dropped once the Todo is gone from HEY or completed.
+	Orphaned bool `json:"orphaned,omitempty"`
 }
 
 // State is pike's record of a prior Sync, persisted between runs. Links is keyed

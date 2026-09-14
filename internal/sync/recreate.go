@@ -52,8 +52,13 @@ func applyRecreate(ctx context.Context, opts Options, id string, t *model.Task, 
 	delete(linkedTasks, id)
 
 	// Deleting the old Todo is best-effort cleanup; the Re-create has already
-	// succeeded, so a failure is only a Warning.
+	// succeeded, so a failure is only a Warning. But the old id must not be
+	// forgotten: were it dropped, the still-open old Todo — unknown to pike —
+	// would be imported next Sync as a second copy of the Task. Keep it in state
+	// marked superseded (a pending delete) so it is never imported and the next
+	// Sync retries the delete.
 	if err := opts.Client.Delete(ctx, id); err != nil {
+		state.Links[id] = Link{PendingDelete: true, Title: newTitle, File: t.File, Line: t.Line}
 		return &model.Warning{File: t.File, Line: t.Line, Message: fmt.Sprintf("deleting replaced HEY todo %s: %v; left in place", id, err)}, true
 	}
 	return nil, true

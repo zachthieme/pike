@@ -48,33 +48,21 @@ func Push(ctx context.Context, opts Options) (*Report, []model.Warning, error) {
 	}
 
 	rep := &Report{DryRun: opts.DryRun}
-	linkedIDs := make(map[string]bool)
-	linkedTasks := make(map[string]*model.Task)
-	var toPush []*model.Task
-	for i := range opts.Tasks {
-		t := &opts.Tasks[i]
-		if id, ok := linkID(t); ok {
-			rep.ExistingLinks++
-			linkedIDs[id] = true
-			linkedTasks[id] = t
-			continue
-		}
-		if !eligible(t) {
-			continue
-		}
-		if node != nil && !query.Eval(node, t, opts.Now) {
-			continue
-		}
-		toPush = append(toPush, t)
-	}
+	linkedIDs, linkedTasks, toPush, classifyWarnings := classifyTasks(opts.Tasks, node, opts.Now, rep)
+	warnings = append(warnings, classifyWarnings...)
 
 	// Orphan reconciliation runs against the state as loaded, before any push
 	// mutates it, so a Task pushed this run is never mistaken for an Orphan.
 	orphanDirty, orphanWarnings := reconcileOrphans(ctx, opts, linkedTasks, todos, state, rep)
 	warnings = append(warnings, orphanWarnings...)
 
+	pushDirty := false
 	for _, t := range toPush {
-		if w := pushTask(ctx, opts, t, state, rep); w != nil {
+		dirty, w := pushTask(ctx, opts, t, state, rep)
+		if dirty {
+			pushDirty = true
+		}
+		if w != nil {
 			warnings = append(warnings, *w)
 		}
 	}
@@ -100,7 +88,7 @@ func Push(ctx context.Context, opts Options) (*Report, []model.Warning, error) {
 	completionDirty, completionWarnings := reconcileCompletions(ctx, opts, linkedTasks, todos, state, rep)
 	warnings = append(warnings, completionWarnings...)
 
-	if !opts.DryRun && (rep.Pushed > 0 || rep.Imported > 0 || titleDirty || weekDirty || completionDirty || orphanDirty) {
+	if !opts.DryRun && (rep.Pushed > 0 || rep.Imported > 0 || pushDirty || titleDirty || weekDirty || completionDirty || orphanDirty) {
 		if err := SaveState(opts.StatePath, state); err != nil {
 			warnings = append(warnings, model.Warning{Message: fmt.Sprintf("writing hey state: %v", err)})
 		}
@@ -110,26 +98,34 @@ func Push(ctx context.Context, opts Options) (*Report, []model.Warning, error) {
 }
 
 // pushTask creates one Todo, appends its Link tag, and records the Link,
-// counting the outcome on rep. It returns a non-nil Warning when the push fails;
-// a failing push does not stop the run. On a dry run it counts the Task as a
-// would-push and writes nothing.
-func pushTask(ctx context.Context, opts Options, t *model.Task, state *State, rep *Report) *model.Warning {
+// counting the outcome on rep. It returns whether the state changed and a
+// non-nil Warning when the push fails; a failing push does not stop the run. On
+// a dry run it counts the Task as a would-push and writes nothing.
+//
+// When the tag write is refused after the Add succeeds — a stale line — nothing
+// in the notes records the new id, so the half-finished create is rolled back by
+// deleting the Todo pike just added (the same in-run delete #2 allows for a
+// Re-create's replaced Todo). If that rollback delete also fails, the id is
+// recorded as a PendingDelete so it is never imported and the next Sync retries
+// the delete.
+func pushTask(ctx context.Context, opts Options, t *model.Task, state *State, rep *Report) (bool, *model.Warning) {
 	title := titleOf(t.Text)
 	if opts.DryRun {
 		rep.WouldPush++
-		return nil
+		return false, nil
 	}
 
 	todo, err := opts.Client.Add(ctx, title, t.Due)
 	if err != nil {
 		rep.Failed++
-		return &model.Warning{File: t.File, Line: t.Line, Message: fmt.Sprintf("pushing %q to HEY: %v", title, err)}
+		return false, &model.Warning{File: t.File, Line: t.Line, Message: fmt.Sprintf("pushing %q to HEY: %v", title, err)}
 	}
 
 	path := filepath.Join(opts.NotesDir, t.File)
 	if err := toggle.AppendTag(ctx, path, t.Line, t.Raw, "@hey("+todo.ID+")"); err != nil {
 		rep.Failed++
-		return &model.Warning{File: t.File, Line: t.Line, Message: fmt.Sprintf("linking %q: %v", title, err)}
+		dirty := rollBackAdd(ctx, opts, todo.ID, title, t, state)
+		return dirty, &model.Warning{File: t.File, Line: t.Line, Message: fmt.Sprintf("linking %q: %v", title, err)}
 	}
 
 	state.Links[todo.ID] = Link{
@@ -141,7 +137,21 @@ func pushTask(ctx context.Context, opts Options, t *model.Task, state *State, re
 		Line:      t.Line,
 	}
 	rep.Pushed++
-	return nil
+	return true, nil
+}
+
+// rollBackAdd deletes a Todo pike just added when the @hey tag write that would
+// record it was refused, so the next Sync does not import the untracked Todo as
+// a second copy of the Task. When the delete itself fails, the id is recorded as
+// a PendingDelete so it is still never imported and the next Sync retries. It
+// reports whether the state changed (only when a PendingDelete entry is
+// recorded — a clean rollback leaves no trace).
+func rollBackAdd(ctx context.Context, opts Options, id, title string, t *model.Task, state *State) bool {
+	if err := opts.Client.Delete(ctx, id); err != nil {
+		state.Links[id] = Link{PendingDelete: true, Title: title, File: t.File, Line: t.Line}
+		return true
+	}
+	return false
 }
 
 // refreshScannedLine re-reads the Task's line from disk into t.Raw after a
@@ -161,9 +171,12 @@ func refreshScannedLine(t *model.Task, path string) {
 	}
 }
 
-// titleOf derives a Todo Title from a Task's text: every @tag removed and
-// surrounding whitespace collapsed to single spaces.
+// titleOf derives a Todo Title from a Task's text: every @tag removed, any
+// zero-width tag breaks an import inserted into the Title decoded away, and
+// surrounding whitespace collapsed to single spaces. Decoding makes the Title
+// pike computes from an imported line equal the HEY Title verbatim; a Task never
+// touched by import carries no breaks, so decoding is the identity there.
 func titleOf(text string) string {
 	stripped := tagRe.ReplaceAllString(text, "")
-	return strings.Join(strings.Fields(stripped), " ")
+	return strings.Join(strings.Fields(decodeTitle(stripped)), " ")
 }

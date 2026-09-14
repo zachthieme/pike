@@ -6,6 +6,7 @@ package sync
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/zachthieme/pike/internal/hey"
@@ -46,23 +47,9 @@ func Plan(ctx context.Context, opts Options) (*Report, []model.Warning, error) {
 	}
 
 	rep := &Report{DryRun: opts.DryRun}
-	linkedIDs := make(map[string]bool)
-	linkedTasks := make(map[string]*model.Task)
-	for i := range opts.Tasks {
-		t := &opts.Tasks[i]
-		if id, ok := linkID(t); ok {
-			rep.ExistingLinks++
-			linkedIDs[id] = true
-			linkedTasks[id] = t
-			continue
-		}
-		if !eligible(t) {
-			continue
-		}
-		if node == nil || query.Eval(node, t, opts.Now) {
-			rep.WouldPush++
-		}
-	}
+	linkedIDs, linkedTasks, toPush, classifyWarnings := classifyTasks(opts.Tasks, node, opts.Now, rep)
+	warnings = append(warnings, classifyWarnings...)
+	rep.WouldPush += len(toPush)
 
 	// A failed first HEY call is the one fatal case for --sync.
 	todos, err := opts.Client.List(ctx)
@@ -95,6 +82,55 @@ func Plan(ctx context.Context, opts Options) (*Report, []model.Warning, error) {
 	return rep, warnings, nil
 }
 
+// classifyTasks partitions the scanned Tasks for a Sync. It records every Linked
+// id in linkedIDs (so its Todo is never imported), maps each singly-Linked id to
+// its live Task in linkedTasks (so the reconciliation passes can act on it), and
+// returns the Tasks eligible to push that match the Sync Query.
+//
+// A line carrying more than one @hey tag is ambiguous: pike cannot tell which id
+// the line means, so it is skipped by every pass (it is left out of linkedTasks)
+// while every id on it still counts as Linked (so neither Todo is imported), and
+// one Warning per such line is returned. Ambiguous and singly-Linked Tasks both
+// count as ExistingLinks, so a Plan and a Push classify identically.
+func classifyTasks(tasks []model.Task, node query.Node, now time.Time, rep *Report) (linkedIDs map[string]bool, linkedTasks map[string]*model.Task, toPush []*model.Task, warnings []model.Warning) {
+	linkedIDs = make(map[string]bool)
+	linkedTasks = make(map[string]*model.Task)
+	for i := range tasks {
+		t := &tasks[i]
+		ids := linkIDs(t)
+		switch {
+		case len(ids) > 1:
+			rep.ExistingLinks++
+			for _, id := range ids {
+				linkedIDs[id] = true
+			}
+			warnings = append(warnings, ambiguousLinkWarning(t, ids))
+		case len(ids) == 1:
+			rep.ExistingLinks++
+			linkedIDs[ids[0]] = true
+			linkedTasks[ids[0]] = t
+		default:
+			if !eligible(t) {
+				continue
+			}
+			if node == nil || query.Eval(node, t, now) {
+				toPush = append(toPush, t)
+			}
+		}
+	}
+	return linkedIDs, linkedTasks, toPush, warnings
+}
+
+// ambiguousLinkWarning reports a Task line carrying more than one @hey tag. Such
+// a line is skipped by every pass, so the Warning is the only trace a Sync
+// leaves of it; it names the file, line, and every id so the user can fix it.
+func ambiguousLinkWarning(t *model.Task, ids []string) model.Warning {
+	return model.Warning{
+		File: t.File, Line: t.Line,
+		Message: fmt.Sprintf("task %s:%d has more than one @hey tag (%s); skipped", t.File, t.Line, strings.Join(ids, ", ")),
+	}
+}
+
 // eligible reports whether a Task is an Eligible Task: unlinked, open, with a
 // checkbox, and not hidden. Hidden-ness is checked here, independently of the
 // Sync Query.
@@ -105,8 +141,8 @@ func eligible(t *model.Task) bool {
 	return t.State == model.Open && t.HasCheckbox && !t.HasTag("hidden")
 }
 
-// linkID returns the HEY id a Task is Linked to, if any. A Link is an @hey(id)
-// tag on the Task line.
+// linkID returns the first HEY id a Task is Linked to, if any. A Link is an
+// @hey(id) tag on the Task line. A line may carry more than one — see linkIDs.
 func linkID(t *model.Task) (string, bool) {
 	for _, tag := range t.Tags {
 		if tag.Name == "hey" && tag.Value != "" {
@@ -114,4 +150,17 @@ func linkID(t *model.Task) (string, bool) {
 		}
 	}
 	return "", false
+}
+
+// linkIDs returns every HEY id a Task is Linked to. A well-formed Link has
+// exactly one @hey(id) tag; a line carrying more than one is ambiguous and
+// classifyTasks skips it.
+func linkIDs(t *model.Task) []string {
+	var ids []string
+	for _, tag := range t.Tags {
+		if tag.Name == "hey" && tag.Value != "" {
+			ids = append(ids, tag.Value)
+		}
+	}
+	return ids
 }
