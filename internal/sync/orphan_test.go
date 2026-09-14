@@ -241,6 +241,49 @@ func TestOrphan_ManualUnlink_WarnsOnceThenDropsWhenTodoGone(t *testing.T) {
 	}
 }
 
+// TestOrphan_LinkRestoredThenReorphaned_WarnsAgain checks that a Link which was
+// orphaned (and warned), then restored, and then orphaned again warns afresh the
+// second time — the Orphaned mark is cleared while the Link is live, so a later
+// disappearance is a new orphan episode rather than a silenced repeat.
+func TestOrphan_LinkRestoredThenReorphaned_WarnsAgain(t *testing.T) {
+	now := time.Now()
+	notesDir := t.TempDir()
+	statePath := filepath.Join(notesDir, "hey-state.json")
+	// The Link was orphaned and warned in a prior episode, but its Task line is
+	// back in the notes now.
+	if err := os.WriteFile(filepath.Join(notesDir, "notes.md"), []byte("- [ ] Buy milk @hey(h1)\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := SaveState(statePath, &State{Links: map[string]Link{
+		"h1": {Title: "Buy milk", File: "notes.md", Line: 1, Orphaned: true},
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	live := model.TaskWith(model.Task{Text: "Buy milk @hey(h1)", Raw: "- [ ] Buy milk @hey(h1)",
+		State: model.Open, HasCheckbox: true, Tags: []model.Tag{{Name: "hey", Value: "h1"}}, File: "notes.md", Line: 1})
+	client := &noDeleteClient{t: t, todos: []hey.Todo{{ID: "h1", Title: "Buy milk", WeekStart: now, WeekEnd: now}}}
+	opts := Options{Tasks: []model.Task{live}, Client: client, Query: "@today",
+		StatePath: statePath, NotesDir: notesDir, Now: now}
+
+	// First Sync: the Link is live, so no orphan Warning and the stale mark clears.
+	if _, warn, err := Push(context.Background(), opts); err != nil || len(warn) != 0 {
+		t.Fatalf("first Push: err=%v warnings=%v", err, warn)
+	}
+	if st, _ := LoadState(statePath); st.Links["h1"].Orphaned {
+		t.Errorf("Orphaned mark should clear while the Link is live; state=%+v", st.Links["h1"])
+	}
+
+	// The Task line disappears again: the orphan warns afresh.
+	opts.Tasks = nil
+	rep, warn, err := Push(context.Background(), opts)
+	if err != nil {
+		t.Fatalf("second Push: %v", err)
+	}
+	if rep.Orphans != 1 || len(warn) != 1 {
+		t.Errorf("re-orphan should warn afresh: Orphans=%d warnings=%d, want 1/1", rep.Orphans, len(warn))
+	}
+}
+
 // TestSync_TwoHeyTags_OneWarningSkippedNoImportSameInDryRun covers a line
 // carrying more than one @hey tag: it is a Warning and is skipped by every pass,
 // every id on it counts as Linked (so neither Todo is imported), and a dry run

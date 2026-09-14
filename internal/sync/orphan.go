@@ -57,6 +57,14 @@ func reconcileOrphans(ctx context.Context, opts Options, linkedTasks map[string]
 	// survives in HEY.
 	for id, link := range state.Links {
 		if _, found := linkedTasks[id]; found {
+			// The Link is live again (its Task line was restored). Clear a stale
+			// Orphaned mark so a later disappearance warns afresh rather than being
+			// silenced by a warning from a previous orphan episode.
+			if link.Orphaned && !opts.DryRun {
+				link.Orphaned = false
+				state.Links[id] = link
+				dirty = true
+			}
 			continue
 		}
 		td, inHey := byID[id]
