@@ -6,11 +6,13 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/zachthieme/pike/internal/hey"
 	"github.com/zachthieme/pike/internal/model"
+	"github.com/zachthieme/pike/internal/parser"
 )
 
 // errDeleteFailed stands in for a HEY delete that fails during a Re-create.
@@ -120,6 +122,106 @@ func TestSyncTitle_HeyRenamed_RetitlesTaskKeepingTags(t *testing.T) {
 	st, _ := LoadState(statePath)
 	if st.Links["h1"].Title != "Deploy it now" {
 		t.Errorf("state Title=%q, want %q", st.Links["h1"].Title, "Deploy it now")
+	}
+}
+
+func TestSyncTitle_HeyRenamedWithAtSigns_EncodesLikeImport(t *testing.T) {
+	// A HEY-side rename to a Title carrying @ tokens must be written through the
+	// same encoding imports use, so the retitled line plants no stray tag and a
+	// second Sync sees no change. State holds HEY's Title as HEY holds it (decoded).
+	tests := []struct {
+		name     string
+		rawLine  string
+		origTags []model.Tag
+		heyTitle string
+		wantTags []string
+	}{
+		{
+			name:     "address and tag-like word",
+			rawLine:  "- [ ] Pay rent @hey(h1)",
+			origTags: []model.Tag{{Name: "hey", Value: "h1"}},
+			heyTitle: "Email bob@example.com re @rent",
+			wantTags: []string{"hey"},
+		},
+		{
+			name:     "embedded due token keeps exactly one @due",
+			rawLine:  "- [ ] Pay rent @hey(h1) @due(2026-09-20)",
+			origTags: []model.Tag{{Name: "hey", Value: "h1"}, {Name: "due", Value: "2026-09-20"}},
+			heyTitle: "Renew it @due(2026-01-01)",
+			wantTags: []string{"hey", "due"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			now := time.Now()
+			parsed, _ := parser.ParseLine(tt.rawLine, "notes.md", 1)
+			if parsed == nil {
+				t.Fatalf("fixture line did not parse: %q", tt.rawLine)
+			}
+			task, notesDir, statePath := linkFixture(t,
+				"h1", tt.rawLine, *parsed,
+				&State{Links: map[string]Link{"h1": {Title: "Pay rent", File: "notes.md", Line: 1}}},
+			)
+			client := &titleClient{todos: []hey.Todo{{ID: "h1", Title: tt.heyTitle, WeekStart: now}}, week: now}
+
+			rep, warnings, err := Push(context.Background(), Options{
+				Tasks: []model.Task{task}, Client: client, Query: "@today",
+				StatePath: statePath, NotesDir: notesDir, Now: now,
+			})
+			if err != nil || len(warnings) != 0 {
+				t.Fatalf("Push: err=%v warnings=%v", err, warnings)
+			}
+			if rep.Retitled != 1 {
+				t.Errorf("Retitled=%d, want 1", rep.Retitled)
+			}
+			if len(client.calls) != 0 {
+				t.Errorf("no HEY mutation expected for a retitle; calls=%v", client.calls)
+			}
+
+			// The retitled line parses with only its original tags, in order.
+			raw, _ := os.ReadFile(filepath.Join(notesDir, "notes.md"))
+			line := strings.TrimSuffix(string(raw), "\n")
+			retitled, _ := parser.ParseLine(line, "notes.md", 1)
+			if retitled == nil {
+				t.Fatalf("retitled line did not parse: %q", line)
+			}
+			var names []string
+			for _, tag := range retitled.Tags {
+				names = append(names, tag.Name)
+			}
+			if len(names) != len(tt.wantTags) {
+				t.Fatalf("retitled line tags %v, want %v; line=%q", names, tt.wantTags, line)
+			}
+			for i, want := range tt.wantTags {
+				if names[i] != want {
+					t.Errorf("retitled line tag[%d]=%q, want %q; line=%q", i, names[i], want, line)
+				}
+			}
+			// The Title pike computes from the line equals HEY's Title verbatim.
+			if got := titleOf(retitled.Text); got != tt.heyTitle {
+				t.Errorf("titleOf(retitled line) = %q, want HEY title %q", got, tt.heyTitle)
+			}
+
+			// State records HEY's Title as HEY holds it, decoded.
+			st, _ := LoadState(statePath)
+			if st.Links["h1"].Title != tt.heyTitle {
+				t.Errorf("state Title=%q, want %q", st.Links["h1"].Title, tt.heyTitle)
+			}
+
+			// A second Sync sees no Title change: no add and no delete.
+			opts := Options{Tasks: []model.Task{*retitled}, Client: client, Query: "@today",
+				StatePath: statePath, NotesDir: notesDir, Now: now}
+			rep2, warnings2, err := Push(context.Background(), opts)
+			if err != nil || len(warnings2) != 0 {
+				t.Fatalf("second Push: err=%v warnings=%v", err, warnings2)
+			}
+			if rep2.Recreated != 0 || rep2.Retitled != 0 {
+				t.Errorf("second Sync Recreated=%d Retitled=%d, want 0/0", rep2.Recreated, rep2.Retitled)
+			}
+			if len(client.calls) != 0 {
+				t.Errorf("second Sync made HEY calls, want none: %v", client.calls)
+			}
+		})
 	}
 }
 

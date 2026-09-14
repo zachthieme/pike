@@ -131,11 +131,15 @@ func reconcileTitles(ctx context.Context, opts Options, linkedTasks map[string]*
 }
 
 // applyRetitle rewrites the Task's text to HEY's Title, keeping its Tags, and
-// refreshes the Link snapshot. It returns a non-nil Warning when the write
-// fails; the checkbox state is left untouched.
+// refreshes the Link snapshot. HEY's Title is written through encodeTitle — the
+// same encoding the import path uses — so a Title carrying "@" text (an email
+// address, a "@rent", an "@due(...)") plants no stray tag on the line and does
+// not give it a second @due; the snapshot still records the decoded Title as HEY
+// holds it. It returns a non-nil Warning when the write fails; the checkbox state
+// is left untouched.
 func applyRetitle(ctx context.Context, opts Options, id string, t *model.Task, newTitle string, td hey.Todo, state *State) *model.Warning {
 	path := filepath.Join(opts.NotesDir, t.File)
-	if err := toggle.SetText(ctx, path, t.Line, t.Raw, newTitle); err != nil {
+	if err := toggle.SetText(ctx, path, t.Line, t.Raw, encodeTitle(newTitle)); err != nil {
 		msg := fmt.Sprintf("retitling task %s:%d (hey %s): %v", t.File, t.Line, id, err)
 		if errors.Is(err, toggle.ErrStaleData) {
 			msg = fmt.Sprintf("retitling task %s:%d (hey %s): line changed since scan; skipped", t.File, t.Line, id)
