@@ -59,5 +59,9 @@ Sending a single Task change to its Linked Todo immediately, outside a full Sync
 The text of a Todo. It is the Task's text with every Tag removed; Tags never travel to HEY.
 
 **Orphan**:
-A Link whose other side can no longer be found: a Linked Todo deleted in HEY, or a Linked Task whose line has gone from the notes. Pike reports Orphans as Warnings and never deletes the surviving side.
+A Link whose Linked Task's line can no longer be found in the notes while its Todo still survives in HEY. Pike reports an Orphan as a Warning once — a later Sync keeps counting it but does not repeat the Warning — and never deletes the surviving Todo. The state entry is dropped, and the Warning stops, once that Todo is gone from HEY or completed. Deleting an `@hey` Tag by hand takes a Task's line off the Link, so its surviving Todo becomes an Orphan by this same path.
 _Avoid_: dangling link, stale link
+
+**Un-link**:
+Pike's response when a Linked Todo can no longer be found in HEY: it strips the `@hey` Tag from the Task line, drops the state entry, and counts the outcome with no Warning. The Task becomes local-only and a later Sync re-pushes it if it still matches the Sync Query. Per ADR 0002, an Un-link never deletes the Task; it is pike reacting to a Todo that is already gone, not the mirror image of an Orphan (where the Todo survives and is reported as a Warning).
+_Avoid_: delete, remove (Sync never deletes either side)
