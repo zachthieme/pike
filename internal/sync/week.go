@@ -18,6 +18,7 @@ import (
 
 	"github.com/zachthieme/pike/internal/hey"
 	"github.com/zachthieme/pike/internal/model"
+	"github.com/zachthieme/pike/internal/parser"
 	"github.com/zachthieme/pike/internal/toggle"
 )
 
@@ -73,6 +74,17 @@ func inWeek(day, start, end time.Time) bool {
 	return !day.Before(start) && !day.After(end)
 }
 
+// lineTitle returns the Task line's Title (Tags stripped) as it now stands on
+// disk, re-parsing t.Raw so a Retitle earlier this Sync — which rewrote the line
+// but left t.Text as first scanned — is reflected. It falls back to t.Text when
+// the refreshed line no longer parses as a Task.
+func lineTitle(t *model.Task) string {
+	if parsed, _ := parser.ParseLine(t.Raw, t.File, t.Line); parsed != nil {
+		return titleOf(parsed.Text)
+	}
+	return titleOf(t.Text)
+}
+
 // reconcileWeeks brings every Link with both a live linked Task and a matching
 // HEY Todo into Week agreement. A HEY-side reschedule sets the Task's @due to the
 // Todo's new Saturday; a notes-side reschedule Re-creates the Todo with the new
@@ -105,7 +117,10 @@ func reconcileWeeks(ctx context.Context, opts Options, linkedTasks map[string]*m
 
 		// A notes-side Title change already Re-creates this Todo with the Task's
 		// @due, carrying any reschedule with it. Skip so the two share one Re-create.
-		notesTitle := normalizeTitle(titleOf(t.Text))
+		// The Title is read from the line as it now stands, so a Retitle earlier
+		// this Sync (which rewrote the line to HEY's Title) is reflected — a Re-create
+		// here must carry that current Title, not the one scanned before the rewrite.
+		notesTitle := normalizeTitle(lineTitle(t))
 		if resolveTitle(notesTitle, normalizeTitle(td.Title), normalizeTitle(base.Title), hasBase, td.Completed != nil) == titleRecreate {
 			continue
 		}
