@@ -30,6 +30,8 @@
 
 **Documentation:**
 - [user] HEY Sync docs now match what ships after the sync fixes: the README explains that deleting the state file (or starting with none) is a safe reset because the default state directory is recreated automatically, that un-linking a task by hand leaves the old todo as an orphan reported once until you remove it from HEY, that an imported title containing `@` text is written so it plants no stray tag, and that a failed `@hey` tag write rolls back the todo pike just added; `CONTEXT.md` redefines **Orphan** as a surviving todo whose task line is gone and adds **Un-link** for a todo already gone from HEY (#18).
+- [user] The README's HEY sync docs now match what ships: resetting the state file is documented as *not* fully lossless — an orphaned or pending-delete todo tracked only in the state file is imported into the inbox as a new task after a reset, so remove orphaned todos from HEY first — and a new section explains that pike inserts a zero-width space (U+200B) after any `@` that would start a tag when writing a HEY title (on import and HEY-side rename), which some editors show (vim: `<200b>`) and which stops a plain-text search matching the stored line (#24).
+- [user] README: the stale "No syncing" tagline now notes optional HEY sync, the `@hey` example uses a numeric HEY id, and the docs state that `hey:` must be a mapping (or empty) and any other value is a config error, and that CRLF notes files are supported and keep their line endings (#24).
 
 ### Collected changes — September 13, 2026
 
