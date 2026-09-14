@@ -8,7 +8,7 @@
 
 Your notes are already in markdown. Your tasks are already in your notes. You don't need another app, another inbox, another tab. You need something that reads what you've already written and shows you what matters — in your terminal, where you already are.
 
-Pike scans your notes directory for checkbox items (`- [ ]`/`- [x]`) and tagged bullets (`- text @tag`), groups them into configurable views via a query DSL, and renders them in an interactive TUI dashboard. No syncing, no database, no account. Just your files.
+Pike scans your notes directory for checkbox items (`- [ ]`/`- [x]`) and tagged bullets (`- text @tag`), groups them into configurable views via a query DSL, and renders them in an interactive TUI dashboard. No database, no account, and nothing running in the background — just your files. Optional [HEY](https://www.hey.com) sync is there when you want it, off until you enable it.
 
 ## Installation
 
@@ -66,6 +66,8 @@ Tasks are extracted from markdown files. Two formats are recognized:
 ```
 
 Tags follow the format `@name` or `@name(value)`. Tag names are **case-sensitive** — `@Today` and `@today` are distinct tags. Use lowercase by convention.
+
+Both Unix (LF) and Windows (CRLF) line endings are supported. When pike rewrites a line — completing a task, or a HEY sync — each line keeps its own ending, and a line pike appends to a CRLF file is written with CRLF too, so a file's line endings survive unchanged.
 
 ### Special Tags
 
@@ -294,7 +296,13 @@ hey:
 | `state_path` | `$XDG_DATA_HOME/pike/hey-state.json` (falls back to `~/.local/share/pike/hey-state.json`) | The sync state file recording each link |
 
 The block's mere presence is what enables sync; every key is optional and falls
-back to the default above.
+back to the default above. An empty block also works: `hey: {}`, or a `hey:` key
+with every child commented out (which loads as null), enables sync with all defaults.
+
+To **disable** sync, remove the `hey:` block entirely — don't set it to a non-mapping
+value. `hey:` must be a mapping (or empty); any other value — `hey: false`, a string,
+a number, or a sequence — is rejected as a config error rather than silently enabling
+defaults, so that `hey: false` never quietly turns sync *on*.
 
 ### Running a sync
 
@@ -313,13 +321,31 @@ A sync is a two-way reconciliation:
   `inbox_file`) as a new task, dated to its week's Saturday and linked. If the todo's
   title contains `@` text — an email address like `bob@example.com`, a `@rent`, or even
   an `@due(...)` — pike writes it so the line parses with only its own `@due` and `@hey`
-  tags: the `@` reads unchanged to you but plants no stray tag that a later sync would
-  misread as a title change.
+  tags, planting no stray tag that a later sync would misread as a title change (see
+  [Titles containing `@`](#titles-containing-)).
 - **Reconcile** — for tasks already linked, completion, title, and schedule changes
   are carried to whichever side is behind.
 
 `--dry-run` runs the planning pass and prints the same report without touching your
 notes, HEY, or the state file — use it to preview before committing.
+
+### Titles containing `@`
+
+A HEY title can contain an `@` that pike's parser would otherwise read as the start
+of a tag — an email address like `bob@example.com`, a `@rent`, or even an
+`@due(...)`. Writing such a title verbatim onto a task line would plant a stray tag
+that the next sync misreads as a title change and re-creates with a mangled title. So
+whenever pike writes a HEY title into your notes — both on **import** and when a
+**HEY-side rename** is carried back to an existing task — it inserts an invisible
+zero-width space (U+200B) directly after any `@` that would otherwise begin a tag.
+That breaks the `@`-then-word adjacency the parser keys on, so the line parses with
+only pike's own `@due` and `@hey` tags and the title round-trips unchanged.
+
+This encoding is deliberate: it keeps HEY titles safe without touching pike's tag
+grammar. It has two visible consequences. Some editors render the zero-width space —
+vim, for instance, shows it as `<200b>`. And because the character sits between the
+`@` and the following word, a plain-text search for `bob@example.com` will not match
+the stored line (it contains `bob@<U+200B>example.com`).
 
 ### The `@hey` tag (the Link)
 
@@ -327,7 +353,7 @@ A link between a task and its HEY todo is recorded as an `@hey(id)` tag written 
 the task's own line, e.g.:
 
 ```markdown
-- [ ] Ship the release notes @due(2026-04-01) @hey(h_a1b2c3)
+- [ ] Ship the release notes @due(2026-04-01) @hey(133760954)
 ```
 
 The tag travels with the line through reordering, moves between files, and rewording,
@@ -379,11 +405,25 @@ rm ~/.local/share/pike/hey-state.json
 ```
 
 The next `pike --sync` rebuilds it from the `@hey` tags in your notes and the current
-state of HEY. Because links live in the tags, no links are lost by resetting the
-state. You do not need to recreate the file or its folder by hand: sync writes the
-state file on its next run and creates the default `~/.local/share/pike/` directory
-for it automatically if it is missing, so deleting the file (or starting on a fresh
-machine with no state at all) is a safe reset.
+state of HEY. Because active links live in the tags, no live link is lost by
+resetting the state, and you do not need to recreate the file or its folder by hand:
+sync writes the state file on its next run and creates the default
+`~/.local/share/pike/` directory for it automatically if it is missing.
+
+Deleting the state file is **not** a fully lossless reset, though. Two kinds of
+record live only in the state file and nowhere in your notes or in HEY: an **orphan**
+(a todo whose task line is gone, held so the warning fires only once — see
+[Un-linking a task by hand](#un-linking-a-task-by-hand)) and a **pending-delete**
+todo (one pike created or superseded but could not delete). Both mark a todo pike
+means to leave alone rather than import. Once the state is gone, the next sync no
+longer recognises them: any such todo still open in HEY looks like an ordinary
+unlinked todo and is imported into your inbox as a brand-new task — a duplicate you
+did not want. (This is easy to reproduce: un-link a task by hand, then reset, and the
+old orphaned todo comes back as a fresh inbox task on the next sync.)
+
+So before you reset, remove any orphaned todos from HEY (complete or delete them
+there). With no stray open todos left for HEY to hand back, deleting the state file —
+or starting on a fresh machine with no state at all — is then a clean reset.
 
 ## Query DSL
 
