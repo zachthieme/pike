@@ -6,6 +6,7 @@ package tui
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/zachthieme/pike/internal/model"
 	heysync "github.com/zachthieme/pike/internal/sync"
@@ -69,19 +70,48 @@ func (m Model) runSync() tea.Cmd {
 		if err != nil {
 			return syncResultMsg{Err: err}
 		}
-		return syncResultMsg{Summary: syncSummaryLine(rep, len(warnings))}
+		return syncResultMsg{Summary: syncSummaryLine(rep, warnings)}
 	}
 }
 
-// syncSummaryLine renders a Sync Report as a single status-line string.
-func syncSummaryLine(rep *heysync.Report, warnings int) string {
-	s := fmt.Sprintf("sync: %d pushed, %d imported, %d completed, %d uncompleted",
-		rep.Pushed, rep.Imported, rep.Completed, rep.Uncompleted)
-	if rep.Failed > 0 {
-		s += fmt.Sprintf(", %d failed", rep.Failed)
+// syncSummaryLine renders a Sync Report as a single status-line string. It lists
+// every non-zero outcome count so a Sync that only retitles, reschedules,
+// re-creates, unlinks or reports orphans is not hidden behind zeros; a run that
+// changed nothing reads "sync: up to date". The first Warning's text is appended,
+// with a count of any others, so it is never silently discarded.
+func syncSummaryLine(rep *heysync.Report, warnings []model.Warning) string {
+	counts := []struct {
+		n     int
+		label string
+	}{
+		{rep.Pushed, "pushed"},
+		{rep.Imported, "imported"},
+		{rep.Completed, "completed"},
+		{rep.Uncompleted, "uncompleted"},
+		{rep.Retitled, "retitled"},
+		{rep.Recreated, "re-created"},
+		{rep.Rescheduled, "rescheduled"},
+		{rep.Unlinked, "unlinked"},
+		{rep.Orphans, "orphans"},
+		{rep.Failed, "failed"},
 	}
-	if warnings > 0 {
-		s += fmt.Sprintf(" (%d warning(s))", warnings)
+	var parts []string
+	for _, c := range counts {
+		if c.n > 0 {
+			parts = append(parts, fmt.Sprintf("%d %s", c.n, c.label))
+		}
+	}
+	s := "sync: "
+	if len(parts) == 0 {
+		s += "up to date"
+	} else {
+		s += strings.Join(parts, ", ")
+	}
+	if len(warnings) > 0 {
+		s += " — " + warnings[0].Message
+		if extra := len(warnings) - 1; extra > 0 {
+			s += fmt.Sprintf(" (+%d more)", extra)
+		}
 	}
 	return s
 }

@@ -94,27 +94,32 @@ func (m Model) toggleTask() (tea.Model, tea.Cmd) {
 			if err := toggle.Complete(ctx, filePath, line, now); err != nil {
 				return toggleResultMsg{Err: err}
 			}
-			// Auto-complete parent if this was the last open child
+			// Auto-complete parent if this was the last open child. Only a
+			// successful write cascades: a stale parent line (ErrStaleData) must
+			// not be pushed to HEY or recorded completed in state.
 			if hasParent && parentHasCheckbox && parentState == model.Open && siblingsDone+1 == siblingsTotal {
 				parentPath := parentFile
 				if notesDir != "" {
 					parentPath = filepath.Join(notesDir, parentFile)
 				}
-				_ = toggle.Complete(ctx, parentPath, parentLine, now) //nolint:errcheck // best-effort cascade; child already written, refresh will reconcile
-				parentCascaded = true
+				if toggle.Complete(ctx, parentPath, parentLine, now) == nil {
+					parentCascaded = true
+				}
 			}
 		} else {
 			if err := toggle.Uncomplete(ctx, filePath, line); err != nil {
 				return toggleResultMsg{Err: err}
 			}
-			// Auto-uncomplete parent if it was completed
+			// Auto-uncomplete parent if it was completed. As with the complete
+			// cascade, only a successful write is pushed to HEY.
 			if hasParent && parentHasCheckbox && parentState == model.Completed {
 				parentPath := parentFile
 				if notesDir != "" {
 					parentPath = filepath.Join(notesDir, parentFile)
 				}
-				_ = toggle.Uncomplete(ctx, parentPath, parentLine) //nolint:errcheck // best-effort cascade; child already written, refresh will reconcile
-				parentCascaded = true
+				if toggle.Uncomplete(ctx, parentPath, parentLine) == nil {
+					parentCascaded = true
+				}
 			}
 		}
 

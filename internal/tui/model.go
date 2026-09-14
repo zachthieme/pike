@@ -70,8 +70,11 @@ type Model struct {
 	status string // one-line status message (sync result or push error)
 
 	// HEY sync — heyClient is nil when no hey: block is configured, which
-	// disables Push on toggle and makes the sync action a no-op.
-	heyClient hey.Client
+	// disables Push on toggle and makes the sync action a no-op. clientFunc
+	// rebuilds the client from a reloaded config so adding, removing, or editing
+	// the hey: block while the TUI runs takes effect; nil leaves the client fixed.
+	heyClient  hey.Client
+	clientFunc func(*config.Config) hey.Client
 
 	// Key bindings.
 	keys           KeyMap
@@ -133,6 +136,13 @@ func buildCustomKeyIndex(bindings []config.CustomBinding) map[string]int {
 // SetVersion sets the version string for display in the summary overlay.
 func (m *Model) SetVersion(v string) {
 	m.version = v
+}
+
+// SetClientFunc installs the factory that rebuilds the HEY client from a
+// reloaded config. It is called on every config reload so a hey: block added,
+// removed, or edited while the TUI runs takes effect.
+func (m *Model) SetClientFunc(f func(*config.Config) hey.Client) {
+	m.clientFunc = f
 }
 
 // SetWarnings sets the current parse warnings slice.
@@ -227,6 +237,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.keys = BuildKeyMap(msg.Config.Keybindings, msg.Config.CustomBindings)
 			m.customBindings = msg.Config.CustomBindings
 			m.customKeyIndex = buildCustomKeyIndex(msg.Config.CustomBindings)
+			// Rebuild the HEY client and sync settings from the reloaded config so
+			// a hey: block added, removed, or retargeted at runtime takes effect.
+			if m.clientFunc != nil {
+				m.heyClient = m.clientFunc(msg.Config)
+			}
 		}
 		if msg.Tasks != nil {
 			parser.LinkSubtasks(msg.Tasks)

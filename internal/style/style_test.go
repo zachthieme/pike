@@ -62,6 +62,18 @@ func TestStripHeyTag(t *testing.T) {
 			tags: []model.Tag{{Name: "heyfriend"}},
 			want: "Talk to @heyfriend soon",
 		},
+		{
+			name: "bare hey does not mangle a longer tag before it",
+			text: "Ping @heyday then @hey",
+			tags: []model.Tag{{Name: "heyday"}, {Name: "hey"}},
+			want: "Ping @heyday then",
+		},
+		{
+			name: "linked hey does not mangle a longer tag before it",
+			text: "Ping @heyday then @hey(1)",
+			tags: []model.Tag{{Name: "heyday"}, {Name: "hey", Value: "1"}},
+			want: "Ping @heyday then",
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
