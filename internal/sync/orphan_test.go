@@ -129,9 +129,10 @@ func TestOrphan_ReportsLinkWhoseTaskLineIsGone(t *testing.T) {
 	}
 }
 
-// TestOrphan_TwoHeyTagsAreSkippedWithWarning covers the ambiguous unlink: a Task
-// line carrying two @hey tags cannot be safely stripped, so it is skipped with a
-// Warning and nothing is written.
+// TestOrphan_TwoHeyTagsAreSkippedWithWarning covers a Task line carrying two
+// @hey tags whose Todos have both vanished from HEY: pike cannot tell which id
+// the line means, so the line is skipped by every pass with a single Warning and
+// nothing is written — no unlink is attempted, so no failure is counted.
 func TestOrphan_TwoHeyTagsAreSkippedWithWarning(t *testing.T) {
 	now := time.Now()
 	notesDir := t.TempDir()
@@ -145,7 +146,8 @@ func TestOrphan_TwoHeyTagsAreSkippedWithWarning(t *testing.T) {
 		Tags: []model.Tag{{Name: "today"}, {Name: "hey", Value: "h1"}, {Name: "hey", Value: "h2"}},
 		File: "notes.md", Line: 1,
 	})
-	// Neither id is in HEY's list, so an unlink would be attempted.
+	// Neither id is in HEY's list; the ambiguous line must still be skipped, not
+	// unlinked, and never touch HEY (noDeleteClient fails the test on Delete).
 	client := &noDeleteClient{t: t, todos: []hey.Todo{}}
 
 	rep, warnings, err := Push(context.Background(), Options{
@@ -158,9 +160,9 @@ func TestOrphan_TwoHeyTagsAreSkippedWithWarning(t *testing.T) {
 	if rep.Unlinked != 0 {
 		t.Errorf("Unlinked = %d, want 0 — an ambiguous line must be skipped", rep.Unlinked)
 	}
-	// The skipped unlink write is a per-item failure and must be counted.
-	if rep.Failed != 1 {
-		t.Errorf("Failed = %d, want 1", rep.Failed)
+	// The line is skipped, not written to: no unlink is attempted, so no failure.
+	if rep.Failed != 0 {
+		t.Errorf("Failed = %d, want 0 — an ambiguous line is skipped, not failed", rep.Failed)
 	}
 	if len(warnings) != 1 {
 		t.Fatalf("want exactly 1 Warning for the ambiguous line, got %d: %v", len(warnings), warnings)
@@ -171,6 +173,78 @@ func TestOrphan_TwoHeyTagsAreSkippedWithWarning(t *testing.T) {
 	// Nothing was written, so no state file was created.
 	if _, err := os.Stat(statePath); !os.IsNotExist(err) {
 		t.Errorf("state should not be written when the only change is skipped (stat err: %v)", err)
+	}
+}
+
+// TestSync_TwoHeyTags_OneWarningSkippedNoImportSameInDryRun covers a line
+// carrying more than one @hey tag: it is a Warning and is skipped by every pass,
+// every id on it counts as Linked (so neither Todo is imported), and a dry run
+// reports the same as a real Sync.
+func TestSync_TwoHeyTags_OneWarningSkippedNoImportSameInDryRun(t *testing.T) {
+	now := time.Now()
+	line := "- [ ] Buy milk @today @hey(h1) @hey(h2)\n"
+	task := model.TaskWith(model.Task{
+		Text: "Buy milk @today @hey(h1) @hey(h2)", State: model.Open, HasCheckbox: true,
+		Tags: []model.Tag{{Name: "today"}, {Name: "hey", Value: "h1"}, {Name: "hey", Value: "h2"}},
+		File: "notes.md", Line: 1,
+	})
+	// Both ids are open in HEY; a stray unlinked id would otherwise import.
+	todos := []hey.Todo{openTodo("h1", "one"), openTodo("h2", "two")}
+
+	run := func(t *testing.T, dry bool) (*Report, []model.Warning) {
+		t.Helper()
+		notesDir := t.TempDir()
+		if err := os.WriteFile(filepath.Join(notesDir, "notes.md"), []byte(line), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		statePath := filepath.Join(notesDir, "hey-state.json")
+		client := &recordingClient{week: now, todos: append([]hey.Todo(nil), todos...)}
+		opts := Options{Tasks: []model.Task{task}, Client: client, Query: "@today",
+			StatePath: statePath, NotesDir: notesDir, Now: now, DryRun: dry}
+
+		var rep *Report
+		var warnings []model.Warning
+		var err error
+		if dry {
+			rep, warnings, err = Plan(context.Background(), opts)
+		} else {
+			rep, warnings, err = Push(context.Background(), opts)
+		}
+		if err != nil {
+			t.Fatalf("run (dry=%v): %v", dry, err)
+		}
+		// Exactly one Warning about the ambiguous line.
+		if len(warnings) != 1 {
+			t.Fatalf("want exactly 1 Warning (dry=%v), got %d: %v", dry, len(warnings), warnings)
+		}
+		if msg := warnings[0].Message; !strings.Contains(msg, "hey") {
+			t.Errorf("Warning should describe the @hey ambiguity, got: %q", msg)
+		}
+		// Neither Todo is imported.
+		if rep.Imported != 0 || rep.WouldImport != 0 {
+			t.Errorf("Imported=%d WouldImport=%d (dry=%v), want 0/0", rep.Imported, rep.WouldImport, dry)
+		}
+		// No HEY mutations and no add.
+		if len(client.added) != 0 || len(client.mutations) != 0 {
+			t.Errorf("HEY was mutated (dry=%v): added=%v mutations=%v", dry, client.added, client.mutations)
+		}
+		// The notes line is untouched, and nothing wrote a state file.
+		if got, _ := os.ReadFile(filepath.Join(notesDir, "notes.md")); string(got) != line {
+			t.Errorf("notes line changed (dry=%v):\n got: %q\nwant: %q", dry, string(got), line)
+		}
+		if _, err := os.Stat(statePath); !os.IsNotExist(err) {
+			t.Errorf("state file written (dry=%v) though nothing changed (stat err: %v)", dry, err)
+		}
+		return rep, warnings
+	}
+
+	real, realWarn := run(t, false)
+	dry, dryWarn := run(t, true)
+	if len(realWarn) != len(dryWarn) || realWarn[0].Message != dryWarn[0].Message {
+		t.Errorf("dry-run Warning differs from real:\n real: %q\n dry:  %q", realWarn[0].Message, dryWarn[0].Message)
+	}
+	if real.ExistingLinks != dry.ExistingLinks {
+		t.Errorf("ExistingLinks differs real=%d dry=%d", real.ExistingLinks, dry.ExistingLinks)
 	}
 }
 

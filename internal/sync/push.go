@@ -48,25 +48,8 @@ func Push(ctx context.Context, opts Options) (*Report, []model.Warning, error) {
 	}
 
 	rep := &Report{DryRun: opts.DryRun}
-	linkedIDs := make(map[string]bool)
-	linkedTasks := make(map[string]*model.Task)
-	var toPush []*model.Task
-	for i := range opts.Tasks {
-		t := &opts.Tasks[i]
-		if id, ok := linkID(t); ok {
-			rep.ExistingLinks++
-			linkedIDs[id] = true
-			linkedTasks[id] = t
-			continue
-		}
-		if !eligible(t) {
-			continue
-		}
-		if node != nil && !query.Eval(node, t, opts.Now) {
-			continue
-		}
-		toPush = append(toPush, t)
-	}
+	linkedIDs, linkedTasks, toPush, classifyWarnings := classifyTasks(opts.Tasks, node, opts.Now, rep)
+	warnings = append(warnings, classifyWarnings...)
 
 	// Orphan reconciliation runs against the state as loaded, before any push
 	// mutates it, so a Task pushed this run is never mistaken for an Orphan.
