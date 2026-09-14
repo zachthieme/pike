@@ -226,7 +226,7 @@ func TestSyncTitle_NoStateFile_NotesTitleWinsRecreates(t *testing.T) {
 	}
 }
 
-func TestSyncTitle_RecreateDeleteFails_LinkMovesWarningReported(t *testing.T) {
+func TestSyncTitle_RecreateDeleteFails_OldIdKeptSupersededRetriedNextSync(t *testing.T) {
 	now := time.Now()
 	task, notesDir, statePath := linkFixture(t,
 		"h1", "- [ ] Deploy it now @hey(h1)",
@@ -259,11 +259,42 @@ func TestSyncTitle_RecreateDeleteFails_LinkMovesWarningReported(t *testing.T) {
 		t.Errorf("link should point at the new Todo, got: %q", string(got))
 	}
 	st, _ := LoadState(statePath)
-	if _, stillOld := st.Links["h1"]; stillOld {
-		t.Errorf("old link should be dropped even when delete fails; state=%+v", st.Links)
+	// The old id is kept, marked superseded (a pending delete), so it is never
+	// imported as a second copy of the Task.
+	old, stillOld := st.Links["h1"]
+	if !stillOld || !old.PendingDelete {
+		t.Errorf("old link h1 should be kept as a pending delete; state=%+v", st.Links)
 	}
 	if st.Links["h_new1"].Title != "Deploy it now" {
 		t.Errorf("new link missing; state=%+v", st.Links)
+	}
+
+	// The next Sync re-scans the line (now linked to h_new1), retries the delete
+	// of the old Todo, and imports nothing.
+	relinked := model.TaskWith(model.Task{
+		Text: "Deploy it now @hey(h_new1)", Raw: "- [ ] Deploy it now @hey(h_new1)",
+		State: model.Open, HasCheckbox: true,
+		Tags: []model.Tag{{Name: "hey", Value: "h_new1"}}, File: "notes.md", Line: 1,
+	})
+	callsBefore := len(client.calls)
+	rep2, _, err := Push(context.Background(), Options{
+		Tasks: []model.Task{relinked}, Client: client, Query: "@today",
+		StatePath: statePath, NotesDir: notesDir, Now: now,
+	})
+	if err != nil {
+		t.Fatalf("second Push: %v", err)
+	}
+	if rep2.Imported != 0 {
+		t.Errorf("second Sync Imported=%d, want 0 (superseded Todo is never imported)", rep2.Imported)
+	}
+	retried := false
+	for _, c := range client.calls[callsBefore:] {
+		if c == "delete:h1" {
+			retried = true
+		}
+	}
+	if !retried {
+		t.Errorf("second Sync should retry delete:h1; calls=%v", client.calls[callsBefore:])
 	}
 }
 
