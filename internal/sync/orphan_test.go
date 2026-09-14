@@ -176,6 +176,71 @@ func TestOrphan_TwoHeyTagsAreSkippedWithWarning(t *testing.T) {
 	}
 }
 
+// TestOrphan_ManualUnlink_WarnsOnceThenDropsWhenTodoGone covers a manual
+// un-link: after the user deletes the @hey tag by hand, the state entry lingers
+// while the Todo stays in HEY. The Orphan Warning must appear on the first Sync
+// that finds it and not repeat on later Syncs, the Orphan is still counted every
+// Sync, and the entry is dropped once the Todo is gone from HEY.
+func TestOrphan_ManualUnlink_WarnsOnceThenDropsWhenTodoGone(t *testing.T) {
+	now := time.Now()
+	notesDir := t.TempDir()
+	// The user deleted the @hey tag; the task line stays but is no longer Linked,
+	// and does not match the Sync Query, so it is not re-pushed here.
+	if err := os.WriteFile(filepath.Join(notesDir, "notes.md"), []byte("- [ ] Buy milk\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	statePath := filepath.Join(notesDir, "hey-state.json")
+	if err := SaveState(statePath, &State{Links: map[string]Link{
+		"h1": {Title: "Buy milk", File: "notes.md", Line: 1},
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	task := model.TaskWith(model.Task{Text: "Buy milk", Raw: "- [ ] Buy milk",
+		State: model.Open, HasCheckbox: true, File: "notes.md", Line: 1})
+	// The Todo survives in HEY; nothing should ever delete it (noDeleteClient).
+	client := &noDeleteClient{t: t, todos: []hey.Todo{{ID: "h1", Title: "Buy milk", WeekStart: now, WeekEnd: now}}}
+	opts := Options{Tasks: []model.Task{task}, Client: client, Query: "@today",
+		StatePath: statePath, NotesDir: notesDir, Now: now}
+
+	// First Sync: the Orphan is counted and warned.
+	rep1, warn1, err := Push(context.Background(), opts)
+	if err != nil {
+		t.Fatalf("first Push: %v", err)
+	}
+	if rep1.Orphans != 1 {
+		t.Errorf("first Sync Orphans=%d, want 1", rep1.Orphans)
+	}
+	if len(warn1) != 1 || !strings.Contains(warn1[0].Message, "h1") {
+		t.Fatalf("first Sync should warn once naming h1, got: %v", warn1)
+	}
+
+	// Second Sync: still counted, but the Warning does not repeat.
+	rep2, warn2, err := Push(context.Background(), opts)
+	if err != nil {
+		t.Fatalf("second Push: %v", err)
+	}
+	if rep2.Orphans != 1 {
+		t.Errorf("second Sync Orphans=%d, want 1 (still an orphan)", rep2.Orphans)
+	}
+	if len(warn2) != 0 {
+		t.Errorf("second Sync should not repeat the orphan Warning, got: %v", warn2)
+	}
+
+	// The Todo is removed from HEY; the next Sync drops the entry.
+	client.todos = nil
+	rep3, _, err := Push(context.Background(), opts)
+	if err != nil {
+		t.Fatalf("third Push: %v", err)
+	}
+	if rep3.Orphans != 0 {
+		t.Errorf("third Sync Orphans=%d, want 0 (entry dropped)", rep3.Orphans)
+	}
+	st, _ := LoadState(statePath)
+	if _, ok := st.Links["h1"]; ok {
+		t.Errorf("orphan entry should be dropped once the Todo is gone; state=%+v", st.Links)
+	}
+}
+
 // TestSync_TwoHeyTags_OneWarningSkippedNoImportSameInDryRun covers a line
 // carrying more than one @hey tag: it is a Warning and is skipped by every pass,
 // every id on it counts as Linked (so neither Todo is imported), and a dry run
