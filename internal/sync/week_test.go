@@ -4,11 +4,13 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/zachthieme/pike/internal/hey"
 	"github.com/zachthieme/pike/internal/model"
+	"github.com/zachthieme/pike/internal/parser"
 )
 
 // day is a UTC calendar date at midnight, matching how the parser and the hey
@@ -324,6 +326,81 @@ func TestSyncWeek_HeyRenamedAndNotesMovedWeek_RecreateCarriesHeyTitle(t *testing
 	}, week: now}
 	if _, w2, err := Push(context.Background(), Options{
 		Tasks: []model.Task{relinked}, Client: client2, Query: "@today",
+		StatePath: statePath, NotesDir: notesDir, Now: now,
+	}); err != nil || len(w2) != 0 {
+		t.Fatalf("second Push: err=%v warnings=%v", err, w2)
+	}
+	if len(client2.calls) != 0 {
+		t.Errorf("second Sync made HEY calls beyond list: %v", client2.calls)
+	}
+}
+
+func TestSyncWeek_HeyRenamedWithAtSignsAndNotesMovedWeek_RecreateSendsDecodedTitle(t *testing.T) {
+	now := time.Now()
+	newDue := day(2026, 9, 23) // moved into W1 in the notes
+	heyTitle := "Email bob@example.com re @rent"
+	// The notes still carry "Ship it" but moved @due into W1; HEY renamed the Todo
+	// to a Title carrying @ tokens and left it in W0. The Title pass retitles the
+	// line (encoded, so no stray tag), then the Week pass Re-creates for the moved
+	// @due — and that Re-create must send HEY's Title decoded, not the encoded form.
+	task, notesDir, statePath := linkFixture(t,
+		"h1", weekLine("h1", newDue), weekLinkTask("h1", newDue),
+		&State{Links: map[string]Link{"h1": {Title: "Ship it", WeekStart: day(2026, 9, 13), File: "notes.md", Line: 1}}},
+	)
+	client := &titleClient{todos: []hey.Todo{
+		{ID: "h1", Title: heyTitle, WeekStart: day(2026, 9, 13), WeekEnd: day(2026, 9, 19)},
+	}, week: now}
+
+	rep, warnings, err := Push(context.Background(), Options{
+		Tasks: []model.Task{task}, Client: client, Query: "@today",
+		StatePath: statePath, NotesDir: notesDir, Now: now,
+	})
+	if err != nil || len(warnings) != 0 {
+		t.Fatalf("Push: err=%v warnings=%v", err, warnings)
+	}
+	if rep.Retitled != 1 || rep.Rescheduled != 1 {
+		t.Errorf("Retitled=%d Rescheduled=%d, want 1/1", rep.Retitled, rep.Rescheduled)
+	}
+	// The Re-create sends HEY's decoded Title verbatim, then a delete.
+	want := []string{"add:" + heyTitle, "delete:h1"}
+	if len(client.calls) != 2 || client.calls[0] != want[0] || client.calls[1] != want[1] {
+		t.Errorf("calls=%v, want %v", client.calls, want)
+	}
+	if !client.lastAddDate.Equal(newDue) {
+		t.Errorf("Add date=%v, want %v", client.lastAddDate, newDue)
+	}
+	// The relinked line parses with only [hey due] and its Title decodes to HEY's.
+	got, _ := os.ReadFile(filepath.Join(notesDir, "notes.md"))
+	line := strings.TrimSuffix(string(got), "\n")
+	relinked, _ := parser.ParseLine(line, "notes.md", 1)
+	if relinked == nil {
+		t.Fatalf("relinked line did not parse: %q", line)
+	}
+	var names []string
+	for _, tag := range relinked.Tags {
+		names = append(names, tag.Name)
+	}
+	if len(names) != 2 || names[0] != "hey" || names[1] != "due" {
+		t.Fatalf("relinked line tags %v, want [hey due]; line=%q", names, line)
+	}
+	if relinked.Tags[0].Value != "h_new1" {
+		t.Errorf("@hey value=%q, want h_new1; line=%q", relinked.Tags[0].Value, line)
+	}
+	if got := titleOf(relinked.Text); got != heyTitle {
+		t.Errorf("titleOf(relinked line) = %q, want %q", got, heyTitle)
+	}
+	st, _ := LoadState(statePath)
+	if st.Links["h_new1"].Title != heyTitle {
+		t.Errorf("state Title=%q, want %q", st.Links["h_new1"].Title, heyTitle)
+	}
+
+	// A second Sync, re-scanning the relinked line against a HEY list that now
+	// agrees, must make no HEY calls beyond the list.
+	client2 := &titleClient{todos: []hey.Todo{
+		{ID: "h_new1", Title: heyTitle, WeekStart: day(2026, 9, 20), WeekEnd: day(2026, 9, 26)},
+	}, week: now}
+	if _, w2, err := Push(context.Background(), Options{
+		Tasks: []model.Task{*relinked}, Client: client2, Query: "@today",
 		StatePath: statePath, NotesDir: notesDir, Now: now,
 	}); err != nil || len(w2) != 0 {
 		t.Fatalf("second Push: err=%v warnings=%v", err, w2)
