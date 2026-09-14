@@ -158,6 +158,23 @@ func TestPlan_ListErrorPropagates(t *testing.T) {
 	}
 }
 
+func TestSaveState_CreatesMissingParentDir(t *testing.T) {
+	// The default state path lives under ~/.local/share/pike, which may not
+	// exist on a fresh machine. Saving must create the parent directory.
+	path := filepath.Join(t.TempDir(), "share", "pike", "hey-state.json")
+	st := &State{Links: map[string]Link{"133760954": {Title: "Buy milk"}}}
+	if err := SaveState(path, st); err != nil {
+		t.Fatalf("SaveState: %v", err)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("state file should be written: %v", err)
+	}
+	if len(data) == 0 {
+		t.Error("state file is empty")
+	}
+}
+
 func TestLoadState_AbsentIsEmpty(t *testing.T) {
 	st, err := LoadState(filepath.Join(t.TempDir(), "nope.json"))
 	if err != nil {

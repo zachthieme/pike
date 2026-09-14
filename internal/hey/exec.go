@@ -4,22 +4,26 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os/exec"
 	"time"
 )
 
-// weekDateLayout is HEY's date format for Week boundaries and the --date flag.
+// weekDateLayout is HEY's date format for the --date flag.
 const weekDateLayout = "2006-01-02"
 
 // ExecClient is the real [Client]: it shells out to the configured hey command
-// with `todo <verb> ... --json --quiet`, reads stdout, and maps
-// {"ok":false,...} envelopes to errors.
+// with `todo <verb> ... --json --quiet`, reads the bare data value from stdout,
+// and maps a non-zero exit (with an {"ok":false,...} envelope on stderr) to an
+// error.
 type ExecClient struct {
 	command string
 	account string
 	// run executes the hey command with the given args and returns its stdout.
-	// It is a field so tests can inject recorded outputs without a real binary.
+	// On a non-zero exit it returns an [*execError] carrying the exit status and
+	// stderr. It is a field so tests can inject recorded outputs without a real
+	// binary.
 	run func(ctx context.Context, args []string) ([]byte, error)
 }
 
@@ -31,13 +35,29 @@ func NewExecClient(command, account string) *ExecClient {
 	return c
 }
 
-// execRun runs the configured command with args, returning combined stdout.
-// stderr is not consulted: HEY reports everything pike needs on stdout.
+// execError is the failure of a hey invocation: a non-zero exit status and the
+// stderr it wrote, which carries HEY's {"ok":false,...} error envelope.
+type execError struct {
+	exitCode int
+	stderr   []byte
+}
+
+func (e *execError) Error() string {
+	return fmt.Sprintf("hey exited with status %d", e.exitCode)
+}
+
+// execRun runs the configured command with args. On success it returns stdout;
+// on a non-zero exit it returns an *execError with the exit status and stderr.
 func (c *ExecClient) execRun(ctx context.Context, args []string) ([]byte, error) {
 	cmd := exec.CommandContext(ctx, c.command, args...)
-	var stdout bytes.Buffer
+	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
+		var ee *exec.ExitError
+		if errors.As(err, &ee) {
+			return nil, &execError{exitCode: ee.ExitCode(), stderr: stderr.Bytes()}
+		}
 		return nil, fmt.Errorf("running %s: %w", c.command, err)
 	}
 	return stdout.Bytes(), nil
@@ -58,10 +78,7 @@ func (c *ExecClient) args(verb string, rest ...string) []string {
 func (c *ExecClient) List(ctx context.Context) ([]Todo, error) {
 	out, err := c.run(ctx, c.args("list", "--all"))
 	if err != nil {
-		return nil, err
-	}
-	if err := checkEnvelope(out); err != nil {
-		return nil, err
+		return nil, mapRunError(err)
 	}
 	var raws []rawTodo
 	if err := json.Unmarshal(out, &raws); err != nil {
@@ -86,7 +103,7 @@ func (c *ExecClient) Add(ctx context.Context, title string, date *time.Time) (To
 	}
 	out, err := c.run(ctx, c.args("add", rest...))
 	if err != nil {
-		return Todo{}, err
+		return Todo{}, mapRunError(err)
 	}
 	return parseTodo(out)
 }
@@ -106,19 +123,17 @@ func (c *ExecClient) Delete(ctx context.Context, id string) error {
 	return c.simpleVerb(ctx, "delete", id)
 }
 
+// simpleVerb runs a verb whose result payload pike does not need. Success is a
+// zero exit status; stdout (a result object, null, or empty) is ignored.
 func (c *ExecClient) simpleVerb(ctx context.Context, verb, id string) error {
-	out, err := c.run(ctx, c.args(verb, id))
-	if err != nil {
-		return err
+	if _, err := c.run(ctx, c.args(verb, id)); err != nil {
+		return mapRunError(err)
 	}
-	return checkEnvelope(out)
+	return nil
 }
 
 // parseTodo parses a single created/returned Todo object.
 func parseTodo(out []byte) (Todo, error) {
-	if err := checkEnvelope(out); err != nil {
-		return Todo{}, err
-	}
 	var r rawTodo
 	if err := json.Unmarshal(out, &r); err != nil {
 		return Todo{}, fmt.Errorf("parsing hey todo output: %w", err)
@@ -126,55 +141,84 @@ func parseTodo(out []byte) (Todo, error) {
 	return r.toTodo()
 }
 
-// errorEnvelope is HEY's {"ok":false,...} failure shape. A successful call
-// omits "ok" (or sets it true) and carries its payload directly.
+// errorEnvelope is HEY's {"ok":false,...} failure shape, written to stderr with
+// a non-zero exit status.
 type errorEnvelope struct {
 	OK    *bool  `json:"ok"`
 	Error string `json:"error"`
-	Kind  string `json:"kind"`
+	Code  string `json:"code"`
+	Hint  string `json:"hint"`
 }
 
-// checkEnvelope inspects an object payload for an {"ok":false,...} error. Array
-// payloads (list output) and success objects pass through untouched.
-func checkEnvelope(out []byte) error {
-	trimmed := bytes.TrimSpace(out)
-	if len(trimmed) == 0 || trimmed[0] != '{' {
-		return nil
+// message renders HEY's error text, appending the hint when present.
+func (e errorEnvelope) message() string {
+	if e.Hint != "" {
+		return fmt.Sprintf("%s (%s)", e.Error, e.Hint)
 	}
-	var env errorEnvelope
-	if err := json.Unmarshal(out, &env); err != nil {
-		return nil // not an envelope we recognise; let the payload parser report it
-	}
-	if env.OK == nil || *env.OK {
-		return nil
-	}
-	if env.Kind == "auth" {
-		return fmt.Errorf("%w: %s", ErrUnauthenticated, env.Error)
-	}
-	return fmt.Errorf("hey: %s", env.Error)
+	return e.Error
 }
 
-// rawTodo mirrors HEY's JSON todo object.
+// mapRunError turns a runner failure into a caller-facing error. A non-zero
+// exit carrying an {"ok":false,...} envelope surfaces HEY's own message; an
+// "auth" code (or a bare exit status 3) wraps [ErrUnauthenticated]. Failures
+// that are not an *execError (e.g. the command not being found) pass through.
+func mapRunError(err error) error {
+	var ee *execError
+	if !errors.As(err, &ee) {
+		return err
+	}
+	if env, ok := parseErrorEnvelope(ee.stderr); ok {
+		if env.Code == "auth" {
+			return fmt.Errorf("%w: %s", ErrUnauthenticated, env.message())
+		}
+		return fmt.Errorf("hey: %s", env.message())
+	}
+	if ee.exitCode == 3 {
+		return fmt.Errorf("%w: %s", ErrUnauthenticated, ee.Error())
+	}
+	return fmt.Errorf("hey: %s", ee.Error())
+}
+
+// parseErrorEnvelope finds HEY's JSON error envelope among the lines of stderr,
+// which may be preceded by unrelated warning lines (e.g. a keyring warning).
+func parseErrorEnvelope(stderr []byte) (errorEnvelope, bool) {
+	for _, line := range bytes.Split(stderr, []byte("\n")) {
+		trimmed := bytes.TrimSpace(line)
+		if len(trimmed) == 0 || trimmed[0] != '{' {
+			continue
+		}
+		var env errorEnvelope
+		if err := json.Unmarshal(trimmed, &env); err != nil {
+			continue
+		}
+		if env.Error != "" || (env.OK != nil && !*env.OK) {
+			return env, true
+		}
+	}
+	return errorEnvelope{}, false
+}
+
+// rawTodo mirrors HEY's JSON todo object. Only the fields pike needs are kept.
 type rawTodo struct {
-	ID          string  `json:"id"`
-	Title       string  `json:"title"`
-	WeekStart   string  `json:"week_start"`
-	WeekEnd     string  `json:"week_end"`
-	CompletedAt *string `json:"completed_at"`
-	UpdatedAt   string  `json:"updated_at"`
+	ID          json.Number `json:"id"`
+	Title       string      `json:"title"`
+	StartsAt    string      `json:"starts_at"`
+	EndsAt      string      `json:"ends_at"`
+	CompletedAt *string     `json:"completed_at"`
+	UpdatedAt   string      `json:"updated_at"`
 }
 
 func (r rawTodo) toTodo() (Todo, error) {
-	weekStart, err := time.Parse(weekDateLayout, r.WeekStart)
+	weekStart, err := parseWeekDate(r.StartsAt)
 	if err != nil {
-		return Todo{}, fmt.Errorf("parsing week_start %q: %w", r.WeekStart, err)
+		return Todo{}, fmt.Errorf("parsing starts_at %q: %w", r.StartsAt, err)
 	}
-	weekEnd, err := time.Parse(weekDateLayout, r.WeekEnd)
+	weekEnd, err := parseWeekDate(r.EndsAt)
 	if err != nil {
-		return Todo{}, fmt.Errorf("parsing week_end %q: %w", r.WeekEnd, err)
+		return Todo{}, fmt.Errorf("parsing ends_at %q: %w", r.EndsAt, err)
 	}
 	t := Todo{
-		ID:        r.ID,
+		ID:        r.ID.String(),
 		Title:     r.Title,
 		WeekStart: weekStart,
 		WeekEnd:   weekEnd,
@@ -194,4 +238,15 @@ func (r rawTodo) toTodo() (Todo, error) {
 		t.Completed = &completed
 	}
 	return t, nil
+}
+
+// parseWeekDate reads an RFC3339 Week boundary (UTC midnight) and keeps its
+// calendar date verbatim, with no zone conversion.
+func parseWeekDate(s string) (time.Time, error) {
+	ts, err := time.Parse(time.RFC3339, s)
+	if err != nil {
+		return time.Time{}, err
+	}
+	ts = ts.UTC()
+	return time.Date(ts.Year(), ts.Month(), ts.Day(), 0, 0, 0, 0, time.UTC), nil
 }

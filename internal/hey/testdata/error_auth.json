@@ -1,1 +1,2 @@
-{"ok":false,"error":"not authenticated; run `hey login`","kind":"auth"}
+warning: no keyring backend available; storing credentials in plaintext
+{"ok":false,"error":"not authenticated; run `hey login`","code":"auth","hint":"run: hey login"}

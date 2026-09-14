@@ -574,7 +574,7 @@ func writeSyncConfig(t *testing.T, extraHey string) (cfgPath, notesDir, statePat
 		t.Fatal(err)
 	}
 	notes := "- [ ] Buy milk @today\n" +
-		"- [ ] Old linked @today @hey(h_open)\n" +
+		"- [ ] Old linked @today @hey(500001)\n" +
 		"- [ ] Secret @today @hidden\n"
 	if err := os.WriteFile(filepath.Join(notesDir, "notes.md"), []byte(notes), 0o644); err != nil {
 		t.Fatal(err)
@@ -658,8 +658,8 @@ func TestSyncDryRunEndToEnd(t *testing.T) {
 	}
 
 	out := stdout.String()
-	// 1 eligible task (Buy milk) would push; 1 unlinked open todo (h_new)
-	// would import; 1 link (h_open) already exists.
+	// 1 eligible task (Buy milk) would push; 1 unlinked open todo (500002)
+	// would import; 1 link (500001) already exists.
 	for _, want := range []string{"1 task", "1 todo", "1 link"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("output missing %q:\n%s", want, out)
@@ -703,8 +703,8 @@ func TestSyncRealPushEndToEnd(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := "- [ ] Buy milk @today @hey(h_buymilk)\n" +
-		"- [ ] Old linked @today @hey(h_open)\n" +
+	want := "- [ ] Buy milk @today @hey(500009)\n" +
+		"- [ ] Old linked @today @hey(500001)\n" +
 		"- [ ] Secret @today @hidden\n"
 	if string(after) != want {
 		t.Errorf("notes after push:\n got: %q\nwant: %q", string(after), want)
@@ -727,7 +727,7 @@ func TestSyncRealPushEndToEnd(t *testing.T) {
 	if err != nil {
 		t.Fatalf("state file should be written: %v", err)
 	}
-	if !strings.Contains(string(stateData), "h_buymilk") || !strings.Contains(string(stateData), "Buy milk") {
+	if !strings.Contains(string(stateData), "500009") || !strings.Contains(string(stateData), "Buy milk") {
 		t.Errorf("state file missing the new link:\n%s", string(stateData))
 	}
 }
@@ -744,7 +744,7 @@ func TestSyncRealImportEndToEnd(t *testing.T) {
 		t.Fatalf("unexpected error: %v\nstderr: %s", err, stderr.String())
 	}
 
-	// The report counts the one unlinked open todo (h_new) imported.
+	// The report counts the one unlinked open todo (500002) imported.
 	if !strings.Contains(stdout.String(), "1 todo(s) imported") {
 		t.Errorf("report should count one import:\n%s", stdout.String())
 	}
@@ -755,12 +755,12 @@ func TestSyncRealImportEndToEnd(t *testing.T) {
 	if err != nil {
 		t.Fatalf("inbox should be created: %v", err)
 	}
-	want := "- [ ] Unlinked todo @due(2026-09-19) @hey(h_new)\n"
+	want := "- [ ] Unlinked todo @due(2026-09-19) @hey(500002)\n"
 	if string(got) != want {
 		t.Errorf("inbox after import:\n got: %q\nwant: %q", string(got), want)
 	}
 
-	// The completed todo (h_done) is never imported.
+	// The completed todo (500003) is never imported.
 	if strings.Contains(string(got), "Old todo") {
 		t.Errorf("completed todo should not be imported:\n%s", string(got))
 	}
@@ -770,7 +770,7 @@ func TestSyncRealImportEndToEnd(t *testing.T) {
 	if err != nil {
 		t.Fatalf("state file should be written: %v", err)
 	}
-	if !strings.Contains(string(stateData), "h_new") {
+	if !strings.Contains(string(stateData), "500002") {
 		t.Errorf("state file missing the import link:\n%s", string(stateData))
 	}
 }
@@ -795,6 +795,40 @@ func TestSyncDryRunJSON(t *testing.T) {
 	}
 }
 
+func TestSyncCreatesDefaultStateDir(t *testing.T) {
+	// With no state_path configured, the state file defaults under
+	// $XDG_DATA_HOME/pike, which does not exist on a fresh machine. Sync must
+	// create the directory and write the file.
+	dir := t.TempDir()
+	notesDir := filepath.Join(dir, "notes")
+	if err := os.MkdirAll(notesDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(notesDir, "notes.md"), []byte("- [ ] Buy milk @today\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	stub, err := filepath.Abs(filepath.Join("testdata", "hey-stub.sh"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	xdgData := filepath.Join(dir, "missing-xdg-data")
+	t.Setenv("XDG_DATA_HOME", xdgData)
+	cfgPath := filepath.Join(dir, "config.yaml")
+	if err := os.WriteFile(cfgPath, []byte("hey:\n  command: "+stub+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	if err := run([]string{"--config", cfgPath, "--dir", notesDir, "--sync"}, &stdout, &stderr); err != nil {
+		t.Fatalf("unexpected error: %v\nstderr: %s", err, stderr.String())
+	}
+
+	statePath := filepath.Join(xdgData, "pike", "hey-state.json")
+	if _, err := os.Stat(statePath); err != nil {
+		t.Fatalf("default state file should be written under a missing XDG dir: %v", err)
+	}
+}
+
 func TestSyncUnauthenticatedExitsNonZero(t *testing.T) {
 	cfgPath, notesDir, _ := writeSyncConfig(t, "")
 	t.Setenv("PIKE_STUB_AUTH", "1")
@@ -802,6 +836,9 @@ func TestSyncUnauthenticatedExitsNonZero(t *testing.T) {
 	err := run([]string{"--config", cfgPath, "--dir", notesDir, "--sync", "--dry-run"}, &stdout, &stderr)
 	if err == nil {
 		t.Fatal("expected a non-zero exit when HEY reports an auth error")
+	}
+	if !strings.Contains(err.Error(), "not authenticated") {
+		t.Errorf("error should carry HEY's message, got: %v", err)
 	}
 }
 
@@ -826,11 +863,11 @@ func TestSyncCompletionEndToEnd(t *testing.T) {
 	if err := os.MkdirAll(notesDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	// h_open is open in HEY (stub) but completed in the notes → completed wins,
-	// so the Todo is completed in HEY. h_done is completed in HEY but open in the
+	// 500001 is open in HEY (stub) but completed in the notes → completed wins,
+	// so the Todo is completed in HEY. 500003 is completed in HEY but open in the
 	// notes → completed wins, so the notes line is checked with @completed.
-	notes := "- [x] Finish report @hey(h_open) @completed(2026-09-12)\n" +
-		"- [ ] Read book @hey(h_done)\n"
+	notes := "- [x] Finish report @hey(500001) @completed(2026-09-12)\n" +
+		"- [ ] Read book @hey(500003)\n"
 	notesFile := filepath.Join(notesDir, "notes.md")
 	if err := os.WriteFile(notesFile, []byte(notes), 0o644); err != nil {
 		t.Fatal(err)
@@ -863,8 +900,8 @@ func TestSyncCompletionEndToEnd(t *testing.T) {
 	if err != nil {
 		t.Fatalf("expected a recorded complete call: %v", err)
 	}
-	if !strings.Contains(string(log), "complete h_open") {
-		t.Errorf("expected complete h_open in mutation log:\n%s", string(log))
+	if !strings.Contains(string(log), "complete 500001") {
+		t.Errorf("expected complete 500001 in mutation log:\n%s", string(log))
 	}
 
 	// The open notes Task was checked and stamped from HEY's completed_at.
@@ -873,11 +910,11 @@ func TestSyncCompletionEndToEnd(t *testing.T) {
 		t.Fatal(err)
 	}
 	lines := strings.Split(string(after), "\n")
-	if !strings.HasPrefix(lines[1], "- [x] Read book @hey(h_done) @completed(") {
+	if !strings.HasPrefix(lines[1], "- [x] Read book @hey(500003) @completed(") {
 		t.Errorf("second line should be completed from HEY:\n%s", string(after))
 	}
 	// The completed Task in the notes was left as-is.
-	if lines[0] != "- [x] Finish report @hey(h_open) @completed(2026-09-12)" {
+	if lines[0] != "- [x] Finish report @hey(500001) @completed(2026-09-12)" {
 		t.Errorf("first line should be preserved:\n%s", string(after))
 	}
 
@@ -886,7 +923,7 @@ func TestSyncCompletionEndToEnd(t *testing.T) {
 	if err != nil {
 		t.Fatalf("state file should be written: %v", err)
 	}
-	if !strings.Contains(string(stateData), "h_open") || !strings.Contains(string(stateData), "h_done") {
+	if !strings.Contains(string(stateData), "500001") || !strings.Contains(string(stateData), "500003") {
 		t.Errorf("state should record both links:\n%s", string(stateData))
 	}
 }
