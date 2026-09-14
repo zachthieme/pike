@@ -71,8 +71,10 @@ func TestResolveTitle_DecisionMatrix(t *testing.T) {
 		// A completed Todo is never retitled or re-created, whichever side moved.
 		{"hey renamed but todo completed", "Ship it", "Deploy it", "Ship it", true, true, titleNone},
 		{"notes renamed but todo completed", "Deploy it", "Ship it", "Ship it", true, true, titleNone},
-		// Without a base snapshot we cannot tell which side changed, so do nothing.
-		{"no base, sides differ", "Deploy it", "Ship it", "", false, false, titleNone},
+		// Without a base snapshot the notes win on text, so the Todo is Re-created.
+		{"no base, sides differ", "Deploy it", "Ship it", "", false, false, titleRecreate},
+		// A completed Todo is never touched, base or not.
+		{"no base, sides differ but todo completed", "Deploy it", "Ship it", "", false, true, titleNone},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -182,6 +184,45 @@ func TestSyncTitle_BothRenamed_NotesWin(t *testing.T) {
 	}
 	if len(client.calls) == 0 || client.calls[0] != "add:Notes title" {
 		t.Errorf("expected Todo re-created with the notes title; calls=%v", client.calls)
+	}
+}
+
+func TestSyncTitle_NoStateFile_NotesTitleWinsRecreates(t *testing.T) {
+	now := time.Now()
+	// No prior state file: with differing Titles and an open Todo, the notes win
+	// on text, so the Todo is Re-created with the notes' Title.
+	task, notesDir, statePath := linkFixture(t,
+		"h1", "- [ ] Deploy it now @hey(h1)",
+		model.Task{Text: "Deploy it now @hey(h1)", State: model.Open, HasCheckbox: true,
+			Tags: []model.Tag{{Name: "hey", Value: "h1"}}},
+		nil,
+	)
+	if _, err := os.Stat(statePath); !os.IsNotExist(err) {
+		t.Fatalf("state file should be absent at start (err: %v)", err)
+	}
+	client := &titleClient{todos: []hey.Todo{{ID: "h1", Title: "Ship it", WeekStart: now}}, week: now}
+
+	rep, warnings, err := Push(context.Background(), Options{
+		Tasks: []model.Task{task}, Client: client, Query: "@today",
+		StatePath: statePath, NotesDir: notesDir, Now: now,
+	})
+	if err != nil || len(warnings) != 0 {
+		t.Fatalf("Push: err=%v warnings=%v", err, warnings)
+	}
+	if rep.Recreated != 1 || rep.Retitled != 0 {
+		t.Errorf("Recreated=%d Retitled=%d, want 1/0", rep.Recreated, rep.Retitled)
+	}
+	want := []string{"add:Deploy it now", "delete:h1"}
+	if len(client.calls) != 2 || client.calls[0] != want[0] || client.calls[1] != want[1] {
+		t.Errorf("calls=%v, want %v", client.calls, want)
+	}
+	got, _ := os.ReadFile(filepath.Join(notesDir, "notes.md"))
+	if string(got) != "- [ ] Deploy it now @hey(h_new1)\n" {
+		t.Errorf("notes @hey not rewritten to new id, got: %q", string(got))
+	}
+	st, _ := LoadState(statePath)
+	if st.Links["h_new1"].Title != "Deploy it now" {
+		t.Errorf("new link missing or wrong title; state=%+v", st.Links)
 	}
 }
 
