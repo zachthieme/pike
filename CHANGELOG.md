@@ -116,6 +116,9 @@
 - [user] TUI: adding, removing, or editing the `hey:` config block while the dashboard is running now takes effect on config reload — the HEY client and sync settings are rebuilt, so `S` and Push follow the new command and account instead of the values from startup (#17).
 - [user] Hiding a bare `@hey` Link tag no longer mangles a longer tag on the same line: `Ping @heyday then @hey` now renders as `Ping @heyday then` with `@heyday` intact and no doubled spaces (#17).
 
+**Documentation:**
+- [user] HEY Sync docs now match what ships after the sync fixes: the README explains that deleting the state file (or starting with none) is a safe reset because the default state directory is recreated automatically, that un-linking a task by hand leaves the old todo as an orphan reported once until you remove it from HEY, that an imported title containing `@` text is written so it plants no stray tag, and that a failed `@hey` tag write rolls back the todo pike just added; `CONTEXT.md` redefines **Orphan** as a surviving todo whose task line is gone and adds **Un-link** for a todo already gone from HEY (#18).
+
 **Fixed:**
 - [user] `pike --sync` now works against the real `hey` CLI (hey-cli 1.4.1): the adapter parses hey's actual todo shape (numeric `id`, `starts_at`/`ends_at` week boundaries, `completed_at`), where before every sync failed immediately on the numeric id. Authentication failures (`code: auth` or exit status 3) now surface HEY's own message and hint and exit non-zero, and the default state file's parent directory (`~/.local/share/pike`) is created on a fresh machine (#14).
 - [user] A `hey:` config key with all its children commented out (loading as YAML null) now enables HEY sync with defaults, the same as `hey: {}` (#14).
