@@ -310,7 +310,11 @@ A sync is a two-way reconciliation:
   matching the Sync Query is created as a new HEY todo and linked. The todo's title
   is the task's text with all `@tags` stripped.
 - **Import** — every unlinked, open HEY todo is appended to your inbox (see
-  `inbox_file`) as a new task, dated to its week's Saturday and linked.
+  `inbox_file`) as a new task, dated to its week's Saturday and linked. If the todo's
+  title contains `@` text — an email address like `bob@example.com`, a `@rent`, or even
+  an `@due(...)` — pike writes it so the line parses with only its own `@due` and `@hey`
+  tags: the `@` reads unchanged to you but plants no stray tag that a later sync would
+  misread as a title change.
 - **Reconcile** — for tasks already linked, completion, title, and schedule changes
   are carried to whichever side is behind.
 
@@ -329,6 +333,11 @@ the task's own line, e.g.:
 The tag travels with the line through reordering, moves between files, and rewording,
 so the link survives edits that a sidecar file could not. A link is **sticky**: once
 made it persists whether or not the task still matches the Sync Query.
+
+A push writes this tag right after creating the todo. If that write is refused — for
+example the task's line changed on disk since the scan — nothing in your notes would
+record the new todo, so pike rolls the push back by deleting the todo it just added.
+You are left where you started, with no untracked duplicate for the next sync to import.
 
 ### Sync never deletes
 
@@ -350,8 +359,14 @@ enough to destroy data over.
 To break the link between a task and its todo, delete the `@hey(id)` tag from the
 task's line in your notes. The task becomes local-only again; the todo is left
 untouched in HEY. A later sync will treat the now-unlinked task like any other and
-re-push it if it matches the Sync Query — so if you meant to stop syncing it
-entirely, remove it from the Sync Query's reach (or delete the todo in HEY) as well.
+re-push it as a **new** todo if it matches the Sync Query.
+
+The old todo, no longer named by any tag, becomes an **orphan**: the next sync reports
+it once as an orphan warning and then leaves it in place — it counts the orphan on
+every later sync but does not repeat the warning. To finish the un-link, delete that
+todo in HEY (or, if you meant to stop syncing the task entirely, remove it from the
+Sync Query's reach so it is not re-pushed). Until you do, expect both the orphaned old
+todo and the freshly pushed one to sit on your HEY week.
 
 ### Resetting the state file
 
@@ -365,7 +380,10 @@ rm ~/.local/share/pike/hey-state.json
 
 The next `pike --sync` rebuilds it from the `@hey` tags in your notes and the current
 state of HEY. Because links live in the tags, no links are lost by resetting the
-state.
+state. You do not need to recreate the file or its folder by hand: sync writes the
+state file on its next run and creates the default `~/.local/share/pike/` directory
+for it automatically if it is missing, so deleting the file (or starting on a fresh
+machine with no state at all) is a safe reset.
 
 ## Query DSL
 
