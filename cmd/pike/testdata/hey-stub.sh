@@ -21,7 +21,7 @@ case "$verb" in
 list)
   cat <<'JSON'
 [
-  {"id":500001,"title":"Buy milk","starts_at":"2026-09-13T00:00:00Z","ends_at":"2026-09-19T00:00:00Z","updated_at":"2026-09-13T08:00:00Z"},
+  {"id":500001,"title":"Old linked","starts_at":"2026-09-13T00:00:00Z","ends_at":"2026-09-19T00:00:00Z","updated_at":"2026-09-13T08:00:00Z"},
   {"id":500002,"title":"Unlinked todo","starts_at":"2026-09-13T00:00:00Z","ends_at":"2026-09-19T00:00:00Z","updated_at":"2026-09-13T08:00:00Z"},
   {"id":500003,"title":"Old todo","starts_at":"2026-09-06T00:00:00Z","ends_at":"2026-09-12T00:00:00Z","completed_at":"2026-09-10T14:30:00Z","updated_at":"2026-09-10T14:30:00Z"}
 ]

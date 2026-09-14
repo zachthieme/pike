@@ -865,8 +865,10 @@ func TestSyncCompletionEndToEnd(t *testing.T) {
 	}
 	// 500001 is open in HEY (stub) but completed in the notes → completed wins,
 	// so the Todo is completed in HEY. 500003 is completed in HEY but open in the
-	// notes → completed wins, so the notes line is checked with @completed.
-	notes := "- [x] Finish report @hey(500001) @completed(2026-09-12)\n" +
+	// notes → completed wins, so the notes line is checked with @completed. 500001's
+	// notes Title matches HEY's and 500003's Todo is completed, so the no-state
+	// title rule re-creates neither and the completion reconciliation is what acts.
+	notes := "- [x] Old linked @hey(500001) @completed(2026-09-12)\n" +
 		"- [ ] Read book @hey(500003)\n"
 	notesFile := filepath.Join(notesDir, "notes.md")
 	if err := os.WriteFile(notesFile, []byte(notes), 0o644); err != nil {
@@ -914,7 +916,7 @@ func TestSyncCompletionEndToEnd(t *testing.T) {
 		t.Errorf("second line should be completed from HEY:\n%s", string(after))
 	}
 	// The completed Task in the notes was left as-is.
-	if lines[0] != "- [x] Finish report @hey(500001) @completed(2026-09-12)" {
+	if lines[0] != "- [x] Old linked @hey(500001) @completed(2026-09-12)" {
 		t.Errorf("first line should be preserved:\n%s", string(after))
 	}
 
