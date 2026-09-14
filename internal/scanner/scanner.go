@@ -6,9 +6,11 @@ import (
 	"context"
 	"fmt"
 	"io/fs"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
+	"sync"
 	"time"
 
 	"github.com/bmatcuk/doublestar/v4"
@@ -33,13 +35,24 @@ const maxLineSize = 1 << 20
 
 // Scanner walks a directory tree, finds files matching include/exclude globs,
 // and parses them for task lines.
+//
+// Scan and Refresh are safe for concurrent use: each call builds its result
+// against a snapshot of the cached state and publishes it atomically, so
+// overlapping callers each get a complete, consistent task list and never
+// observe another caller's half-updated cache. Reads of Warnings should go
+// through [Scanner.Warns] for the same guarantee.
 type Scanner struct {
-	root     string
-	include  []string               // glob patterns like "**/*.md"
-	exclude  []string               // glob patterns like "archive/**"
-	mtimes   map[string]time.Time   // relPath -> last mtime
+	root    string
+	include []string // glob patterns like "**/*.md"
+	exclude []string // glob patterns like "archive/**"
+
+	// mu guards the cached scan state (mtimes, tasks, Warnings). It is only
+	// held to snapshot or publish that state, never across file I/O, so
+	// concurrent scans do not serialize on disk work.
+	mu       sync.Mutex
+	mtimes   map[string]time.Time    // relPath -> last mtime
 	tasks    map[string][]model.Task // relPath -> tasks from that file
-	Warnings []model.Warning        // populated during Scan/Refresh
+	Warnings []model.Warning         // populated during Scan/Refresh; read via Warns
 }
 
 // matchedFile holds info about a file discovered during a directory walk.
@@ -74,37 +87,45 @@ func New(root string, include, exclude []string) (*Scanner, error) {
 
 // Scan performs a full scan of all matching files. Returns all tasks found.
 func (s *Scanner) Scan(ctx context.Context) ([]model.Task, error) {
-	s.Warnings = nil
 	mtimes := make(map[string]time.Time)
 	tasks := make(map[string][]model.Task)
+	var warnings []model.Warning
 
 	err := s.walkMatching(ctx, func(mf matchedFile) error {
-		return s.parseFileInto(mf.absPath, mf.relPath, mf.modTime, mtimes, tasks)
+		return parseFileInto(mf.absPath, mf.relPath, mf.modTime, mtimes, tasks, &warnings)
 	})
 	if err != nil {
 		return nil, err
 	}
 
-	s.mtimes = mtimes
-	s.tasks = tasks
-
-	return s.allTasks(), nil
+	s.publish(mtimes, tasks, warnings)
+	return allTasks(tasks), nil
 }
 
 // Refresh does an incremental scan. Only re-parses files whose mtime has
 // changed since the last scan. Removes tasks from deleted files.
+//
+// It works against an independent snapshot of the cached state taken up front
+// and publishes the fully-built result atomically at the end, so it is safe to
+// call from several goroutines at once (see [Scanner]).
 func (s *Scanner) Refresh(ctx context.Context) ([]model.Task, error) {
-	s.Warnings = nil
+	// Snapshot the cache into fresh maps this call owns exclusively. The
+	// snapshot is shallow, but parseFileInto only ever replaces a file's
+	// entry wholesale (never mutates a stored slice in place), so the shared
+	// task slices are read-only here.
+	mtimes, tasks := s.snapshot()
+	var warnings []model.Warning
+
 	// Collect the set of files currently on disk that match our patterns
 	onDisk := make(map[string]bool)
 
 	err := s.walkMatching(ctx, func(mf matchedFile) error {
 		onDisk[mf.relPath] = true
 
-		prevMtime, seen := s.mtimes[mf.relPath]
+		prevMtime, seen := mtimes[mf.relPath]
 		if !seen || mf.modTime.After(prevMtime) {
 			// File is new or modified — re-parse
-			return s.parseFileInto(mf.absPath, mf.relPath, mf.modTime, s.mtimes, s.tasks)
+			return parseFileInto(mf.absPath, mf.relPath, mf.modTime, mtimes, tasks, &warnings)
 		}
 
 		return nil
@@ -114,14 +135,40 @@ func (s *Scanner) Refresh(ctx context.Context) ([]model.Task, error) {
 	}
 
 	// Remove tasks for files that no longer exist
-	for relPath := range s.tasks {
+	for relPath := range tasks {
 		if !onDisk[relPath] {
-			delete(s.tasks, relPath)
-			delete(s.mtimes, relPath)
+			delete(tasks, relPath)
+			delete(mtimes, relPath)
 		}
 	}
 
-	return s.allTasks(), nil
+	s.publish(mtimes, tasks, warnings)
+	return allTasks(tasks), nil
+}
+
+// snapshot returns independent copies of the cached mtimes and tasks maps that
+// the caller may mutate freely without affecting the shared state.
+func (s *Scanner) snapshot() (map[string]time.Time, map[string][]model.Task) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return maps.Clone(s.mtimes), maps.Clone(s.tasks)
+}
+
+// publish atomically replaces the cached scan state with the given result.
+func (s *Scanner) publish(mtimes map[string]time.Time, tasks map[string][]model.Task, warnings []model.Warning) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.mtimes = mtimes
+	s.tasks = tasks
+	s.Warnings = warnings
+}
+
+// Warns returns the warnings collected by the most recent completed Scan or
+// Refresh. It is safe to call concurrently with a scan in progress.
+func (s *Scanner) Warns() []model.Warning {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.Warnings
 }
 
 // walkMatching walks the root directory and calls fn for each file matching
@@ -167,9 +214,12 @@ func (s *Scanner) walkMatching(ctx context.Context, fn func(matchedFile) error) 
 }
 
 // parseFileInto reads a file, extracts tasks, and stores the results into the
-// provided maps. The modTime parameter is the file's modification time obtained
-// during the directory walk, avoiding a TOCTOU race from re-statting the file.
-func (s *Scanner) parseFileInto(absPath, relPath string, modTime time.Time, mtimes map[string]time.Time, tasks map[string][]model.Task) error {
+// provided maps, appending any parse warnings to warnings. The modTime parameter
+// is the file's modification time obtained during the directory walk, avoiding a
+// TOCTOU race from re-statting the file. It writes only into caller-owned state
+// (the maps and slice passed in), never the Scanner's shared cache, so it is
+// safe to call from concurrent scans.
+func parseFileInto(absPath, relPath string, modTime time.Time, mtimes map[string]time.Time, tasks map[string][]model.Task, warnings *[]model.Warning) error {
 	f, err := os.Open(absPath)
 	if err != nil {
 		return err
@@ -183,11 +233,11 @@ func (s *Scanner) parseFileInto(absPath, relPath string, modTime time.Time, mtim
 	for sc.Scan() {
 		lineNum++
 		line := sc.Text()
-		task, warnings := parser.ParseLine(line, relPath, lineNum)
+		task, warns := parser.ParseLine(line, relPath, lineNum)
 		if task != nil {
 			fileTasks = append(fileTasks, *task)
 		}
-		s.Warnings = append(s.Warnings, warnings...)
+		*warnings = append(*warnings, warns...)
 	}
 	if err := sc.Err(); err != nil {
 		return err
@@ -222,18 +272,19 @@ func (s *Scanner) matchesExclude(relPath string) bool {
 	return false
 }
 
-// allTasks collects all tasks from the map in a stable order (sorted by file path).
-func (s *Scanner) allTasks() []model.Task {
+// allTasks collects all tasks from the given map in a stable order (sorted by
+// file path). It operates on the caller's snapshot, not the shared cache.
+func allTasks(tasks map[string][]model.Task) []model.Task {
 	// Get sorted file paths
-	paths := make([]string, 0, len(s.tasks))
-	for p := range s.tasks {
+	paths := make([]string, 0, len(tasks))
+	for p := range tasks {
 		paths = append(paths, p)
 	}
 	slices.Sort(paths)
 
 	var all []model.Task
 	for _, p := range paths {
-		all = append(all, s.tasks[p]...)
+		all = append(all, tasks[p]...)
 	}
 	return all
 }
