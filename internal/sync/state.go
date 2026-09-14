@@ -81,6 +81,11 @@ func SaveState(path string, st *State) error {
 	}
 	data = append(data, '\n')
 	dir := filepath.Dir(path)
+	// Create the parent directory when missing, so the default state path under
+	// ~/.local/share/pike works on a fresh machine.
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return fmt.Errorf("creating state directory %s: %w", dir, err)
+	}
 	tmp, err := os.CreateTemp(dir, ".pike-hey-state-*")
 	if err != nil {
 		return err

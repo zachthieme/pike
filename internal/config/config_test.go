@@ -805,6 +805,30 @@ hey: {}
 	}
 }
 
+func TestLoadBytes_HeyNull(t *testing.T) {
+	t.Setenv("XDG_DATA_HOME", "")
+	// A hey: key whose children are all commented out loads as YAML null. It
+	// enables the feature with defaults, exactly like `hey: {}`.
+	cfg, err := LoadBytes([]byte("hey:\n"))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.Hey == nil {
+		t.Fatal("expected Hey block to be present for a null hey: value")
+	}
+	if cfg.Hey.Command != "hey" {
+		t.Errorf("Command = %q, want %q", cfg.Hey.Command, "hey")
+	}
+	if cfg.Hey.Query != "@due or @today" {
+		t.Errorf("Query = %q, want %q", cfg.Hey.Query, "@due or @today")
+	}
+	home, _ := os.UserHomeDir()
+	wantState := filepath.Join(home, ".local", "share", "pike", "hey-state.json")
+	if cfg.Hey.StatePath != wantState {
+		t.Errorf("StatePath = %q, want %q", cfg.Hey.StatePath, wantState)
+	}
+}
+
 func TestLoadBytes_HeyStatePathXDG(t *testing.T) {
 	t.Setenv("XDG_DATA_HOME", "/tmp/xdgdata")
 	cfg, err := LoadBytes([]byte("hey: {}\n"))

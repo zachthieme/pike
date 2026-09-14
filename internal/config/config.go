@@ -94,7 +94,7 @@ type rawConfig struct {
 	InboxFile             string            `yaml:"inbox_file"`
 	Views                 []ViewConfig      `yaml:"views"`
 	Keybindings           *rawKeybindings   `yaml:"keybindings"`
-	Hey                   *rawHey           `yaml:"hey"`
+	Hey                   yaml.Node         `yaml:"hey"`
 }
 
 // rawHey mirrors the hey: YAML block for unmarshalling.
@@ -353,9 +353,16 @@ func applyDefaults(raw *rawConfig) (*Config, error) {
 	}
 
 	// Hey: only populated when a hey: block is present, so its absence leaves
-	// all existing behaviour untouched.
-	if raw.Hey != nil {
-		cfg.Hey = applyHeyDefaults(raw.Hey)
+	// all existing behaviour untouched. A present-but-null value (every child
+	// commented out) enables the feature with defaults, the same as `hey: {}`.
+	if raw.Hey.Kind != 0 {
+		var rh rawHey
+		if raw.Hey.Kind == yaml.MappingNode {
+			if err := raw.Hey.Decode(&rh); err != nil {
+				return nil, err
+			}
+		}
+		cfg.Hey = applyHeyDefaults(&rh)
 	}
 
 	keybindings, customBindings, err := parseKeybindings(raw.Keybindings)

@@ -1,1 +1,2 @@
-{"ok":false,"error":"todo not found"}
+warning: no keyring backend available; storing credentials in plaintext
+{"ok":false,"error":"todo not found","code":"not_found"}
