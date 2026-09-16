@@ -512,7 +512,7 @@ tag_colors:
 # Action names: up, down, top, bottom, page_down, page_up, next_section,
 #   prev_section, enter, quit, summary, filter, query, escape, refresh,
 #   all_tasks, tag_search, toggle_hidden, toggle, toggle_hidden_tag,
-#   recently_completed
+#   recently_completed, create_task, toggle_collapse
 # keybindings:
 #   toggle: ["space", "x"]       # override: list ALL keys you want
 #   quit: ["q", "ctrl+c"]
