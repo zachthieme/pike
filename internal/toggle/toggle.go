@@ -427,11 +427,13 @@ func (t *Toggler) AppendTask(ctx context.Context, filePath string, text string) 
 		lines, endings = parseLines(string(data))
 	}
 
-	// The appended line — and the previous last line, if it lacked one — takes the
-	// file's own ending: CRLF when the existing lines use it, LF otherwise
-	// (including for a new or empty file).
+	// The appended line — and the previous last line, if it lacked a real one —
+	// takes the file's own ending: CRLF when the existing lines use it, LF
+	// otherwise (including for a new or empty file). A final line ending in a bare
+	// "\r" counts as lacking one too, so it gets a full ending rather than leaving
+	// a doubled CR behind the appended line.
 	ending := fileEnding(endings)
-	if n := len(endings); n > 0 && endings[n-1] == "" {
+	if n := len(endings); n > 0 && (endings[n-1] == "" || endings[n-1] == "\r") {
 		endings[n-1] = ending
 	}
 	lines = append(lines, line)
@@ -511,8 +513,16 @@ func parseLines(s string) (lines, endings []string) {
 	endings = make([]string, len(parts))
 	for i, p := range parts {
 		if i == len(parts)-1 && !trailingNewline {
-			// Final line with no trailing newline: any trailing "\r" is content.
-			lines[i], endings[i] = p, ""
+			// Final line with no trailing newline: a trailing "\r" is that line's
+			// ending, not content. The scanner reads it the same way (bufio's
+			// dropCR strips it from the final unterminated line too), so keeping
+			// it out of the content makes the two agree. Concatenating
+			// lines[i]+endings[i] still reproduces s exactly.
+			if strings.HasSuffix(p, "\r") {
+				lines[i], endings[i] = p[:len(p)-1], "\r"
+			} else {
+				lines[i], endings[i] = p, ""
+			}
 			continue
 		}
 		if strings.HasSuffix(p, "\r") {
