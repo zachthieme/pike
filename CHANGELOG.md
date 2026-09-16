@@ -1,5 +1,16 @@
 # Changelog
 
+### Collected changes — September 16, 2026
+
+**Bug fixes:**
+- [user] HEY Sync: a Todo whose HEY title contains a newline, carriage return, or tab is now normalised to a single line before it is written into the notes, the same way a HEY-side rename already normalises. Before, such a title split across two lines — leaving an unlinked open checkbox that the next Sync pushed back to HEY and multiplied on every run — and a crafted title could inject a second checkbox or a stray `@hey` tag on its own line (#25).
+- [user] HEY Sync: a HEY title that already contains a literal zero-width space (U+200B, e.g. pasted from a web page) now round-trips unchanged instead of reading back short and triggering a spurious Re-create that silently renamed the Todo in HEY. `decodeTitle` now removes only the zero-width breaks pike inserts after an `@`, leaving the user's own U+200B in place (#25).
+- [user] HEY sync now finds HEY's error message and hint even when a warning line containing a brace (or a whole JSON warning object) precedes the error envelope on stderr, and keeps the resulting error on a single line for the status bar (#26).
+- [user] A `hey` exit with status 3 and a non-JSON diagnostic on stderr now surfaces that text alongside the not-authenticated error instead of dropping it (#26).
+- [user] A non-mapping `hey:` config value now names the offending YAML kind (e.g. `got sequence`) rather than rendering an empty value (#26).
+- [user] HEY sync now retries and clears a pending Todo delete even when that id also sits on an ambiguous (multi-@hey) line, so a leaked Todo is no longer stranded in HEY forever with an unreachable sync state entry; the ambiguous line still produces only its single warning (#27).
+- [user] A notes file whose final line ends in a bare `\r` (from a truncated write or classic CR-only line endings) is now handled correctly: the trailing `\r` is treated as that line's ending — matching how the scanner reads it — so Sync mutations apply instead of being refused forever, and `--sync`/`pike add` no longer append a doubled CR that corrupts the previous last line (#28).
+
 ### Collected changes — September 14, 2026
 
 **Bug fixes:**
