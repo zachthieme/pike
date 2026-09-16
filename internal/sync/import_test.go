@@ -195,6 +195,17 @@ func TestEncodeDecodeTitle_RoundTrip(t *testing.T) {
 		"has a \u200b literal zero-width space",
 		"paste\u200bmemo about @rent due @due(2026-01-01)",
 		"@leading tag-like start",
+		// A user's own U+200B sitting directly after an "@" is the case a naive
+		// encoder leaves alone but a naive decoder still strips: the pair must
+		// escape it so the round trip stays lossless.
+		"Pay @\u200brent",
+		"@\u200bhey(h9)",
+		"@\u200b\u200bx",
+		"Pay @rent",
+		"bob@example.com",
+		"trailing @",
+		"",
+		"no at sign here",
 	}
 	for _, title := range titles {
 		t.Run(title, func(t *testing.T) {
@@ -352,6 +363,67 @@ func TestImport_TitleWithLiteralZeroWidthSpace_NoSpuriousRecreate(t *testing.T) 
 	}
 	if got := titleOf(task.Text); got != title {
 		t.Errorf("titleOf(imported line) = %q, want HEY title %q (literal U+200B preserved)", got, title)
+	}
+
+	// A second and third Sync make no HEY calls of any kind.
+	opts.Tasks = []model.Task{*task}
+	for _, pass := range []string{"second", "third"} {
+		addsBefore := len(client.added)
+		mutationsBefore := len(client.mutations)
+		rep, warnings, err := Push(context.Background(), opts)
+		if err != nil || len(warnings) != 0 {
+			t.Fatalf("%s Push: err=%v warnings=%v", pass, err, warnings)
+		}
+		if rep.Recreated != 0 || rep.Retitled != 0 || rep.Imported != 0 {
+			t.Errorf("%s Sync Recreated=%d Retitled=%d Imported=%d, want 0/0/0", pass, rep.Recreated, rep.Retitled, rep.Imported)
+		}
+		if len(client.added) != addsBefore {
+			t.Errorf("%s Sync made %d Add call(s), want 0", pass, len(client.added)-addsBefore)
+		}
+		if got := client.mutations[mutationsBefore:]; len(got) != 0 {
+			t.Errorf("%s Sync made HEY mutations, want none: %v", pass, got)
+		}
+	}
+}
+
+func TestImport_TitleWithZeroWidthSpaceAfterAt_NoSpuriousRecreate(t *testing.T) {
+	// A HEY Title carrying its own U+200B directly after an "@" is the case a naive
+	// decoder mangled: encodeTitle escapes the pre-existing break so decodeTitle
+	// restores it exactly. The imported line parses with only pike's own tags, its
+	// Title matches the HEY Title, and a second and third Sync make no HEY calls.
+	now := time.Now()
+	notesDir := t.TempDir()
+	statePath := filepath.Join(notesDir, "hey-state.json")
+	weekEnd := time.Date(2026, 9, 26, 0, 0, 0, 0, time.UTC)
+	title := "Pay @\u200brent"
+	client := &recordingClient{week: now, todos: []hey.Todo{weekTodo("h1", title, weekEnd)}}
+	opts := Options{Client: client, Query: "@due or @today", StatePath: statePath, NotesDir: notesDir, Now: now}
+
+	if _, _, err := Push(context.Background(), opts); err != nil {
+		t.Fatalf("first Push: %v", err)
+	}
+
+	raw, err := os.ReadFile(filepath.Join(notesDir, "inbox.md"))
+	if err != nil {
+		t.Fatalf("reading inbox: %v", err)
+	}
+	line := strings.TrimSuffix(string(raw), "\n")
+	task, _ := parser.ParseLine(line, "inbox.md", 1)
+	if task == nil {
+		t.Fatalf("imported line did not parse: %q", line)
+	}
+
+	// The only tags on the imported line are the ones pike appended.
+	var names []string
+	for _, tag := range task.Tags {
+		names = append(names, tag.Name)
+	}
+	if len(names) != 2 || names[0] != "due" || names[1] != "hey" {
+		t.Errorf("imported line has tags %v, want only [due hey]; line=%q", names, line)
+	}
+
+	if got := titleOf(task.Text); got != title {
+		t.Errorf("titleOf(imported line) = %q, want HEY title %q (U+200B after @ preserved)", got, title)
 	}
 
 	// A second and third Sync make no HEY calls of any kind.
