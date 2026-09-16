@@ -434,7 +434,16 @@ func (t *Toggler) AppendTask(ctx context.Context, filePath string, text string) 
 	// a doubled CR behind the appended line.
 	ending := fileEnding(endings)
 	if n := len(endings); n > 0 && (endings[n-1] == "" || endings[n-1] == "\r") {
-		endings[n-1] = ending
+		last := ending
+		// A file ending in two or more CRs leaves parseLines with one CR as the
+		// line's ending and the rest as content. Terminating that content with a
+		// bare "\n" would merge with its trailing CR into a CRLF the scanner then
+		// strips, silently dropping a CR from a line we do not own. Use "\r\n" so
+		// the scanner-visible content of that line stays byte-for-byte unchanged.
+		if last == "\n" && strings.HasSuffix(lines[n-1], "\r") {
+			last = "\r\n"
+		}
+		endings[n-1] = last
 	}
 	lines = append(lines, line)
 	endings = append(endings, ending)
