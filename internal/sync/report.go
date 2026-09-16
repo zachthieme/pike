@@ -55,21 +55,64 @@ type Report struct {
 	Rescheduled int `json:"rescheduled"`
 	// WouldReschedule is the dry-run equivalent.
 	WouldReschedule int `json:"would_reschedule"`
+	// OrphanItems names every Orphan counted in Orphans/WouldOrphan — id and
+	// Title — so the user can act on it (removing the surviving Todo from HEY by
+	// hand) without reading the state file. It is populated independently of the
+	// warn-once rule, so a later Sync that emits no Orphan Warning still lists
+	// them, in a dry run as in a real run.
+	OrphanItems []Item `json:"orphans_detail,omitempty"`
+	// PendingDeletes names every pending delete still outstanding after this
+	// Sync's retry — a Todo pike created or replaced but has not yet removed from
+	// HEY. Until it is gone the reset procedure would re-import it as a duplicate,
+	// so the report names it (id and Title) whether or not the retry warned.
+	PendingDeletes []Item `json:"pending_deletes,omitempty"`
+}
+
+// Item names a single Todo the report is calling out by identity rather than
+// only counting: an Orphan whose Task line is gone, or a pending delete pike has
+// not yet cleared. Carrying id and Title lets the user find and remove it in HEY
+// by hand — the only list of these ids otherwise lives in the state file the
+// reset procedure tells the user to delete.
+type Item struct {
+	ID    string `json:"id"`
+	Title string `json:"title"`
 }
 
 // WriteText renders the Report as human-readable lines. A dry run reports what
 // a Sync would do; a real run reports what it did.
 func (r *Report) WriteText(w io.Writer) error {
 	if r.DryRun {
-		_, err := fmt.Fprintf(w,
+		if _, err := fmt.Fprintf(w,
 			"Sync (dry run — nothing written)\n  %d task(s) would push to HEY\n  %d todo(s) would import to the inbox\n  %d item(s) would complete\n  %d item(s) would uncomplete\n  %d task(s) would retitle\n  %d todo(s) would re-create\n  %d item(s) would reschedule\n  %d link(s) would unlink\n  %d orphan(s) would be reported\n  %d link(s) already exist\n",
-			r.WouldPush, r.WouldImport, r.WouldComplete, r.WouldUncomplete, r.WouldRetitle, r.WouldRecreate, r.WouldReschedule, r.WouldUnlink, r.WouldOrphan, r.ExistingLinks)
+			r.WouldPush, r.WouldImport, r.WouldComplete, r.WouldUncomplete, r.WouldRetitle, r.WouldRecreate, r.WouldReschedule, r.WouldUnlink, r.WouldOrphan, r.ExistingLinks); err != nil {
+			return err
+		}
+	} else if _, err := fmt.Fprintf(w,
+		"Sync\n  %d task(s) pushed to HEY\n  %d item(s) failed\n  %d todo(s) imported to the inbox\n  %d item(s) completed\n  %d item(s) uncompleted\n  %d task(s) retitled\n  %d todo(s) re-created\n  %d item(s) rescheduled\n  %d link(s) unlinked\n  %d orphan(s) reported\n  %d link(s) already exist\n",
+		r.Pushed, r.Failed, r.Imported, r.Completed, r.Uncompleted, r.Retitled, r.Recreated, r.Rescheduled, r.Unlinked, r.Orphans, r.ExistingLinks); err != nil {
 		return err
 	}
-	_, err := fmt.Fprintf(w,
-		"Sync\n  %d task(s) pushed to HEY\n  %d item(s) failed\n  %d todo(s) imported to the inbox\n  %d item(s) completed\n  %d item(s) uncompleted\n  %d task(s) retitled\n  %d todo(s) re-created\n  %d item(s) rescheduled\n  %d link(s) unlinked\n  %d orphan(s) reported\n  %d link(s) already exist\n",
-		r.Pushed, r.Failed, r.Imported, r.Completed, r.Uncompleted, r.Retitled, r.Recreated, r.Rescheduled, r.Unlinked, r.Orphans, r.ExistingLinks)
-	return err
+	if err := writeItems(w, "orphaned todo(s)", r.OrphanItems); err != nil {
+		return err
+	}
+	return writeItems(w, "pending delete(s)", r.PendingDeletes)
+}
+
+// writeItems lists named Todos under the counts as "  <label>:" followed by one
+// indented "    <id> \"<title>\"" line each. An empty list renders nothing.
+func writeItems(w io.Writer, label string, items []Item) error {
+	if len(items) == 0 {
+		return nil
+	}
+	if _, err := fmt.Fprintf(w, "  %s:\n", label); err != nil {
+		return err
+	}
+	for _, it := range items {
+		if _, err := fmt.Fprintf(w, "    %s %q\n", it.ID, it.Title); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // WriteJSON renders the Report as indented JSON.

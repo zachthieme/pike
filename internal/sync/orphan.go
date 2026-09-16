@@ -80,8 +80,20 @@ func reconcileOrphans(ctx context.Context, opts Options, linkedTasks map[string]
 		// ambiguous line. Otherwise the skip would strand the leaked Todo in HEY
 		// forever and leave its state entry unreachable.
 		if link.PendingDelete {
-			if retryPendingDelete(ctx, opts, id, td, inHey, state) {
+			dropped, w := retryPendingDelete(ctx, opts, id, td, inHey, link, state)
+			if dropped {
 				dirty = true
+			}
+			if w != nil {
+				warnings = append(warnings, *w)
+				rep.Failed++
+			}
+			// Name the pending delete while its Todo is still live in HEY — the
+			// same condition, dry run or real, under which the entry is not
+			// dropped. This is independent of whether the retry warned, so the
+			// report always lists what is still outstanding.
+			if inHey && td.Completed == nil {
+				rep.PendingDeletes = append(rep.PendingDeletes, Item{ID: id, Title: link.Title})
 			}
 			continue
 		}
@@ -100,12 +112,16 @@ func reconcileOrphans(ctx context.Context, opts Options, linkedTasks map[string]
 		}
 		if opts.DryRun {
 			rep.WouldOrphan++
+			rep.OrphanItems = append(rep.OrphanItems, Item{ID: id, Title: link.Title})
 			if !link.Orphaned {
 				warnings = append(warnings, orphanWarning(id, link))
 			}
 			continue
 		}
 		rep.Orphans++
+		// Name every Orphan counted, independently of the warn-once rule, so a
+		// later Sync that no longer warns still lists it.
+		rep.OrphanItems = append(rep.OrphanItems, Item{ID: id, Title: link.Title})
 		if !link.Orphaned {
 			warnings = append(warnings, orphanWarning(id, link))
 			link.Orphaned = true
@@ -117,26 +133,43 @@ func reconcileOrphans(ctx context.Context, opts Options, linkedTasks map[string]
 }
 
 // retryPendingDelete re-attempts the delete of a Todo pike created or replaced
-// but could not remove — a rolled-back push add or a superseded Re-create. It is
-// silent (a repeating Warning is the very thing #2 forbids) and never imports
-// the Todo. The entry is dropped, reporting dirty, once the Todo is gone from
-// HEY or completed; while the Todo is still listed the delete is retried but the
-// entry is kept, because this Sync's Todo list — captured before the delete —
-// still contains the Todo, and dropping the entry now would let the import pass
-// re-add it. A dry run touches nothing. It reports whether it dropped the entry
-// (state changed).
-func retryPendingDelete(ctx context.Context, opts Options, id string, td hey.Todo, inHey bool, state *State) bool {
+// but could not remove — a rolled-back push add or a superseded Re-create. It
+// never imports the Todo. The entry is dropped, reporting dirty, once the Todo
+// is gone from HEY or completed; while the Todo is still listed the delete is
+// retried but the entry is kept, because this Sync's Todo list — captured before
+// the delete — still contains the Todo, and dropping the entry now would let the
+// import pass re-add it. A dry run touches nothing. A failed delete does not
+// stop the run, but unlike the warn-once Orphan case it is not silent: it
+// returns a Warning naming the id so the user is not misled into thinking the
+// leaked Todo is gone (#32). It reports whether it dropped the entry (state
+// changed) and, when the retried delete failed, a Warning to surface.
+func retryPendingDelete(ctx context.Context, opts Options, id string, td hey.Todo, inHey bool, link Link, state *State) (bool, *model.Warning) {
 	if opts.DryRun {
-		return false
+		return false, nil
 	}
 	if !inHey || td.Completed != nil {
 		delete(state.Links, id)
-		return true
+		return true, nil
 	}
-	// Best-effort: a failure just means the next Sync retries. Either way the
-	// entry stays until a later List confirms the Todo is gone.
-	_ = opts.Client.Delete(ctx, id) //nolint:errcheck // retried next Sync; kept until the Todo leaves HEY's list
-	return false
+	// The entry stays until a later List confirms the Todo is gone. A failure
+	// just means the next Sync retries — but it is surfaced, not swallowed.
+	if err := opts.Client.Delete(ctx, id); err != nil {
+		w := pendingDeleteWarning(id, link, err)
+		return false, &w
+	}
+	return false, nil
+}
+
+// pendingDeleteWarning wraps a failed retry of a pending delete: pike could not
+// remove a Todo it created or replaced, and until it is gone the reset procedure
+// would re-import it as a duplicate. It names the id and Title so the user can
+// remove it by hand.
+func pendingDeleteWarning(id string, link Link, err error) model.Warning {
+	return model.Warning{
+		File:    link.File,
+		Line:    link.Line,
+		Message: fmt.Sprintf("pending delete: could not remove HEY todo %s %q; will retry next sync: %v", id, link.Title, err),
+	}
 }
 
 // orphanDropped drops an Orphan's state entry once its surviving Todo is gone

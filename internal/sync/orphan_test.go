@@ -1,9 +1,12 @@
 package sync
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -591,6 +594,215 @@ func TestOrphan_PendingDeleteOnAmbiguousLine_DryRunReportsSameWritesNothing(t *t
 	}
 	if real.Orphans != dry.Orphans {
 		t.Errorf("Orphans differ real=%d dry=%d", real.Orphans, dry.Orphans)
+	}
+}
+
+// TestPendingDelete_FailedRetryWarnsAndCountsFailure covers a pending-delete
+// retry whose delete fails: it must emit one Warning naming the id, count one
+// failure, and keep the record so the next Sync retries it — rather than
+// discarding the error silently.
+func TestPendingDelete_FailedRetryWarnsAndCountsFailure(t *testing.T) {
+	now := time.Now()
+	notesDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(notesDir, "notes.md"), []byte("- [ ] Something else\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	statePath := filepath.Join(notesDir, "hey-state.json")
+	if err := SaveState(statePath, &State{Links: map[string]Link{
+		"h_leak": {PendingDelete: true, Title: "Leaked todo", File: "notes.md", Line: 1},
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	// The leaked Todo is still in HEY and its delete fails this run.
+	client := &recordingClient{week: now, deleteErr: errDeleteFailed, todos: []hey.Todo{openTodo("h_leak", "Leaked todo")}}
+	opts := Options{Tasks: nil, Client: client, Query: "@today",
+		StatePath: statePath, NotesDir: notesDir, Now: now}
+
+	rep, warnings, err := Push(context.Background(), opts)
+	if err != nil {
+		t.Fatalf("Push: %v", err)
+	}
+	if rep.Failed != 1 {
+		t.Errorf("Failed=%d, want 1 — a failed retry must count a failure", rep.Failed)
+	}
+	if len(warnings) != 1 || !strings.Contains(warnings[0].Message, "h_leak") {
+		t.Fatalf("want exactly 1 Warning naming h_leak, got %d: %v", len(warnings), warnings)
+	}
+	// The delete was attempted.
+	if want := []string{"delete:h_leak"}; !equalStrings(client.mutations, want) {
+		t.Errorf("mutations=%v, want %v", client.mutations, want)
+	}
+	// The record is kept and retried next Sync.
+	st, _ := LoadState(statePath)
+	if link, ok := st.Links["h_leak"]; !ok || !link.PendingDelete {
+		t.Errorf("pending-delete entry should be kept for retry; state=%+v", st.Links)
+	}
+}
+
+// TestPendingDelete_SuccessfulRetryIsSilent covers a pending-delete retry whose
+// delete succeeds: it emits no Warning and counts no failure, as before.
+func TestPendingDelete_SuccessfulRetryIsSilent(t *testing.T) {
+	now := time.Now()
+	notesDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(notesDir, "notes.md"), []byte("- [ ] Something else\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	statePath := filepath.Join(notesDir, "hey-state.json")
+	if err := SaveState(statePath, &State{Links: map[string]Link{
+		"h_leak": {PendingDelete: true, Title: "Leaked todo", File: "notes.md", Line: 1},
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	// The leaked Todo is still in HEY and its delete succeeds this run.
+	client := &recordingClient{week: now, todos: []hey.Todo{openTodo("h_leak", "Leaked todo")}}
+	opts := Options{Tasks: nil, Client: client, Query: "@today",
+		StatePath: statePath, NotesDir: notesDir, Now: now}
+
+	rep, warnings, err := Push(context.Background(), opts)
+	if err != nil {
+		t.Fatalf("Push: %v", err)
+	}
+	if rep.Failed != 0 {
+		t.Errorf("Failed=%d, want 0 — a successful retry counts no failure", rep.Failed)
+	}
+	if len(warnings) != 0 {
+		t.Errorf("a successful retry must stay silent, got warnings: %v", warnings)
+	}
+	if want := []string{"delete:h_leak"}; !equalStrings(client.mutations, want) {
+		t.Errorf("mutations=%v, want %v", client.mutations, want)
+	}
+	// A silent retry still names the outstanding pending delete in the report.
+	if want := []Item{{ID: "h_leak", Title: "Leaked todo"}}; !reflect.DeepEqual(rep.PendingDeletes, want) {
+		t.Errorf("PendingDeletes=%+v, want %+v (named without a Warning)", rep.PendingDeletes, want)
+	}
+}
+
+// TestReport_NamesOrphansAndPendingDeletes_AcrossSyncsAndRenders covers acceptance
+// B: the report carries the identity (id and title) of every Orphan and every
+// outstanding pending delete, in text and JSON, on the first Sync and again on a
+// second Sync where the Orphan's warn-once Warning no longer fires.
+func TestReport_NamesOrphansAndPendingDeletes_AcrossSyncsAndRenders(t *testing.T) {
+	now := time.Now()
+	notesDir := t.TempDir()
+	// No Task line for either id: h_lost is an Orphan; h_leak is a pending delete.
+	if err := os.WriteFile(filepath.Join(notesDir, "notes.md"), []byte("- [ ] Something else\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	statePath := filepath.Join(notesDir, "hey-state.json")
+	if err := SaveState(statePath, &State{Links: map[string]Link{
+		"h_lost": {Title: "Gone task", File: "notes.md", Line: 9},
+		"h_leak": {PendingDelete: true, Title: "Leaked todo", File: "notes.md", Line: 1},
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	// Both Todos survive in HEY; the pending delete keeps failing so it persists
+	// across both Syncs and stays outstanding.
+	client := &recordingClient{week: now, deleteErr: errDeleteFailed, todos: []hey.Todo{
+		openTodo("h_lost", "Gone task"), openTodo("h_leak", "Leaked todo"),
+	}}
+	opts := Options{Tasks: nil, Client: client, Query: "@today",
+		StatePath: statePath, NotesDir: notesDir, Now: now}
+
+	wantOrphans := []Item{{ID: "h_lost", Title: "Gone task"}}
+	wantPending := []Item{{ID: "h_leak", Title: "Leaked todo"}}
+
+	assertNamed := func(t *testing.T, pass string, rep *Report) {
+		t.Helper()
+		if !reflect.DeepEqual(rep.OrphanItems, wantOrphans) {
+			t.Errorf("%s: OrphanItems=%+v, want %+v", pass, rep.OrphanItems, wantOrphans)
+		}
+		if !reflect.DeepEqual(rep.PendingDeletes, wantPending) {
+			t.Errorf("%s: PendingDeletes=%+v, want %+v", pass, rep.PendingDeletes, wantPending)
+		}
+		// Text names both by id and title.
+		var text bytes.Buffer
+		if err := rep.WriteText(&text); err != nil {
+			t.Fatalf("%s WriteText: %v", pass, err)
+		}
+		for _, want := range []string{"h_lost", "Gone task", "h_leak", "Leaked todo"} {
+			if !strings.Contains(text.String(), want) {
+				t.Errorf("%s: text output missing %q:\n%s", pass, want, text.String())
+			}
+		}
+		// JSON carries them as arrays.
+		var js bytes.Buffer
+		if err := rep.WriteJSON(&js); err != nil {
+			t.Fatalf("%s WriteJSON: %v", pass, err)
+		}
+		var got Report
+		if err := json.Unmarshal(js.Bytes(), &got); err != nil {
+			t.Fatalf("%s: JSON invalid: %v\n%s", pass, err, js.String())
+		}
+		if !reflect.DeepEqual(got.OrphanItems, wantOrphans) || !reflect.DeepEqual(got.PendingDeletes, wantPending) {
+			t.Errorf("%s: JSON arrays = %+v / %+v, want %+v / %+v", pass, got.OrphanItems, got.PendingDeletes, wantOrphans, wantPending)
+		}
+	}
+
+	rep1, warn1, err := Push(context.Background(), opts)
+	if err != nil {
+		t.Fatalf("first Push: %v", err)
+	}
+	// First Sync: the Orphan warns once and the failed pending delete warns.
+	if len(warn1) != 2 {
+		t.Fatalf("first Sync want 2 Warnings (orphan + pending), got %d: %v", len(warn1), warn1)
+	}
+	assertNamed(t, "first Sync", rep1)
+
+	rep2, warn2, err := Push(context.Background(), opts)
+	if err != nil {
+		t.Fatalf("second Push: %v", err)
+	}
+	// Second Sync: the Orphan's warn-once Warning is suppressed; only the pending
+	// delete still warns. Both are still named in the report.
+	if len(warn2) != 1 || !strings.Contains(warn2[0].Message, "h_leak") {
+		t.Fatalf("second Sync want only the pending-delete Warning, got %d: %v", len(warn2), warn2)
+	}
+	assertNamed(t, "second Sync", rep2)
+}
+
+// TestReport_DryRunNamesSameItemsWritesNothing covers acceptance B for a dry run:
+// it names the same Orphan and pending delete as a real Sync yet writes nothing
+// on either side or to the state file — so `pike --sync --dry-run --json` always
+// names what is outstanding.
+func TestReport_DryRunNamesSameItemsWritesNothing(t *testing.T) {
+	now := time.Now()
+	notesDir := t.TempDir()
+	notes := "- [ ] Something else\n"
+	if err := os.WriteFile(filepath.Join(notesDir, "notes.md"), []byte(notes), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	statePath := filepath.Join(notesDir, "hey-state.json")
+	if err := SaveState(statePath, &State{Links: map[string]Link{
+		"h_lost": {Title: "Gone task", File: "notes.md", Line: 9},
+		"h_leak": {PendingDelete: true, Title: "Leaked todo", File: "notes.md", Line: 1},
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	stateBefore, _ := os.ReadFile(statePath)
+	// dryFakeClient fails the test on any mutating verb, so a dry run that tried
+	// to retry the delete would be caught.
+	client := &dryFakeClient{t: t, todos: []hey.Todo{
+		openTodo("h_lost", "Gone task"), openTodo("h_leak", "Leaked todo"),
+	}}
+	rep, _, err := Plan(context.Background(), Options{
+		Tasks: nil, Client: client, Query: "@today",
+		StatePath: statePath, NotesDir: notesDir, Now: now, DryRun: true,
+	})
+	if err != nil {
+		t.Fatalf("Plan: %v", err)
+	}
+	if want := []Item{{ID: "h_lost", Title: "Gone task"}}; !reflect.DeepEqual(rep.OrphanItems, want) {
+		t.Errorf("OrphanItems=%+v, want %+v", rep.OrphanItems, want)
+	}
+	if want := []Item{{ID: "h_leak", Title: "Leaked todo"}}; !reflect.DeepEqual(rep.PendingDeletes, want) {
+		t.Errorf("PendingDeletes=%+v, want %+v", rep.PendingDeletes, want)
+	}
+	// Nothing written: notes and state are byte-for-byte unchanged.
+	if got, _ := os.ReadFile(filepath.Join(notesDir, "notes.md")); string(got) != notes {
+		t.Errorf("dry run modified notes:\n%s", string(got))
+	}
+	if got, _ := os.ReadFile(statePath); string(got) != string(stateBefore) {
+		t.Errorf("dry run modified state:\n%s", string(got))
 	}
 }
 

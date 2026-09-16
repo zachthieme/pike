@@ -3,6 +3,7 @@ package sync
 import (
 	"bytes"
 	"encoding/json"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -58,6 +59,61 @@ func TestReportWriteText_FailedLabelIsGeneric(t *testing.T) {
 	}
 }
 
+func TestReportWriteText_NamesOrphansAndPendingDeletes(t *testing.T) {
+	rep := &Report{
+		Orphans:     1,
+		OrphanItems: []Item{{ID: "h_lost", Title: "Gone task"}},
+		PendingDeletes: []Item{
+			{ID: "h_leak1", Title: "Leaked one"},
+			{ID: "h_leak2", Title: "Leaked two"},
+		},
+	}
+	var buf bytes.Buffer
+	if err := rep.WriteText(&buf); err != nil {
+		t.Fatalf("WriteText: %v", err)
+	}
+	out := buf.String()
+	for _, want := range []string{"h_lost", "Gone task", "h_leak1", "Leaked one", "h_leak2", "Leaked two"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("text report missing %q:\n%s", want, out)
+		}
+	}
+}
+
+func TestReportWriteText_OmitsEmptyItemSections(t *testing.T) {
+	// With no orphans or pending deletes, the extra sections must not appear.
+	rep := &Report{Pushed: 1}
+	var buf bytes.Buffer
+	if err := rep.WriteText(&buf); err != nil {
+		t.Fatalf("WriteText: %v", err)
+	}
+	out := strings.ToLower(buf.String())
+	if strings.Contains(out, "pending delete") {
+		t.Errorf("empty pending-delete section should not render:\n%s", buf.String())
+	}
+}
+
+func TestReportWriteJSON_CarriesItemArrays(t *testing.T) {
+	rep := &Report{
+		OrphanItems:    []Item{{ID: "h_lost", Title: "Gone task"}},
+		PendingDeletes: []Item{{ID: "h_leak", Title: "Leaked"}},
+	}
+	var buf bytes.Buffer
+	if err := rep.WriteJSON(&buf); err != nil {
+		t.Fatalf("WriteJSON: %v", err)
+	}
+	var got Report
+	if err := json.Unmarshal(buf.Bytes(), &got); err != nil {
+		t.Fatalf("output is not valid JSON: %v\n%s", err, buf.String())
+	}
+	if !reflect.DeepEqual(got.OrphanItems, rep.OrphanItems) {
+		t.Errorf("OrphanItems round-trip = %+v, want %+v", got.OrphanItems, rep.OrphanItems)
+	}
+	if !reflect.DeepEqual(got.PendingDeletes, rep.PendingDeletes) {
+		t.Errorf("PendingDeletes round-trip = %+v, want %+v", got.PendingDeletes, rep.PendingDeletes)
+	}
+}
+
 func TestReportWriteJSON_RoundTrips(t *testing.T) {
 	rep := &Report{DryRun: true, WouldPush: 2, WouldImport: 3, ExistingLinks: 4}
 	var buf bytes.Buffer
@@ -68,7 +124,7 @@ func TestReportWriteJSON_RoundTrips(t *testing.T) {
 	if err := json.Unmarshal(buf.Bytes(), &got); err != nil {
 		t.Fatalf("output is not valid JSON: %v\n%s", err, buf.String())
 	}
-	if got != *rep {
+	if !reflect.DeepEqual(got, *rep) {
 		t.Errorf("round-trip = %+v, want %+v", got, *rep)
 	}
 }
