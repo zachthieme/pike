@@ -479,6 +479,10 @@ const defaultConfigYAML = `# Pike configuration
 # Write due dates JSON for wen calendar integration (disabled by default)
 # due_dates_path: ~/.local/share/pike/due.json
 
+# File (relative to notes_dir) that new tasks are appended to, including todos
+# imported by HEY sync (default: inbox.md)
+# inbox_file: inbox.md
+
 # HEY sync (disabled until this block is present). Uncomment to reconcile tasks
 # with HEY via 'pike --sync'. Eligible tasks matching 'query' are pushed as new
 # todos and linked with an @hey(id) tag; unlinked open todos are imported into
