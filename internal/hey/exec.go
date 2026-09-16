@@ -7,7 +7,9 @@ import (
 	"errors"
 	"fmt"
 	"os/exec"
+	"strings"
 	"time"
+	"unicode/utf8"
 )
 
 // weekDateLayout is HEY's date format for the --date flag.
@@ -173,11 +175,12 @@ func mapRunError(err error) error {
 		}
 		return fmt.Errorf("hey: %s", env.message())
 	}
-	// No envelope: surface the exit status and stderr's trimmed text. Exit
-	// status 3 still means unauthenticated, but its diagnostic (a keyring
-	// failure, a backtrace) must not be dropped.
+	// No envelope: surface the exit status and stderr's text. Exit status 3
+	// still means unauthenticated, but its diagnostic (a keyring failure, a
+	// backtrace) must not be dropped. Fold it to a single bounded line so a
+	// multi-line backtrace cannot inflate the TUI's fixed-height status footer.
 	detail := ee.Error()
-	if trimmed := bytes.TrimSpace(ee.stderr); len(trimmed) > 0 {
+	if trimmed := oneLine(ee.stderr); trimmed != "" {
 		detail = fmt.Sprintf("%s: %s", ee.Error(), trimmed)
 	}
 	if ee.exitCode == 3 {
@@ -186,14 +189,42 @@ func mapRunError(err error) error {
 	return fmt.Errorf("hey: %s", detail)
 }
 
+// maxEnvelopeScan bounds how much of stderr parseErrorEnvelope inspects. A real
+// hey 1.4.1 envelope (with any warning noise around it) is a few hundred bytes;
+// capping the scan keeps a pathological stderr — megabytes of '{' or deeply
+// nested JSON — from turning the per-brace decode into quadratic work.
+const maxEnvelopeScan = 64 << 10
+
+// maxStderrDetail bounds, in runes, the stderr text folded into a fallback
+// error. It is generous enough for a real one-line hey diagnostic yet keeps a
+// backtrace or a runaway stderr from overflowing the TUI status line.
+const maxStderrDetail = 200
+
+// oneLine collapses stderr into a single bounded line: leading/trailing space is
+// dropped and every internal whitespace run (including newlines) becomes one
+// space, then the result is truncated with an ellipsis past maxStderrDetail
+// runes. The empty string means stderr held nothing printable.
+func oneLine(stderr []byte) string {
+	s := strings.Join(strings.Fields(string(stderr)), " ")
+	if utf8.RuneCountInString(s) > maxStderrDetail {
+		s = string([]rune(s)[:maxStderrDetail]) + "…"
+	}
+	return s
+}
+
 // parseErrorEnvelope finds HEY's JSON error envelope anywhere in stderr, which
 // may be single-line or pretty-printed across several lines (as hey-cli 1.4.1
 // does) and surrounded by unrelated warning noise — plain text, braces embedded
 // in prose (`warning: token {abc} rejected`), or whole JSON warning objects. It
 // scans each '{' in turn and decodes the JSON value there, accepting the first
-// that carries an `ok` field; braces that do not begin a decodable object, and
-// objects without `ok`, are skipped.
+// that is a genuine error envelope: an object carrying ok:false (or ok with a
+// non-empty error). Braces that do not begin a decodable object, objects
+// without `ok`, and success objects (ok:true with no error) are skipped, so a
+// success log line does not shadow the real failure.
 func parseErrorEnvelope(stderr []byte) (errorEnvelope, bool) {
+	if len(stderr) > maxEnvelopeScan {
+		stderr = stderr[:maxEnvelopeScan]
+	}
 	for i := 0; i < len(stderr); i++ {
 		if stderr[i] != '{' {
 			continue
@@ -202,7 +233,7 @@ func parseErrorEnvelope(stderr []byte) (errorEnvelope, bool) {
 		if err := json.NewDecoder(bytes.NewReader(stderr[i:])).Decode(&env); err != nil {
 			continue
 		}
-		if env.OK != nil {
+		if env.OK != nil && (!*env.OK || env.Error != "") {
 			return env, true
 		}
 	}
