@@ -93,7 +93,7 @@ const heyTagBreak = "\u200b"
 // a run of pre-existing zero-width breaks (the user's own U+200B pasted right
 // after an "@") or by a single word character. encodeTitle prepends one break to
 // each match, which both stops the parser reading a tag from "@word" and escapes
-// a pre-existing "@​" by doubling it — decodeTitle then removes exactly one
+// a pre-existing "@" + U+200B by doubling it — decodeTitle then removes exactly one
 // break after every "@", restoring the original either way.
 var encodeAtRe = regexp.MustCompile(`@(` + heyTagBreak + `+|\w)`)
 
@@ -107,9 +107,9 @@ var decodeAtBreakRe = regexp.MustCompile(`@` + heyTagBreak)
 // reversible by decodeTitle. It prepends one zero-width break to every "@" that
 // is followed by a word character or by the user's own break(s): the first stops
 // the parser reading a tag out of the Title, the second escapes a pre-existing
-// break so decodeTitle can tell it apart from one pike inserted. Every other "@"
-// (a trailing "@", "bob@example.com" mid-word is a word char so it is broken) is
-// left untouched.
+// break so decodeTitle can tell it apart from one pike inserted. An "@" followed
+// by neither (a bare trailing "@", "@ ", "@.") is left untouched. Note a mid-word
+// "@" like "bob@example.com" is followed by a word character, so it is broken too.
 func encodeTitle(title string) string {
 	return encodeAtRe.ReplaceAllString(title, "@"+heyTagBreak+"$1")
 }
@@ -117,8 +117,8 @@ func encodeTitle(title string) string {
 // decodeTitle is the exact inverse of encodeTitle: decodeTitle(encodeTitle(s)) ==
 // s for every input. It removes exactly one zero-width break immediately after
 // each "@" — the single break encodeTitle prepends — so an "@word" tag pike broke
-// is restored and a pre-existing "@​" that encodeTitle doubled is returned
-// to one break. A U+200B the user's Title carries anywhere else, or a lone "@"
+// is restored and a pre-existing "@" + U+200B that encodeTitle doubled is
+// returned to one break. A U+200B the user's Title carries anywhere else, or a lone "@"
 // pike never touched, is left as is, so every human-written Task decodes to
 // itself and no round trip triggers a spurious Re-create or rename.
 func decodeTitle(s string) string {
