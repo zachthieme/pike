@@ -11,6 +11,11 @@
 - [user] HEY sync now retries and clears a pending Todo delete even when that id also sits on an ambiguous (multi-@hey) line, so a leaked Todo is no longer stranded in HEY forever with an unreachable sync state entry; the ambiguous line still produces only its single warning (#27).
 - [user] A notes file whose final line ends in a bare `\r` (from a truncated write or classic CR-only line endings) is now handled correctly: the trailing `\r` is treated as that line's ending — matching how the scanner reads it — so Sync mutations apply instead of being refused forever, and `--sync`/`pike add` no longer append a doubled CR that corrupts the previous last line (#28).
 
+**Documentation:**
+- [user] Documented the `inbox_file` config key (default `inbox.md`) in the README config section and added it, commented with its default, to the config pike writes on first run (#30).
+- [user] Added the `--debug` flag to the README flag table to match `--help` (#30).
+- [user] The HEY state-reset remedy now explains how to clear pending-delete todos as well as orphans, so a reset no longer resurrects them as duplicates (#30).
+
 ### Collected changes — September 14, 2026
 
 **Bug fixes:**
