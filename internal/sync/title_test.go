@@ -293,6 +293,71 @@ func TestSyncTitle_HeyRenamedWithLiteralZeroWidthSpace_NoSpuriousRecreate(t *tes
 	}
 }
 
+func TestSyncTitle_HeyRenamedWithZeroWidthSpaceAfterAt_NoSpuriousRecreate(t *testing.T) {
+	// A HEY-side rename to a Title carrying its own U+200B directly after an "@"
+	// must round-trip: encodeTitle escapes the pre-existing break when it writes the
+	// notes line and decodeTitle restores it, so after the Retitle the notes Title
+	// matches the snapshot and no later Sync Re-creates the Todo or renames it.
+	now := time.Now()
+	heyTitle := "Pay @\u200brent"
+	task, notesDir, statePath := linkFixture(t,
+		"h1", "- [ ] Pay rent @hey(h1)",
+		model.Task{Text: "Pay rent @hey(h1)", State: model.Open, HasCheckbox: true,
+			Tags: []model.Tag{{Name: "hey", Value: "h1"}}},
+		&State{Links: map[string]Link{"h1": {Title: "Pay rent", File: "notes.md", Line: 1}}},
+	)
+	client := &titleClient{todos: []hey.Todo{{ID: "h1", Title: heyTitle, WeekStart: now}}, week: now}
+
+	rep, warnings, err := Push(context.Background(), Options{
+		Tasks: []model.Task{task}, Client: client, Query: "@today",
+		StatePath: statePath, NotesDir: notesDir, Now: now,
+	})
+	if err != nil || len(warnings) != 0 {
+		t.Fatalf("Push: err=%v warnings=%v", err, warnings)
+	}
+	if rep.Retitled != 1 {
+		t.Errorf("Retitled=%d, want 1", rep.Retitled)
+	}
+	if len(client.calls) != 0 {
+		t.Errorf("no HEY mutation expected for a retitle; calls=%v", client.calls)
+	}
+
+	raw, _ := os.ReadFile(filepath.Join(notesDir, "notes.md"))
+	line := strings.TrimSuffix(string(raw), "\n")
+	retitled, _ := parser.ParseLine(line, "notes.md", 1)
+	if retitled == nil {
+		t.Fatalf("retitled line did not parse: %q", line)
+	}
+	// The retitled line carries only pike's own @hey tag — the broken "@rent" plants none.
+	var names []string
+	for _, tag := range retitled.Tags {
+		names = append(names, tag.Name)
+	}
+	if len(names) != 1 || names[0] != "hey" {
+		t.Errorf("retitled line has tags %v, want only [hey]; line=%q", names, line)
+	}
+	if got := titleOf(retitled.Text); got != heyTitle {
+		t.Errorf("titleOf(retitled line) = %q, want HEY title %q (U+200B after @ preserved)", got, heyTitle)
+	}
+
+	// A second and third Sync make no HEY calls of any kind.
+	opts := Options{Tasks: []model.Task{*retitled}, Client: client, Query: "@today",
+		StatePath: statePath, NotesDir: notesDir, Now: now}
+	for _, pass := range []string{"second", "third"} {
+		callsBefore := len(client.calls)
+		rep2, warnings2, err := Push(context.Background(), opts)
+		if err != nil || len(warnings2) != 0 {
+			t.Fatalf("%s Push: err=%v warnings=%v", pass, err, warnings2)
+		}
+		if rep2.Recreated != 0 || rep2.Retitled != 0 {
+			t.Errorf("%s Sync Recreated=%d Retitled=%d, want 0/0", pass, rep2.Recreated, rep2.Retitled)
+		}
+		if got := client.calls[callsBefore:]; len(got) != 0 {
+			t.Errorf("%s Sync made HEY calls, want none: %v", pass, got)
+		}
+	}
+}
+
 func TestSyncTitle_NotesRenamed_RecreatesTodoAddBeforeDelete(t *testing.T) {
 	now := time.Now()
 	task, notesDir, statePath := linkFixture(t,

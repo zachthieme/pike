@@ -89,37 +89,43 @@ func importText(td hey.Todo) string {
 // so ParseLine's grammar is left untouched.
 const heyTagBreak = "\u200b"
 
-// atTagStartRe matches an "@" that would begin a tag: one immediately followed
-// by a word character. encodeTitle breaks exactly these, so an imported Title
-// like "Email bob@example.com re @rent" parses with no @example or @rent tag,
-// and a Title carrying "@due(...)" does not give the line a second @due tag.
-var atTagStartRe = regexp.MustCompile(`@(\w)`)
+// encodeAtRe matches an "@" that encodeTitle must break: one followed either by
+// a run of pre-existing zero-width breaks (the user's own U+200B pasted right
+// after an "@") or by a single word character. encodeTitle prepends one break to
+// each match, which both stops the parser reading a tag from "@word" and escapes
+// a pre-existing "@" + U+200B by doubling it — decodeTitle then removes exactly one
+// break after every "@", restoring the original either way.
+var encodeAtRe = regexp.MustCompile(`@(` + heyTagBreak + `+|\w)`)
 
-// atTagBreakRe matches exactly what encodeTitle produces: an "@", the zero-width
-// break, then a word character. decodeTitle removes only these breaks, so a Title
-// carrying its own U+200B anywhere else round-trips unchanged.
-var atTagBreakRe = regexp.MustCompile(`@` + heyTagBreak + `(\w)`)
+// decodeAtBreakRe matches an "@" immediately followed by one zero-width break.
+// Because ReplaceAllString consumes non-overlapping matches left to right, it
+// strips exactly one break per "@" — undoing encodeTitle's single prepended
+// break and leaving any further breaks (the user's own) in place.
+var decodeAtBreakRe = regexp.MustCompile(`@` + heyTagBreak)
 
-// encodeTitle renders a HEY Title safe to write on a Task line: every "@" that
-// would otherwise start a tag is broken with a zero-width space so the parser
-// reads no tag from the Title itself. decodeTitle (applied by titleOf) is the
-// inverse, so the round trip is lossless.
+// encodeTitle renders a HEY Title safe to write on a Task line and is losslessly
+// reversible by decodeTitle. It prepends one zero-width break to every "@" that
+// is followed by a word character or by the user's own break(s): the first stops
+// the parser reading a tag out of the Title, the second escapes a pre-existing
+// break so decodeTitle can tell it apart from one pike inserted. An "@" followed
+// by neither (a bare trailing "@", "@ ", "@.") is left untouched. Note a mid-word
+// "@" like "bob@example.com" is followed by a word character, so it is broken too.
 func encodeTitle(title string) string {
-	return atTagStartRe.ReplaceAllString(title, "@"+heyTagBreak+"$1")
+	return encodeAtRe.ReplaceAllString(title, "@"+heyTagBreak+"$1")
 }
 
-// decodeTitle is the exact inverse of encodeTitle: it removes only the zero-width
-// breaks encodeTitle inserts — a U+200B sitting between an "@" and the word
-// character that follows it — recovering the original Title. A U+200B the user's
-// own Title carries anywhere else (pasted from a web page) is left in place, so a
-// Title round-trips unchanged and triggers no spurious Re-create. Any Title never
-// touched by encodeTitle — every human-written Task — carries no such break, so
-// decoding it is the identity.
+// decodeTitle is the exact inverse of encodeTitle: decodeTitle(encodeTitle(s)) ==
+// s for every input. It removes exactly one zero-width break immediately after
+// each "@" — the single break encodeTitle prepends — so an "@word" tag pike broke
+// is restored and a pre-existing "@" + U+200B that encodeTitle doubled is
+// returned to one break. A U+200B the user's Title carries anywhere else, or a lone "@"
+// pike never touched, is left as is, so every human-written Task decodes to
+// itself and no round trip triggers a spurious Re-create or rename.
 func decodeTitle(s string) string {
 	if !strings.Contains(s, heyTagBreak) {
 		return s
 	}
-	return atTagBreakRe.ReplaceAllString(s, "@$1")
+	return decodeAtBreakRe.ReplaceAllString(s, "@")
 }
 
 // inboxFile resolves the Inbox file, defaulting to inbox.md when unconfigured.
