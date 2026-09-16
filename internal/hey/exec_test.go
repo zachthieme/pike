@@ -136,6 +136,31 @@ func TestExecList_AuthErrorEnvelope(t *testing.T) {
 	if !strings.Contains(err.Error(), "run: hey login") {
 		t.Errorf("error should carry HEY's hint, got: %v", err)
 	}
+	// Correctly parsing the envelope keeps the error on one line for the status
+	// bar, unlike the raw multi-line stderr dump the fallback would produce.
+	if strings.Contains(err.Error(), "\n") {
+		t.Errorf("error should stay on one line, got: %q", err.Error())
+	}
+}
+
+func TestExecList_AuthCodeAtExit2(t *testing.T) {
+	// An envelope with code:"auth" maps to ErrUnauthenticated on any exit
+	// status, not just the exit-3 shortcut. Exit 2 gets no shortcut, so this
+	// fails outright if envelope parsing stops finding the code — proving the
+	// auth mapping comes from the parsed envelope, not the exit status.
+	stderr := []byte("{\"ok\":false,\"error\":\"session expired\",\"code\":\"auth\",\"hint\":\"run: hey login\"}\n")
+	run := func(_ context.Context, _ []string) ([]byte, error) {
+		return nil, &execError{exitCode: 2, stderr: stderr}
+	}
+	c := &ExecClient{command: "hey", run: run}
+
+	_, err := c.List(context.Background())
+	if !errors.Is(err, ErrUnauthenticated) {
+		t.Errorf("code:auth envelope should be unauth, got %v", err)
+	}
+	if !strings.Contains(err.Error(), "session expired") {
+		t.Errorf("error should carry HEY's message, got: %v", err)
+	}
 }
 
 func TestExecList_NonZeroExitNonJSONStderr(t *testing.T) {
@@ -192,6 +217,57 @@ func TestExecList_EnvelopeAfterTrailingWarning(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "todo not found") {
 		t.Errorf("error should carry HEY's message, got: %v", err)
+	}
+	if strings.Contains(err.Error(), "\n") {
+		t.Errorf("error should stay on one line, got: %q", err.Error())
+	}
+}
+
+func TestExecList_StderrFallbackIsOneLineAndBounded(t *testing.T) {
+	// Exit 3 with a large multi-line backtrace and no envelope must collapse to
+	// a single, length-bounded line: a raw dump reaches the TUI's fixed-height
+	// footer, and megabytes of stderr must not become a megabyte-long error.
+	var b strings.Builder
+	b.WriteString("panic: boom\n")
+	for i := 0; i < 100000; i++ {
+		b.WriteString("goroutine stack frame line\n")
+	}
+	run := func(_ context.Context, _ []string) ([]byte, error) {
+		return nil, &execError{exitCode: 3, stderr: []byte(b.String())}
+	}
+	c := &ExecClient{command: "hey", run: run}
+
+	_, err := c.List(context.Background())
+	if !errors.Is(err, ErrUnauthenticated) {
+		t.Errorf("exit 3 should be unauth, got %v", err)
+	}
+	if strings.Contains(err.Error(), "\n") {
+		t.Errorf("fallback error should be one line, got newlines: %q", err.Error())
+	}
+	if len(err.Error()) > 512 {
+		t.Errorf("fallback error should be length-bounded, got %d bytes", len(err.Error()))
+	}
+	if !strings.Contains(err.Error(), "panic: boom") {
+		t.Errorf("fallback should keep the head of the diagnostic, got: %v", err)
+	}
+}
+
+func TestExecList_OkTrueObjectDoesNotShadowError(t *testing.T) {
+	// A non-envelope JSON object carrying ok:true (e.g. a structured success
+	// log line) must not be mistaken for the error envelope. The real
+	// diagnostic on stderr is what the user needs.
+	stderr := []byte("{\"ok\":true,\"data\":null}\nreal failure: disk full\n")
+	run := func(_ context.Context, _ []string) ([]byte, error) {
+		return nil, &execError{exitCode: 2, stderr: stderr}
+	}
+	c := &ExecClient{command: "hey", run: run}
+
+	_, err := c.List(context.Background())
+	if err == nil {
+		t.Fatal("expected an error from a non-zero exit")
+	}
+	if !strings.Contains(err.Error(), "real failure: disk full") {
+		t.Errorf("error should carry stderr's diagnostic, got: %v", err)
 	}
 	if strings.Contains(err.Error(), "\n") {
 		t.Errorf("error should stay on one line, got: %q", err.Error())
