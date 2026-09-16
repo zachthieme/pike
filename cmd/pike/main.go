@@ -195,7 +195,7 @@ func run(args []string, stdout, stderr io.Writer) error {
 	if err != nil {
 		return fmt.Errorf("scanning: %w", err)
 	}
-	for _, w := range sc.Warnings {
+	for _, w := range sc.Warns() {
 		_, _ = fmt.Fprintf(stderr, "warning: %s:%d: %s\n", w.File, w.Line, w.Message)
 	}
 

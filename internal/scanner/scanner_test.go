@@ -295,12 +295,55 @@ func TestScanCollectsWarnings(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(sc.Warnings) != 1 {
-		t.Errorf("got %d warnings, want 1", len(sc.Warnings))
+	warns := sc.Warns()
+	if len(warns) != 1 {
+		t.Errorf("got %d warnings, want 1", len(warns))
 	}
-	if len(sc.Warnings) > 0 && sc.Warnings[0].Line != 1 {
-		t.Errorf("warning line = %d, want 1", sc.Warnings[0].Line)
+	if len(warns) > 0 && warns[0].Line != 1 {
+		t.Errorf("warning line = %d, want 1", warns[0].Line)
 	}
+}
+
+// TestConcurrentWarnsDuringRefresh reads warnings through Warns() while another
+// goroutine calls Refresh. It must not data-race (run under -race): the raw
+// field is unexported, so Warns() is the only reader and every access is guarded
+// by the same lock the publish write takes.
+func TestConcurrentWarnsDuringRefresh(t *testing.T) {
+	dir := t.TempDir()
+	// A file with a bad date so every scan collects a warning to read.
+	writeFile(t, dir, "notes/bad.md", "- [ ] task @due(bad-date)\n")
+
+	s := newScanner(t, dir, []string{"**/*.md"}, nil)
+	if _, err := s.Scan(ctx); err != nil {
+		t.Fatalf("Scan() error: %v", err)
+	}
+
+	const goroutines = 32
+	var wg sync.WaitGroup
+
+	// Writers: refresh repeatedly, republishing warnings under the lock.
+	for range goroutines {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if _, err := s.Refresh(ctx); err != nil {
+				t.Errorf("Refresh() error: %v", err)
+			}
+		}()
+	}
+
+	// Readers: read warnings through the accessor while refreshes publish.
+	for range goroutines {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for range 100 {
+				_ = s.Warns()
+			}
+		}()
+	}
+
+	wg.Wait()
 }
 
 // TestConcurrentRefreshStableFiles runs many Refresh calls at once against an

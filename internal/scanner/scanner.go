@@ -39,20 +39,20 @@ const maxLineSize = 1 << 20
 // Scan and Refresh are safe for concurrent use: each call builds its result
 // against a snapshot of the cached state and publishes it atomically, so
 // overlapping callers each get a complete, consistent task list and never
-// observe another caller's half-updated cache. Reads of Warnings should go
-// through [Scanner.Warns] for the same guarantee.
+// observe another caller's half-updated cache. Scan warnings are read through
+// [Scanner.Warns], which guards the same state under the lock.
 type Scanner struct {
 	root    string
 	include []string // glob patterns like "**/*.md"
 	exclude []string // glob patterns like "archive/**"
 
-	// mu guards the cached scan state (mtimes, tasks, Warnings). It is only
+	// mu guards the cached scan state (mtimes, tasks, warnings). It is only
 	// held to snapshot or publish that state, never across file I/O, so
 	// concurrent scans do not serialize on disk work.
 	mu       sync.Mutex
 	mtimes   map[string]time.Time    // relPath -> last mtime
 	tasks    map[string][]model.Task // relPath -> tasks from that file
-	Warnings []model.Warning         // populated during Scan/Refresh; read via Warns
+	warnings []model.Warning         // populated during Scan/Refresh; read via Warns
 }
 
 // matchedFile holds info about a file discovered during a directory walk.
@@ -160,7 +160,7 @@ func (s *Scanner) publish(mtimes map[string]time.Time, tasks map[string][]model.
 	defer s.mu.Unlock()
 	s.mtimes = mtimes
 	s.tasks = tasks
-	s.Warnings = warnings
+	s.warnings = warnings
 }
 
 // Warns returns the warnings collected by the most recent completed Scan or
@@ -168,7 +168,7 @@ func (s *Scanner) publish(mtimes map[string]time.Time, tasks map[string][]model.
 func (s *Scanner) Warns() []model.Warning {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.Warnings
+	return s.warnings
 }
 
 // walkMatching walks the root directory and calls fn for each file matching
