@@ -1,4 +1,4 @@
-warning: no keyring backend available; storing credentials in plaintext
+warning: token {abc} rejected
 {
   "ok": false,
   "error": "todo not found",
