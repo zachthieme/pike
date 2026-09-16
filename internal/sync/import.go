@@ -68,11 +68,15 @@ func importTodo(ctx context.Context, opts Options, td hey.Todo, state *State, re
 // importText is the Inbox line body for a Todo, without the "- [ ] " checkbox
 // prefix the append path adds: the encoded Title, an @due tag on the Week's
 // Saturday, and an @hey Link tag. The date is HEY's WeekEnd taken verbatim, no
-// zone conversion. The Title is run through encodeTitle so a HEY Title
-// containing "@" text (an email address, a "@rent", an "@due(...)") does not
-// plant a stray tag on the line and trigger a spurious Re-create next Sync.
+// zone conversion. The Title is normalised to a single line first — the same
+// normalising the retitle path applies — so a newline, carriage return or tab in
+// the HEY Title can never split the import into a second, unlinked checkbox line
+// or inject a heading or a second @hey tag. It is then run through encodeTitle so
+// a HEY Title containing "@" text (an email address, a "@rent", an "@due(...)")
+// does not plant a stray tag on the line and trigger a spurious Re-create next
+// Sync.
 func importText(td hey.Todo) string {
-	return fmt.Sprintf("%s @due(%s) @hey(%s)", encodeTitle(td.Title), td.WeekEnd.Format("2006-01-02"), td.ID)
+	return fmt.Sprintf("%s @due(%s) @hey(%s)", encodeTitle(normalizeTitle(td.Title)), td.WeekEnd.Format("2006-01-02"), td.ID)
 }
 
 // heyTagBreak is a zero-width space (U+200B) pike inserts between an "@" and the
@@ -91,6 +95,11 @@ const heyTagBreak = "\u200b"
 // and a Title carrying "@due(...)" does not give the line a second @due tag.
 var atTagStartRe = regexp.MustCompile(`@(\w)`)
 
+// atTagBreakRe matches exactly what encodeTitle produces: an "@", the zero-width
+// break, then a word character. decodeTitle removes only these breaks, so a Title
+// carrying its own U+200B anywhere else round-trips unchanged.
+var atTagBreakRe = regexp.MustCompile(`@` + heyTagBreak + `(\w)`)
+
 // encodeTitle renders a HEY Title safe to write on a Task line: every "@" that
 // would otherwise start a tag is broken with a zero-width space so the parser
 // reads no tag from the Title itself. decodeTitle (applied by titleOf) is the
@@ -99,14 +108,18 @@ func encodeTitle(title string) string {
 	return atTagStartRe.ReplaceAllString(title, "@"+heyTagBreak+"$1")
 }
 
-// decodeTitle removes the zero-width tag breaks encodeTitle inserts, recovering
-// the original Title. Any Title never touched by encodeTitle — every
-// human-written Task — carries no such break, so decoding it is the identity.
+// decodeTitle is the exact inverse of encodeTitle: it removes only the zero-width
+// breaks encodeTitle inserts — a U+200B sitting between an "@" and the word
+// character that follows it — recovering the original Title. A U+200B the user's
+// own Title carries anywhere else (pasted from a web page) is left in place, so a
+// Title round-trips unchanged and triggers no spurious Re-create. Any Title never
+// touched by encodeTitle — every human-written Task — carries no such break, so
+// decoding it is the identity.
 func decodeTitle(s string) string {
 	if !strings.Contains(s, heyTagBreak) {
 		return s
 	}
-	return strings.ReplaceAll(s, heyTagBreak, "")
+	return atTagBreakRe.ReplaceAllString(s, "@$1")
 }
 
 // inboxFile resolves the Inbox file, defaulting to inbox.md when unconfigured.

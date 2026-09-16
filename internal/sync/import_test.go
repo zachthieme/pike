@@ -184,6 +184,197 @@ func TestImport_TitleWithAtSigns_RoundTripsWithoutRecreate(t *testing.T) {
 	}
 }
 
+func TestEncodeDecodeTitle_RoundTrip(t *testing.T) {
+	// decodeTitle is the exact inverse of encodeTitle: decode(encode(title)) == title,
+	// including a Title holding both a literal U+200B (which encode never touches and
+	// decode must leave alone) and an "@" that encode breaks.
+	titles := []string{
+		"plain title",
+		"Email bob@example.com re @rent",
+		"Renew it @due(2026-01-01)",
+		"has a \u200b literal zero-width space",
+		"paste\u200bmemo about @rent due @due(2026-01-01)",
+		"@leading tag-like start",
+	}
+	for _, title := range titles {
+		t.Run(title, func(t *testing.T) {
+			if got := decodeTitle(encodeTitle(title)); got != title {
+				t.Errorf("decode(encode(%q)) = %q, want %q", title, got, title)
+			}
+		})
+	}
+}
+
+func TestImport_TitleWithNewline_ImportsAsSingleNormalisedLine(t *testing.T) {
+	// A HEY Title carrying a newline must be normalised to a single line before it
+	// is written, so it lands as exactly one checkbox Task whose @hey Link sits on
+	// the same line — never a second, unlinked open checkbox that the next Sync
+	// pushes back to HEY and multiplies on every run.
+	now := time.Now()
+	notesDir := t.TempDir()
+	statePath := filepath.Join(notesDir, "hey-state.json")
+	weekEnd := time.Date(2026, 9, 26, 0, 0, 0, 0, time.UTC)
+	client := &recordingClient{week: now, todos: []hey.Todo{weekTodo("h1", "Call bob\nabout the lease", weekEnd)}}
+	opts := Options{Client: client, Query: "@due or @today", StatePath: statePath, NotesDir: notesDir, Now: now}
+
+	if _, _, err := Push(context.Background(), opts); err != nil {
+		t.Fatalf("first Push: %v", err)
+	}
+
+	raw, err := os.ReadFile(filepath.Join(notesDir, "inbox.md"))
+	if err != nil {
+		t.Fatalf("reading inbox: %v", err)
+	}
+	body := strings.TrimSuffix(string(raw), "\n")
+	if strings.Contains(body, "\n") {
+		t.Fatalf("imported title split across lines:\n%q", body)
+	}
+	task, _ := parser.ParseLine(body, "inbox.md", 1)
+	if task == nil {
+		t.Fatalf("imported line did not parse: %q", body)
+	}
+	if got, want := titleOf(task.Text), "Call bob about the lease"; got != want {
+		t.Errorf("titleOf(imported line) = %q, want %q", got, want)
+	}
+
+	// A second Sync makes no add and imports nothing.
+	addsBefore := len(client.added)
+	opts.Tasks = []model.Task{*task}
+	rep, warnings, err := Push(context.Background(), opts)
+	if err != nil || len(warnings) != 0 {
+		t.Fatalf("second Push: err=%v warnings=%v", err, warnings)
+	}
+	if rep.Imported != 0 {
+		t.Errorf("second Sync Imported=%d, want 0", rep.Imported)
+	}
+	if len(client.added) != addsBefore {
+		t.Errorf("second Sync made %d Add call(s), want 0", len(client.added)-addsBefore)
+	}
+}
+
+func TestImport_TitleInjectingCheckboxAndHey_YieldsOneLineOneHeyTag(t *testing.T) {
+	// A crafted HEY Title carrying its own checkbox and @hey token must not smuggle
+	// a second checkbox Task or a second @hey Link into the notes: normalising folds
+	// it onto one line, and encodeTitle breaks the injected @hey so it plants no tag.
+	now := time.Now()
+	notesDir := t.TempDir()
+	statePath := filepath.Join(notesDir, "hey-state.json")
+	weekEnd := time.Date(2026, 9, 26, 0, 0, 0, 0, time.UTC)
+	client := &recordingClient{week: now, todos: []hey.Todo{weekTodo("h1", "x\n- [ ] sneaky @hey(h9)", weekEnd)}}
+	opts := Options{Client: client, Query: "@due or @today", StatePath: statePath, NotesDir: notesDir, Now: now}
+
+	if _, _, err := Push(context.Background(), opts); err != nil {
+		t.Fatalf("first Push: %v", err)
+	}
+
+	raw, err := os.ReadFile(filepath.Join(notesDir, "inbox.md"))
+	if err != nil {
+		t.Fatalf("reading inbox: %v", err)
+	}
+	lines := strings.Split(strings.TrimSuffix(string(raw), "\n"), "\n")
+	if len(lines) != 1 {
+		t.Fatalf("import produced %d lines, want 1:\n%q", len(lines), string(raw))
+	}
+	task, _ := parser.ParseLine(lines[0], "inbox.md", 1)
+	if task == nil {
+		t.Fatalf("imported line did not parse: %q", lines[0])
+	}
+	heyTags := 0
+	for _, tag := range task.Tags {
+		if tag.Name == "hey" {
+			heyTags++
+			if tag.Value != "h1" {
+				t.Errorf("@hey tag value = %q, want h1 (the real Link, not the injected h9)", tag.Value)
+			}
+		}
+	}
+	if heyTags != 1 {
+		t.Errorf("imported line has %d @hey tags, want exactly 1; tags=%+v", heyTags, task.Tags)
+	}
+}
+
+func TestImport_TitleWithTabsAndSpaceRuns_CollapsesLikeRetitle(t *testing.T) {
+	// Tabs and runs of spaces in a HEY Title collapse the same way the retitle path
+	// collapses them (normalizeTitle), so the imported line's Title is identical to
+	// what a HEY-side rename to the same Title would have written.
+	now := time.Now()
+	notesDir := t.TempDir()
+	statePath := filepath.Join(notesDir, "hey-state.json")
+	weekEnd := time.Date(2026, 9, 26, 0, 0, 0, 0, time.UTC)
+	raw := "Pay\trent   now  "
+	client := &recordingClient{week: now, todos: []hey.Todo{weekTodo("h1", raw, weekEnd)}}
+	opts := Options{Client: client, Query: "@due or @today", StatePath: statePath, NotesDir: notesDir, Now: now}
+
+	if _, _, err := Push(context.Background(), opts); err != nil {
+		t.Fatalf("first Push: %v", err)
+	}
+
+	body, err := os.ReadFile(filepath.Join(notesDir, "inbox.md"))
+	if err != nil {
+		t.Fatalf("reading inbox: %v", err)
+	}
+	line := strings.TrimSuffix(string(body), "\n")
+	task, _ := parser.ParseLine(line, "inbox.md", 1)
+	if task == nil {
+		t.Fatalf("imported line did not parse: %q", line)
+	}
+	if got := titleOf(task.Text); got != normalizeTitle(raw) {
+		t.Errorf("titleOf(imported line) = %q, want retitle-collapsed %q", got, normalizeTitle(raw))
+	}
+}
+
+func TestImport_TitleWithLiteralZeroWidthSpace_NoSpuriousRecreate(t *testing.T) {
+	// A HEY Title that already carries a literal zero-width space (pasted from a
+	// web page) must round-trip through import unchanged: decodeTitle removes only
+	// the breaks encodeTitle inserts after an "@", not the user's own U+200B. So the
+	// notes Title still matches the snapshot and no Sync Re-creates the Todo or
+	// silently renames it in HEY.
+	now := time.Now()
+	notesDir := t.TempDir()
+	statePath := filepath.Join(notesDir, "hey-state.json")
+	weekEnd := time.Date(2026, 9, 26, 0, 0, 0, 0, time.UTC)
+	title := "Read the\u200bmemo"
+	client := &recordingClient{week: now, todos: []hey.Todo{weekTodo("h1", title, weekEnd)}}
+	opts := Options{Client: client, Query: "@due or @today", StatePath: statePath, NotesDir: notesDir, Now: now}
+
+	if _, _, err := Push(context.Background(), opts); err != nil {
+		t.Fatalf("first Push: %v", err)
+	}
+
+	raw, err := os.ReadFile(filepath.Join(notesDir, "inbox.md"))
+	if err != nil {
+		t.Fatalf("reading inbox: %v", err)
+	}
+	line := strings.TrimSuffix(string(raw), "\n")
+	task, _ := parser.ParseLine(line, "inbox.md", 1)
+	if task == nil {
+		t.Fatalf("imported line did not parse: %q", line)
+	}
+	if got := titleOf(task.Text); got != title {
+		t.Errorf("titleOf(imported line) = %q, want HEY title %q (literal U+200B preserved)", got, title)
+	}
+
+	// A second and third Sync make no HEY calls of any kind.
+	opts.Tasks = []model.Task{*task}
+	for _, pass := range []string{"second", "third"} {
+		addsBefore := len(client.added)
+		mutationsBefore := len(client.mutations)
+		rep, warnings, err := Push(context.Background(), opts)
+		if err != nil || len(warnings) != 0 {
+			t.Fatalf("%s Push: err=%v warnings=%v", pass, err, warnings)
+		}
+		if rep.Recreated != 0 || rep.Retitled != 0 || rep.Imported != 0 {
+			t.Errorf("%s Sync Recreated=%d Retitled=%d Imported=%d, want 0/0/0", pass, rep.Recreated, rep.Retitled, rep.Imported)
+		}
+		if len(client.added) != addsBefore {
+			t.Errorf("%s Sync made %d Add call(s), want 0", pass, len(client.added)-addsBefore)
+		}
+		if got := client.mutations[mutationsBefore:]; len(got) != 0 {
+			t.Errorf("%s Sync made HEY mutations, want none: %v", pass, got)
+		}
+	}
+}
+
 func TestImport_AppendsUnlinkedOpenTodosInListOrder(t *testing.T) {
 	now := time.Now()
 	notesDir := t.TempDir()
