@@ -436,6 +436,164 @@ func TestOrphan_TwoHeyTags_IdInState_NotOrphaned(t *testing.T) {
 	})
 }
 
+// TestOrphan_PendingDeleteOnAmbiguousLine_RetriedAndDropped covers a pending
+// delete whose id also sits on a multi-@hey (ambiguous) line alongside a normal
+// Link. The ambiguous-line skip must not swallow the pending delete: its retry
+// runs on its own terms — delete is called for the pending id and the entry is
+// dropped once the Todo leaves HEY — while the ambiguous line still gets exactly
+// one Warning and nothing else on either side is touched. Without the fix the
+// ambiguous-line skip runs first, so the delete is never retried and the entry
+// can never be dropped.
+func TestOrphan_PendingDeleteOnAmbiguousLine_RetriedAndDropped(t *testing.T) {
+	now := time.Now()
+	line := "- [ ] Buy milk @today @hey(h1) @hey(h_new1)\n"
+	notesDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(notesDir, "notes.md"), []byte(line), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	statePath := filepath.Join(notesDir, "hey-state.json")
+	// h1 is a normal Link; h_new1 is a leaked Todo pike could not delete. Both ids
+	// happen to sit on the same ambiguous line (the user pasted the pending id in).
+	if err := SaveState(statePath, &State{Links: map[string]Link{
+		"h1":     {Title: "Buy milk", File: "notes.md", Line: 1},
+		"h_new1": {PendingDelete: true, Title: "Buy milk", File: "notes.md", Line: 1},
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	task := model.TaskWith(model.Task{
+		Text: "Buy milk @today @hey(h1) @hey(h_new1)", State: model.Open, HasCheckbox: true,
+		Tags: []model.Tag{{Name: "today"}, {Name: "hey", Value: "h1"}, {Name: "hey", Value: "h_new1"}},
+		File: "notes.md", Line: 1,
+	})
+	// Both Todos are still listed in HEY: h1 open, and the leaked h_new1 pike wants gone.
+	client := &recordingClient{week: now, todos: []hey.Todo{openTodo("h1", "Buy milk"), openTodo("h_new1", "Buy milk")}}
+	opts := Options{Tasks: []model.Task{task}, Client: client, Query: "@today",
+		StatePath: statePath, NotesDir: notesDir, Now: now}
+
+	// First Sync: the pending delete is retried (delete of h_new1), the ambiguous
+	// line still gets exactly one Warning, and nothing else is written.
+	rep, warnings, err := Push(context.Background(), opts)
+	if err != nil {
+		t.Fatalf("Push: %v", err)
+	}
+	if len(warnings) != 1 || !strings.Contains(warnings[0].Message, "@hey") {
+		t.Fatalf("want exactly 1 ambiguous-line Warning, got %d: %v", len(warnings), warnings)
+	}
+	if rep.Orphans != 0 || rep.Unlinked != 0 || rep.Imported != 0 {
+		t.Errorf("no orphan/unlink/import expected: Orphans=%d Unlinked=%d Imported=%d", rep.Orphans, rep.Unlinked, rep.Imported)
+	}
+	if want := []string{"delete:h_new1"}; !equalStrings(client.mutations, want) {
+		t.Errorf("mutations=%v, want %v (only the pending id deleted, no other write)", client.mutations, want)
+	}
+	// The ambiguous line is untouched on disk.
+	if got, _ := os.ReadFile(filepath.Join(notesDir, "notes.md")); string(got) != line {
+		t.Errorf("ambiguous line must not be written:\n got: %q\nwant: %q", string(got), line)
+	}
+	// The pending-delete entry is kept until a later List confirms the Todo is gone
+	// (dropping it now would let the import pass re-add it); the normal Link stands.
+	st, _ := LoadState(statePath)
+	if nw, ok := st.Links["h_new1"]; !ok || !nw.PendingDelete {
+		t.Errorf("pending delete should be kept this Sync; state=%+v", st.Links)
+	}
+	if _, ok := st.Links["h1"]; !ok {
+		t.Errorf("the normal Link h1 must survive; state=%+v", st.Links)
+	}
+
+	// The delete removed h_new1 from HEY. The next Sync sees it gone and drops the
+	// entry, retrying no delete and still leaving the ambiguous line its one Warning.
+	_, warn2, err := Push(context.Background(), opts)
+	if err != nil {
+		t.Fatalf("second Push: %v", err)
+	}
+	if len(warn2) != 1 {
+		t.Errorf("second Sync should still warn once on the ambiguous line, got %d: %v", len(warn2), warn2)
+	}
+	if len(client.mutations) != 1 {
+		t.Errorf("no further delete expected once the Todo is gone; mutations=%v", client.mutations)
+	}
+	st2, _ := LoadState(statePath)
+	if _, ok := st2.Links["h_new1"]; ok {
+		t.Errorf("pending-delete entry should be dropped once the Todo is gone; state=%+v", st2.Links)
+	}
+	if _, ok := st2.Links["h1"]; !ok {
+		t.Errorf("the normal Link h1 must still survive; state=%+v", st2.Links)
+	}
+}
+
+// TestOrphan_PendingDeleteOnAmbiguousLine_DryRunReportsSameWritesNothing checks
+// that the same case in a dry run reports identically to a real Sync (a single
+// ambiguous-line Warning, no orphan/unlink/import counted) yet touches nothing:
+// no HEY delete, no notes write, no state write.
+func TestOrphan_PendingDeleteOnAmbiguousLine_DryRunReportsSameWritesNothing(t *testing.T) {
+	now := time.Now()
+	line := "- [ ] Buy milk @today @hey(h1) @hey(h_new1)\n"
+	task := model.TaskWith(model.Task{
+		Text: "Buy milk @today @hey(h1) @hey(h_new1)", State: model.Open, HasCheckbox: true,
+		Tags: []model.Tag{{Name: "today"}, {Name: "hey", Value: "h1"}, {Name: "hey", Value: "h_new1"}},
+		File: "notes.md", Line: 1,
+	})
+	todos := []hey.Todo{openTodo("h1", "Buy milk"), openTodo("h_new1", "Buy milk")}
+
+	run := func(t *testing.T, dry bool) (*Report, []model.Warning) {
+		t.Helper()
+		notesDir := t.TempDir()
+		if err := os.WriteFile(filepath.Join(notesDir, "notes.md"), []byte(line), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		statePath := filepath.Join(notesDir, "hey-state.json")
+		if err := SaveState(statePath, &State{Links: map[string]Link{
+			"h1":     {Title: "Buy milk", File: "notes.md", Line: 1},
+			"h_new1": {PendingDelete: true, Title: "Buy milk", File: "notes.md", Line: 1},
+		}}); err != nil {
+			t.Fatal(err)
+		}
+		stateBefore, _ := os.ReadFile(statePath)
+
+		var rep *Report
+		var warnings []model.Warning
+		var err error
+		if dry {
+			// dryFakeClient fails the test on any mutating verb, so a dry run that
+			// tried to retry the delete would be caught.
+			opts := Options{Tasks: []model.Task{task}, Client: &dryFakeClient{t: t, todos: append([]hey.Todo(nil), todos...)},
+				Query: "@today", StatePath: statePath, NotesDir: notesDir, Now: now, DryRun: true}
+			rep, warnings, err = Plan(context.Background(), opts)
+		} else {
+			opts := Options{Tasks: []model.Task{task}, Client: &recordingClient{week: now, todos: append([]hey.Todo(nil), todos...)},
+				Query: "@today", StatePath: statePath, NotesDir: notesDir, Now: now}
+			rep, warnings, err = Push(context.Background(), opts)
+		}
+		if err != nil {
+			t.Fatalf("run (dry=%v): %v", dry, err)
+		}
+		if len(warnings) != 1 || !strings.Contains(warnings[0].Message, "@hey") {
+			t.Fatalf("want exactly 1 ambiguous-line Warning (dry=%v), got %d: %v", dry, len(warnings), warnings)
+		}
+		if rep.Orphans != 0 || rep.WouldOrphan != 0 {
+			t.Errorf("Orphans=%d WouldOrphan=%d (dry=%v), want 0/0", rep.Orphans, rep.WouldOrphan, dry)
+		}
+		if dry {
+			// Nothing written: the ambiguous line and the state are byte-for-byte unchanged.
+			if got, _ := os.ReadFile(filepath.Join(notesDir, "notes.md")); string(got) != line {
+				t.Errorf("dry run wrote the ambiguous line:\n got: %q\nwant: %q", string(got), line)
+			}
+			if got, _ := os.ReadFile(statePath); string(got) != string(stateBefore) {
+				t.Errorf("dry run modified state:\n got: %s\nwant: %s", string(got), string(stateBefore))
+			}
+		}
+		return rep, warnings
+	}
+
+	real, realWarn := run(t, false)
+	dry, dryWarn := run(t, true)
+	if len(realWarn) != len(dryWarn) || realWarn[0].Message != dryWarn[0].Message {
+		t.Errorf("dry-run Warning differs from real:\n real: %q\n dry:  %q", realWarn[0].Message, dryWarn[0].Message)
+	}
+	if real.Orphans != dry.Orphans {
+		t.Errorf("Orphans differ real=%d dry=%d", real.Orphans, dry.Orphans)
+	}
+}
+
 // TestOrphan_DryRunReportsBothCasesWritesNothing covers the planning pass: a
 // dry run counts both an unlink and an Orphan and touches nothing on either side
 // or in the state file.

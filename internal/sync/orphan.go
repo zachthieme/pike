@@ -25,7 +25,9 @@ import (
 // Warning for every state entry whose Task can no longer be found (an Orphan),
 // never deleting the surviving side. An id that sits on an ambiguous line is
 // never an Orphan and its state entry is never marked, rewritten, or dropped
-// while the line stays ambiguous. On a dry run it only counts. It returns
+// while the line stays ambiguous — unless it carries a PendingDelete, which is
+// retried and dropped on its own terms regardless of the line. On a dry run it
+// only counts. It returns
 // whether state changed and any Warnings; a failed tag strip is a Warning that
 // does not stop the run.
 func reconcileOrphans(ctx context.Context, opts Options, linkedTasks map[string]*model.Task, ambiguousIDs map[string]bool, todos []hey.Todo, state *State, rep *Report) (bool, []model.Warning) {
@@ -60,13 +62,6 @@ func reconcileOrphans(ctx context.Context, opts Options, linkedTasks map[string]
 	// pike is still clearing, and an Orphan whose Task line is gone but whose Todo
 	// survives in HEY.
 	for id, link := range state.Links {
-		if ambiguousIDs[id] {
-			// The id sits on a multi-@hey line, skipped by every pass. Its Task line
-			// exists, so it is not an Orphan; leave the entry exactly as it stands —
-			// never mark, rewrite, or drop it while the line stays ambiguous, even
-			// when its Todo is completed or gone from HEY.
-			continue
-		}
 		if _, found := linkedTasks[id]; found {
 			// The Link is live again (its Task line was restored). Clear a stale
 			// Orphaned mark so a later disappearance warns afresh rather than being
@@ -80,10 +75,22 @@ func reconcileOrphans(ctx context.Context, opts Options, linkedTasks map[string]
 		}
 		td, inHey := byID[id]
 
+		// A pending delete is retried and dropped on its own terms — before the
+		// ambiguous-line skip below — whether or not its id also sits on an
+		// ambiguous line. Otherwise the skip would strand the leaked Todo in HEY
+		// forever and leave its state entry unreachable.
 		if link.PendingDelete {
 			if retryPendingDelete(ctx, opts, id, td, inHey, state) {
 				dirty = true
 			}
+			continue
+		}
+
+		if ambiguousIDs[id] {
+			// The id sits on a multi-@hey line, skipped by every pass. Its Task line
+			// exists, so it is not an Orphan; leave the entry exactly as it stands —
+			// never mark, rewrite, or drop it while the line stays ambiguous, even
+			// when its Todo is completed or gone from HEY.
 			continue
 		}
 

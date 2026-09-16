@@ -532,6 +532,171 @@ func TestPlanWeek_DryRunCountsAndWritesNothing(t *testing.T) {
 	}
 }
 
+// TestSyncWeekRecreate_TagRewriteRefused_RollsBackAddThenDelete pins the
+// Re-create rollback reached through the Week-move path. A notes-side @due move
+// into a new Week would Re-create the Todo, but the @hey rewrite is refused (the
+// line changed since the scan), so the freshly-added Todo must be rolled back:
+// add then delete of the new id, never the old, leaving the old Link and its
+// state entry untouched and importing nothing on the next Sync. This exercises
+// the same applyRecreate code the title path covers; only the trigger (a @due
+// Week move rather than a rename) differs.
+func TestSyncWeekRecreate_TagRewriteRefused_RollsBackAddThenDelete(t *testing.T) {
+	now := time.Now()
+	newDue := day(2026, 9, 23) // moved into W1
+	task, notesDir, statePath := linkFixture(t,
+		"h1", weekLine("h1", newDue), weekLinkTask("h1", newDue),
+		&State{Links: map[string]Link{"h1": {Title: "Ship it", WeekStart: day(2026, 9, 13), File: "notes.md", Line: 1}}},
+	)
+	// HEY still holds the old Week (W0); the notes moved @due into W1, driving a
+	// notes-side Re-create. But the line was edited since the scan, so the @hey
+	// rewrite finds a line it never scanned and is refused.
+	overwriteLine(t, notesDir, "- [ ] Shipped elsewhere @hey(h1) @due(2026-09-23)\n")
+	client := &titleClient{todos: []hey.Todo{
+		{ID: "h1", Title: "Ship it", WeekStart: day(2026, 9, 13), WeekEnd: day(2026, 9, 19)},
+	}, week: now}
+	opts := Options{Tasks: []model.Task{task}, Client: client, Query: "@today",
+		StatePath: statePath, NotesDir: notesDir, Now: now}
+
+	rep, warnings, err := Push(context.Background(), opts)
+	if err != nil {
+		t.Fatalf("Push: %v", err)
+	}
+	if rep.Rescheduled != 0 || rep.Failed != 1 {
+		t.Errorf("Rescheduled=%d Failed=%d, want 0/1", rep.Rescheduled, rep.Failed)
+	}
+	if len(warnings) != 1 {
+		t.Fatalf("want exactly 1 Warning, got %d: %v", len(warnings), warnings)
+	}
+	// The freshly-added Todo is rolled back: add then delete of the new id, never
+	// the old id, whose Link the refused rewrite left in place.
+	if want := []string{"add:Ship it", "delete:h_new1"}; !equalStrings(client.calls, want) {
+		t.Errorf("client calls = %v, want %v (add then delete of the new id, no delete of the old)", client.calls, want)
+	}
+	// The original Link survives untouched, with no pending-delete entry left behind
+	// since the rollback delete succeeded.
+	st, _ := LoadState(statePath)
+	if old, ok := st.Links["h1"]; !ok || old.Title != "Ship it" || old.PendingDelete {
+		t.Errorf("original Link h1 should be unchanged, got %+v", st.Links["h1"])
+	}
+	if len(st.Links) != 1 {
+		t.Errorf("only the original Link should remain, got %+v", st.Links)
+	}
+
+	// A second Sync imports nothing: the rolled-back Todo is gone from HEY, so no
+	// leaked Todo is ever imported and the original Link is untouched.
+	client.calls = nil
+	rep2, _, err := Push(context.Background(), opts)
+	if err != nil {
+		t.Fatalf("second Push: %v", err)
+	}
+	if rep2.Imported != 0 {
+		t.Errorf("second Sync Imported=%d, want 0 — a rolled-back Todo must never be imported", rep2.Imported)
+	}
+	if st2, _ := LoadState(statePath); st2.Links["h1"].File == "" {
+		t.Errorf("original Link should still be present after a second Sync, state=%+v", st2.Links)
+	}
+}
+
+// TestSyncWeekRecreate_TagRewriteRefused_RollbackDeleteFails_KeptPendingRetried
+// is the Week-path variant where the rollback delete also fails: the freshly-added
+// Todo cannot be removed, so its id is kept as a pending delete — never imported —
+// and the next Sync retries the delete. Mirrors the title path's rollback-fails
+// case, reached through a @due Week move.
+func TestSyncWeekRecreate_TagRewriteRefused_RollbackDeleteFails_KeptPendingRetried(t *testing.T) {
+	now := time.Now()
+	newDue := day(2026, 9, 23) // moved into W1
+	task, notesDir, statePath := linkFixture(t,
+		"h1", weekLine("h1", newDue), weekLinkTask("h1", newDue),
+		&State{Links: map[string]Link{"h1": {Title: "Ship it", WeekStart: day(2026, 9, 13), File: "notes.md", Line: 1}}},
+	)
+	// The line changed since the scan, so the tag rewrite is refused; the rollback
+	// delete of the just-added Todo then fails too.
+	overwriteLine(t, notesDir, "- [ ] Shipped elsewhere @hey(h1) @due(2026-09-23)\n")
+	client := &titleClient{
+		todos:     []hey.Todo{{ID: "h1", Title: "Ship it", WeekStart: day(2026, 9, 13), WeekEnd: day(2026, 9, 19)}},
+		week:      now,
+		deleteErr: errDeleteFailed,
+	}
+	opts := Options{Tasks: []model.Task{task}, Client: client, Query: "@today",
+		StatePath: statePath, NotesDir: notesDir, Now: now}
+
+	rep, warnings, err := Push(context.Background(), opts)
+	if err != nil {
+		t.Fatalf("Push: %v", err)
+	}
+	if rep.Rescheduled != 0 || rep.Failed != 1 {
+		t.Errorf("Rescheduled=%d Failed=%d, want 0/1", rep.Rescheduled, rep.Failed)
+	}
+	if len(warnings) != 1 {
+		t.Fatalf("want exactly 1 Warning, got %d: %v", len(warnings), warnings)
+	}
+	if want := []string{"add:Ship it", "delete:h_new1"}; !equalStrings(client.calls, want) {
+		t.Errorf("client calls = %v, want %v", client.calls, want)
+	}
+	st, _ := LoadState(statePath)
+	// The old Link is untouched; the leaked new id is kept as a pending delete.
+	if old := st.Links["h1"]; old.Title != "Ship it" || old.PendingDelete {
+		t.Errorf("old Link h1 should be unchanged, got %+v", old)
+	}
+	if nw, ok := st.Links["h_new1"]; !ok || !nw.PendingDelete {
+		t.Errorf("new id h_new1 should be kept as a pending delete; state=%+v", st.Links)
+	}
+
+	// The next Sync retries the delete. The user has since reverted the stale edit
+	// to a plain, agreeing line (no @due, so the Week is never compared and no
+	// Re-create fires); the retried delete succeeds, so the leaked Todo leaves HEY
+	// and nothing is imported.
+	client.deleteErr = nil
+	overwriteLine(t, notesDir, "- [ ] Ship it @hey(h1)\n")
+	relinked := model.TaskWith(model.Task{
+		Text: "Ship it @hey(h1)", Raw: "- [ ] Ship it @hey(h1)",
+		State: model.Open, HasCheckbox: true,
+		Tags: []model.Tag{{Name: "hey", Value: "h1"}}, File: "notes.md", Line: 1,
+	})
+	callsBefore := len(client.calls)
+	opts.Tasks = []model.Task{relinked}
+	rep2, _, err := Push(context.Background(), opts)
+	if err != nil {
+		t.Fatalf("second Push: %v", err)
+	}
+	if rep2.Imported != 0 {
+		t.Errorf("second Sync Imported=%d, want 0 — a leaked Todo is never imported", rep2.Imported)
+	}
+	second := client.calls[callsBefore:]
+	retried := false
+	for _, c := range second {
+		if strings.HasPrefix(c, "add:") {
+			t.Errorf("second Sync made a further add: %v", second)
+		}
+		if c == "delete:h_new1" {
+			retried = true
+		}
+	}
+	if !retried {
+		t.Errorf("second Sync should retry the delete of h_new1; calls=%v", second)
+	}
+	if _, ok := findTodo(client.todos, "h_new1"); ok {
+		t.Errorf("h_new1 should be gone from HEY after the retried delete; todos=%v", client.todos)
+	}
+
+	// Once the Todo is absent from HEY's list, a later Sync drops the pending-delete
+	// entry, leaving only the original Link.
+	rep3, _, err := Push(context.Background(), opts)
+	if err != nil {
+		t.Fatalf("third Push: %v", err)
+	}
+	if rep3.Imported != 0 {
+		t.Errorf("third Sync Imported=%d, want 0", rep3.Imported)
+	}
+	st, _ = LoadState(statePath)
+	if _, ok := st.Links["h_new1"]; ok {
+		t.Errorf("pending-delete entry should be dropped once the Todo is gone; state=%+v", st.Links)
+	}
+	if _, ok := st.Links["h1"]; !ok {
+		t.Errorf("the original Link h1 must survive; state=%+v", st.Links)
+	}
+}
+
 func ptrDay(y int, m time.Month, d int) *time.Time {
 	t := day(y, m, d)
 	return &t
