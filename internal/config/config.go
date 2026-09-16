@@ -370,7 +370,7 @@ func applyDefaults(raw *rawConfig) (*Config, error) {
 	case raw.Hey.Kind == yaml.ScalarNode && raw.Hey.Tag == "!!null":
 		cfg.Hey = applyHeyDefaults(&rawHey{})
 	default:
-		return nil, fmt.Errorf("hey: must be a mapping (or removed to disable sync), got %q", raw.Hey.Value)
+		return nil, fmt.Errorf("hey: must be a mapping (or removed to disable sync), got %s", yamlKindName(raw.Hey.Kind))
 	}
 
 	keybindings, customBindings, err := parseKeybindings(raw.Keybindings)
@@ -381,6 +381,23 @@ func applyDefaults(raw *rawConfig) (*Config, error) {
 	cfg.CustomBindings = customBindings
 
 	return cfg, nil
+}
+
+// yamlKindName names a YAML node kind for diagnostics. Non-scalar nodes have no
+// scalar Value, so naming the kind avoids rendering an empty %q for `hey: [1]`.
+func yamlKindName(k yaml.Kind) string {
+	switch k {
+	case yaml.SequenceNode:
+		return "sequence"
+	case yaml.MappingNode:
+		return "mapping"
+	case yaml.ScalarNode:
+		return "scalar"
+	case yaml.AliasNode:
+		return "alias"
+	default:
+		return "unknown"
+	}
 }
 
 // applyHeyDefaults fills in the documented defaults for an explicit hey: block.

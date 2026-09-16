@@ -1,4 +1,4 @@
-warning: no keyring backend available; storing credentials in plaintext
+{"level":"warn","msg":"no keyring backend"}
 {
   "ok": false,
   "error": "not authenticated; run `hey login`",

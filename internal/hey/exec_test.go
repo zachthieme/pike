@@ -92,7 +92,9 @@ func TestExecList_OpenAndCompletedTodos(t *testing.T) {
 }
 
 func TestExecList_ErrorEnvelope(t *testing.T) {
-	// A not_found error: written to stderr after a warning line, exit status 2.
+	// A not_found error: written to stderr after a warning line that itself
+	// contains a brace (`warning: token {abc} rejected`), exit status 2. The
+	// adapter must skip past the brace-bearing noise to the real envelope.
 	c := &ExecClient{command: "hey", run: errorRunner(t, "error_generic.json", 2)}
 
 	_, err := c.List(context.Background())
@@ -105,10 +107,18 @@ func TestExecList_ErrorEnvelope(t *testing.T) {
 	if !strings.Contains(err.Error(), "todo not found") {
 		t.Errorf("error should carry HEY's message, got: %v", err)
 	}
+	// The error must fit the TUI status line: no embedded newlines from a
+	// multi-line stderr dump.
+	if strings.Contains(err.Error(), "\n") {
+		t.Errorf("error should stay on one line, got: %q", err.Error())
+	}
 }
 
 func TestExecList_AuthErrorEnvelope(t *testing.T) {
-	// An auth error: written to stderr after a warning line, exit status 3.
+	// An auth error: written to stderr after a JSON warning object on its own
+	// line ({"level":"warn",...}), exit status 3. That warning object decodes
+	// as JSON but carries no `ok` field, so the adapter must keep scanning to
+	// the real envelope.
 	c := &ExecClient{command: "hey", run: errorRunner(t, "error_auth.json", 3)}
 
 	_, err := c.List(context.Background())
@@ -146,7 +156,9 @@ func TestExecList_NonZeroExitNonJSONStderr(t *testing.T) {
 }
 
 func TestExecList_AuthExitNoEnvelope(t *testing.T) {
-	// Exit status 3 with no parseable envelope on stderr still means unauth.
+	// Exit status 3 with no parseable envelope on stderr still means unauth,
+	// and must carry stderr's text rather than dropping it — a non-JSON
+	// diagnostic (a keyring failure, a backtrace) is all the user has to go on.
 	run := func(_ context.Context, _ []string) ([]byte, error) {
 		return nil, &execError{exitCode: 3, stderr: []byte("keyring: no backend\n")}
 	}
@@ -155,6 +167,34 @@ func TestExecList_AuthExitNoEnvelope(t *testing.T) {
 	_, err := c.List(context.Background())
 	if !errors.Is(err, ErrUnauthenticated) {
 		t.Errorf("exit 3 without an envelope should be unauth, got %v", err)
+	}
+	if !strings.Contains(err.Error(), "keyring: no backend") {
+		t.Errorf("exit 3 error should carry stderr's text, got: %v", err)
+	}
+}
+
+func TestExecList_EnvelopeAfterTrailingWarning(t *testing.T) {
+	// A single-line envelope followed by a trailing warning line still parses:
+	// the adapter finds the object carrying `ok`, wherever it sits.
+	stderr := []byte("{\"ok\":false,\"error\":\"todo not found\",\"code\":\"not_found\"}\n" +
+		"warning: token cache expired\n")
+	run := func(_ context.Context, _ []string) ([]byte, error) {
+		return nil, &execError{exitCode: 2, stderr: stderr}
+	}
+	c := &ExecClient{command: "hey", run: run}
+
+	_, err := c.List(context.Background())
+	if err == nil {
+		t.Fatal("expected an error from an ok:false envelope")
+	}
+	if errors.Is(err, ErrUnauthenticated) {
+		t.Errorf("generic error should not be an auth error: %v", err)
+	}
+	if !strings.Contains(err.Error(), "todo not found") {
+		t.Errorf("error should carry HEY's message, got: %v", err)
+	}
+	if strings.Contains(err.Error(), "\n") {
+		t.Errorf("error should stay on one line, got: %q", err.Error())
 	}
 }
 

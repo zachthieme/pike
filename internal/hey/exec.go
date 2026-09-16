@@ -173,30 +173,38 @@ func mapRunError(err error) error {
 		}
 		return fmt.Errorf("hey: %s", env.message())
 	}
-	if ee.exitCode == 3 {
-		return fmt.Errorf("%w: %s", ErrUnauthenticated, ee.Error())
-	}
+	// No envelope: surface the exit status and stderr's trimmed text. Exit
+	// status 3 still means unauthenticated, but its diagnostic (a keyring
+	// failure, a backtrace) must not be dropped.
+	detail := ee.Error()
 	if trimmed := bytes.TrimSpace(ee.stderr); len(trimmed) > 0 {
-		return fmt.Errorf("hey: %s: %s", ee.Error(), trimmed)
+		detail = fmt.Sprintf("%s: %s", ee.Error(), trimmed)
 	}
-	return fmt.Errorf("hey: %s", ee.Error())
+	if ee.exitCode == 3 {
+		return fmt.Errorf("%w: %s", ErrUnauthenticated, detail)
+	}
+	return fmt.Errorf("hey: %s", detail)
 }
 
-// parseErrorEnvelope finds HEY's JSON error envelope in stderr, which may be
-// preceded by unrelated warning lines (e.g. a keyring warning) and may be
-// pretty-printed across several lines (as hey-cli 1.4.1 does). It decodes the
-// first JSON object starting at the first '{'; warning lines carry no brace.
+// parseErrorEnvelope finds HEY's JSON error envelope anywhere in stderr, which
+// may be single-line or pretty-printed across several lines (as hey-cli 1.4.1
+// does) and surrounded by unrelated warning noise — plain text, braces embedded
+// in prose (`warning: token {abc} rejected`), or whole JSON warning objects. It
+// scans each '{' in turn and decodes the JSON value there, accepting the first
+// that carries an `ok` field; braces that do not begin a decodable object, and
+// objects without `ok`, are skipped.
 func parseErrorEnvelope(stderr []byte) (errorEnvelope, bool) {
-	idx := bytes.IndexByte(stderr, '{')
-	if idx < 0 {
-		return errorEnvelope{}, false
-	}
-	var env errorEnvelope
-	if err := json.NewDecoder(bytes.NewReader(stderr[idx:])).Decode(&env); err != nil {
-		return errorEnvelope{}, false
-	}
-	if env.Error != "" || (env.OK != nil && !*env.OK) {
-		return env, true
+	for i := 0; i < len(stderr); i++ {
+		if stderr[i] != '{' {
+			continue
+		}
+		var env errorEnvelope
+		if err := json.NewDecoder(bytes.NewReader(stderr[i:])).Decode(&env); err != nil {
+			continue
+		}
+		if env.OK != nil {
+			return env, true
+		}
 	}
 	return errorEnvelope{}, false
 }

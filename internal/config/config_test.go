@@ -833,20 +833,27 @@ func TestLoadBytes_HeyNonMappingRejected(t *testing.T) {
 	// Any non-mapping, non-null hey: value is a config error. Silently enabling
 	// defaults would let `hey: false` (a user trying to switch sync off) turn
 	// sync on instead.
-	cases := map[string]string{
-		"boolean":  "hey: false\n",
-		"string":   "hey: \"x\"\n",
-		"number":   "hey: 3\n",
-		"sequence": "hey: [1]\n",
+	cases := map[string]struct {
+		yamlDoc  string
+		wantKind string
+	}{
+		"boolean":      {"hey: false\n", "scalar"},
+		"string":       {"hey: \"x\"\n", "scalar"},
+		"empty string": {"hey: \"\"\n", "scalar"},
+		"number":       {"hey: 3\n", "scalar"},
+		"sequence":     {"hey: [1]\n", "sequence"},
 	}
-	for name, yamlDoc := range cases {
+	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			_, err := LoadBytes([]byte(yamlDoc))
+			_, err := LoadBytes([]byte(tc.yamlDoc))
 			if err == nil {
 				t.Fatalf("expected an error for %s hey: value", name)
 			}
-			if !strings.Contains(err.Error(), "hey") {
-				t.Errorf("error should name the hey: block, got: %v", err)
+			// The message names the offending YAML kind rather than rendering an
+			// empty value for non-scalar nodes (a sequence has no scalar Value).
+			want := "hey: must be a mapping (or removed to disable sync), got " + tc.wantKind
+			if err.Error() != want {
+				t.Errorf("error = %q, want %q", err.Error(), want)
 			}
 		})
 	}
