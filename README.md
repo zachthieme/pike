@@ -266,7 +266,7 @@ Each custom shortcut binds a single key to **either** a `view` (focus a dashboar
 | `view` | Focus a dashboard section by its title |
 | `query` | Execute a query DSL expression in all-tasks mode |
 
-**Remappable actions:** `up`, `down`, `top`, `bottom`, `page_down`, `page_up`, `next_section`, `prev_section`, `enter`, `quit`, `summary`, `filter`, `query`, `escape`, `refresh`, `all_tasks`, `tag_search`, `toggle_hidden`, `toggle`, `toggle_hidden_tag`, `recently_completed`, `sync`
+**Remappable actions:** `up`, `down`, `top`, `bottom`, `page_down`, `page_up`, `next_section`, `prev_section`, `enter`, `quit`, `summary`, `filter`, `query`, `escape`, `refresh`, `all_tasks`, `tag_search`, `toggle_hidden`, `toggle`, `toggle_hidden_tag`, `recently_completed`, `create_task`, `toggle_collapse`, `sync`
 
 When custom shortcuts are defined, the default `1`-`9` section focus keys are replaced. Custom shortcuts take priority over built-in keys on conflict. The `s` help overlay shows your actual configured bindings including custom shortcuts.
 
@@ -352,6 +352,14 @@ vim, for instance, shows it as `<200b>`. And because the character sits between 
 `@` and the following word, a plain-text search for `bob@example.com` will not match
 the stored line (it contains `bob@<U+200B>example.com`).
 
+The same paths also **fold the title to a single line** before writing it: a HEY
+title containing a newline, carriage return, or tab has each run of whitespace
+collapsed to one space and its ends trimmed, so a multi-line HEY todo becomes one
+task line rather than splitting across two (which would leave a stray, unlinked
+checkbox). This applies both on **import** and on a **HEY-side rename**, matching how
+pike derives a title back from a task line, so a title unchanged since the last sync
+still compares equal on both sides.
+
 ### The `@hey` tag (the Link)
 
 A link between a task and its HEY todo is recorded as an `@hey(id)` tag written into
@@ -427,12 +435,27 @@ did not want. (This is easy to reproduce: un-link a task by hand, then reset, an
 old orphaned todo comes back as a fresh inbox task on the next sync.)
 
 So before you reset, clear both kinds of open todo that HEY would otherwise hand
-back. First run a normal `pike --sync`: it retries and removes any pending-delete
-todos pike left behind, so the reset does not resurrect them. Then remove any
-orphaned todos from HEY yourself (complete or delete them there) — pike leaves
-those in place deliberately, so a sync will not clear them for you. With no stray
-open todos left for HEY to hand back, deleting the state file — or starting on a
-fresh machine with no state at all — is then a clean reset.
+back. First **list what is outstanding** with
+
+```bash
+pike --sync --dry-run --json
+```
+
+The report names every orphan and every pending-delete todo by id and title —
+under the counts in text output, and as arrays in the `--json` object — so you can
+see exactly what still lives only in the state file. Then run a normal
+`pike --sync`: it retries and removes any pending-delete todos pike left behind, so
+the reset does not resurrect them. Remove any orphaned todos from HEY yourself
+(complete or delete them there) — pike leaves those in place deliberately, so a sync
+will not clear them for you.
+
+Before you delete the state file, **confirm that sync reported no failures**. A
+pending-delete retry can fail (for example a briefly-unavailable `hey`), and a
+failed retry now warns and counts a failure rather than passing silently — so a run
+that still reports a failure means a pending delete was *not* cleared, and deleting
+the state now would strand it as a duplicate. Only once a sync reports no failures,
+with no stray open todos left for HEY to hand back, is deleting the state file — or
+starting on a fresh machine with no state at all — a clean reset.
 
 ## Query DSL
 
@@ -476,6 +499,7 @@ open and "meeting notes"                # quoted substring match
 | `a` | All tasks — show every task with substring search |
 | `t` | Tag search — browse and pick a tag |
 | `x` | Toggle task complete/incomplete |
+| `i` | Create a new task (appended to your `inbox_file`) |
 | `H` | Toggle `@hidden` tag on selected task |
 | `c` | Recently completed tasks (opens in query mode) |
 | `h` | Toggle hidden tasks visibility (show/hide `@hidden` tasks) |

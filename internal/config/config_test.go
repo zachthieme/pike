@@ -936,6 +936,18 @@ func TestDefaultConfigHasCommentedHeyKeys(t *testing.T) {
 	}
 }
 
+// TestDefaultConfigListsRemappableActions asserts the action-name comment in the
+// config written on first run names create_task and toggle_collapse, the two
+// bindable actions that were missing from it, so a user reading the shipped
+// config sees the full set of remappable action names.
+func TestDefaultConfigListsRemappableActions(t *testing.T) {
+	for _, want := range []string{"create_task", "toggle_collapse"} {
+		if !strings.Contains(defaultConfigYAML, want) {
+			t.Errorf("default config action-name comment missing %q", want)
+		}
+	}
+}
+
 // TestDefaultConfigHasCommentedInboxFile asserts the config written on first run
 // carries the inbox_file key, commented out, with its default. The key ships
 // commented so an untouched config still resolves the inbox to "inbox.md".
