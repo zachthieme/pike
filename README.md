@@ -104,6 +104,7 @@ pike [flags]
 | `--summary` | | Print task summary counts and exit |
 | `--color` | | Force color output |
 | `--no-color` | | Disable color output |
+| `--debug` | | Print debug diagnostics to stderr |
 | `--version` | `-v` | Print version |
 | `--help` | `-h` | Print help |
 
@@ -176,6 +177,10 @@ recently_completed_days: 7
 
 # Day the week starts on: 0=Sunday, 1=Monday, ..., 6=Saturday (default: 0)
 week_start_day: 0
+
+# File (relative to notes_dir) that new tasks are appended to, including todos
+# imported by HEY sync (default: inbox.md)
+inbox_file: inbox.md
 
 # Color theme (Catppuccin Mocha)
 # Supports named colors (red, green, etc.) and hex (#FF5733)
@@ -421,9 +426,13 @@ unlinked todo and is imported into your inbox as a brand-new task — a duplicat
 did not want. (This is easy to reproduce: un-link a task by hand, then reset, and the
 old orphaned todo comes back as a fresh inbox task on the next sync.)
 
-So before you reset, remove any orphaned todos from HEY (complete or delete them
-there). With no stray open todos left for HEY to hand back, deleting the state file —
-or starting on a fresh machine with no state at all — is then a clean reset.
+So before you reset, clear both kinds of open todo that HEY would otherwise hand
+back. First run a normal `pike --sync`: it retries and removes any pending-delete
+todos pike left behind, so the reset does not resurrect them. Then remove any
+orphaned todos from HEY yourself (complete or delete them there) — pike leaves
+those in place deliberately, so a sync will not clear them for you. With no stray
+open todos left for HEY to hand back, deleting the state file — or starting on a
+fresh machine with no state at all — is then a clean reset.
 
 ## Query DSL
 

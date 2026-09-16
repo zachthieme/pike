@@ -935,3 +935,22 @@ func TestDefaultConfigHasCommentedHeyKeys(t *testing.T) {
 		t.Errorf("commented hey: block should leave Hey nil, got %+v", cfg.Hey)
 	}
 }
+
+// TestDefaultConfigHasCommentedInboxFile asserts the config written on first run
+// carries the inbox_file key, commented out, with its default. The key ships
+// commented so an untouched config still resolves the inbox to "inbox.md".
+func TestDefaultConfigHasCommentedInboxFile(t *testing.T) {
+	if !strings.Contains(defaultConfigYAML, "# inbox_file: inbox.md") {
+		t.Errorf("default config missing commented inbox_file key with its default")
+	}
+
+	// The commented key must be inert: an untouched default config still resolves
+	// the inbox to the built-in default.
+	cfg, err := LoadBytes([]byte(defaultConfigYAML))
+	if err != nil {
+		t.Fatalf("default config does not parse: %v", err)
+	}
+	if cfg.InboxFile != "inbox.md" {
+		t.Errorf("commented inbox_file should leave InboxFile default, got %q", cfg.InboxFile)
+	}
+}
