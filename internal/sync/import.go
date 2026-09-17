@@ -119,8 +119,12 @@ func encodeTitle(title string) string {
 // each "@" — the single break encodeTitle prepends — so an "@word" tag pike broke
 // is restored and a pre-existing "@" + U+200B that encodeTitle doubled is
 // returned to one break. A U+200B the user's Title carries anywhere else, or a lone "@"
-// pike never touched, is left as is, so every human-written Task decodes to
-// itself and no round trip triggers a spurious Re-create or rename.
+// pike never touched, is left as is. Decoding is not the identity on arbitrary notes
+// text, though: a hand-typed U+200B sitting directly after an "@" (one the encoder
+// never produced) is stripped like a break pike inserted, so that Task decodes short
+// and triggers a single rename in HEY. What is guaranteed is the inverse over encoder
+// output — a title pike wrote and reads back decodes to itself — so a normal round
+// trip never triggers a spurious Re-create or rename.
 func decodeTitle(s string) string {
 	if !strings.Contains(s, heyTagBreak) {
 		return s

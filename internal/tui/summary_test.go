@@ -61,3 +61,28 @@ func TestRenderSummary_ListsSync(t *testing.T) {
 		t.Error("help should list the sync action")
 	}
 }
+
+func TestRenderSummary_ListsCreateAndCollapse(t *testing.T) {
+	km := DefaultKeyMap()
+	output := RenderSummary("v1.4.0", 80, km, nil)
+	if !strings.Contains(output, "new task") {
+		t.Error("help should list the new-task action")
+	}
+	if !strings.Contains(output, "toggle collapse") {
+		t.Error("help should list the collapse action")
+	}
+}
+
+func TestRenderSummary_ListsCreateAndCollapseAfterRebind(t *testing.T) {
+	km := BuildKeyMap(map[string][]string{
+		"create_task":     {"N"},
+		"toggle_collapse": {"Z"},
+	}, nil)
+	output := RenderSummary("v1.4.0", 80, km, nil)
+	// Both rebound keys must appear beside their (unchanged) descriptions.
+	for _, want := range []string{"N", "new task", "Z", "toggle collapse"} {
+		if !strings.Contains(output, want) {
+			t.Errorf("help should show rebound binding %q", want)
+		}
+	}
+}

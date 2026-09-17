@@ -67,7 +67,7 @@ Tasks are extracted from markdown files. Two formats are recognized:
 
 Tags follow the format `@name` or `@name(value)`. Tag names are **case-sensitive** — `@Today` and `@today` are distinct tags. Use lowercase by convention.
 
-Both Unix (LF) and Windows (CRLF) line endings are supported. When pike rewrites a line — completing a task, or a HEY sync — each line keeps its own ending, and a line pike appends to a CRLF file is written with CRLF too, so a file's line endings survive unchanged.
+Both Unix (LF) and Windows (CRLF) line endings are supported. When pike rewrites a line — completing a task, or a HEY sync — each line keeps its own ending, and a line pike appends to a CRLF file is written with CRLF too, so an LF or CRLF file's line endings survive unchanged. (Pike has no CR-only mode: appending to a classic CR-only file rewrites the final line's ending to LF, though the scanner-visible content is preserved.)
 
 ### Special Tags
 
@@ -344,7 +344,11 @@ whenever pike writes a HEY title into your notes — both on **import** and when
 **HEY-side rename** is carried back to an existing task — it inserts an invisible
 zero-width space (U+200B) directly after any `@` that would otherwise begin a tag.
 That breaks the `@`-then-word adjacency the parser keys on, so the line parses with
-only pike's own `@due` and `@hey` tags and the title round-trips unchanged.
+only pike's own `@due` and `@hey` tags and the title round-trips unchanged. A break
+is also inserted before a zero-width space the title *already* carries right after an
+`@` (one you pasted yourself), escaping it so it survives the round trip — an imported
+`Pay @<U+200B>rent` is stored with two breaks (`Pay @<U+200B><U+200B>rent`), one pike
+strips back off on the next read and one it leaves in place.
 
 This encoding is deliberate: it keeps HEY titles safe without touching pike's tag
 grammar. It has two visible consequences. Some editors render the zero-width space —
@@ -500,6 +504,7 @@ open and "meeting notes"                # quoted substring match
 | `t` | Tag search — browse and pick a tag |
 | `x` | Toggle task complete/incomplete |
 | `i` | Create a new task (appended to your `inbox_file`) |
+| `z` | Collapse or expand the subtasks under the selected parent |
 | `H` | Toggle `@hidden` tag on selected task |
 | `c` | Recently completed tasks (opens in query mode) |
 | `h` | Toggle hidden tasks visibility (show/hide `@hidden` tasks) |
