@@ -7,7 +7,18 @@ import (
 	"github.com/zachthieme/pike/internal/filter"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/mattn/go-runewidth"
 )
+
+// truncateToWidth shortens s so its display width is at most width columns,
+// counting East Asian wide characters as two columns and appending an ellipsis
+// when it trims. A non-positive width returns s unchanged (dimensions unknown).
+func truncateToWidth(s string, width int) string {
+	if width <= 0 {
+		return s
+	}
+	return runewidth.Truncate(s, width, "…")
+}
 
 // View implements tea.Model.
 func (m Model) View() string {
@@ -20,11 +31,14 @@ func (m Model) View() string {
 
 	var errLine string
 	if m.err != nil {
-		errLine = ErrorStyle().Render("Error: "+m.err.Error()) + "\n"
+		errLine = ErrorStyle().Render(truncateToWidth("Error: "+m.err.Error(), m.width)) + "\n"
 	}
 	// A one-line status message (sync result or Push error) sits under any error.
+	// Both lines are truncated to the terminal's display width so a long hey
+	// diagnostic occupies exactly one row rather than wrapping and pushing the
+	// viewport's content off-screen.
 	if m.status != "" {
-		errLine += FooterStyle().Render("  "+m.status) + "\n"
+		errLine += FooterStyle().Render(truncateToWidth("  "+m.status, m.width)) + "\n"
 	}
 
 	var content string

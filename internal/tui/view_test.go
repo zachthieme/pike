@@ -2,10 +2,12 @@ package tui
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/charmbracelet/lipgloss"
 	"github.com/zachthieme/pike/internal/config"
 	"github.com/zachthieme/pike/internal/model"
 	"github.com/zachthieme/pike/internal/style"
@@ -214,6 +216,50 @@ func TestViewRecentlyCompletedMode(t *testing.T) {
 
 	if !strings.Contains(output, "Recently Completed") {
 		t.Errorf("recently-completed View() missing 'Recently Completed' header; got:\n%s", output)
+	}
+}
+
+func TestViewStatusLineFitsOneRow(t *testing.T) {
+	// A long status message (a folded hey diagnostic) must occupy exactly one
+	// footer row at any width, measured by display columns: East Asian wide
+	// characters count as two columns, so 200 of them is 400 columns. Anything
+	// wider than the terminal wraps and pushes the viewport's content out.
+	cases := []struct {
+		name   string
+		status string
+	}{
+		{"ascii500", strings.Repeat("x", 500)},
+		{"cjk200", strings.Repeat("あ", 200)},
+	}
+	for _, tc := range cases {
+		for _, width := range []int{80, 40} {
+			t.Run(fmt.Sprintf("%s@%d", tc.name, width), func(t *testing.T) {
+				m := viewTestModel(viewTestTasks(), testViews())
+				m.width = width
+				m.height = 40
+				m.nav.SetHeight(40)
+				m.status = tc.status
+
+				out := stripped(m)
+				lines := strings.Split(out, "\n")
+
+				// The viewport keeps its fixed height: output is exactly height rows.
+				if len(lines) != m.height {
+					t.Errorf("View() produced %d rows, want viewport height %d", len(lines), m.height)
+				}
+				// No line exceeds the terminal width, so nothing visually wraps.
+				for i, line := range lines {
+					if w := lipgloss.Width(line); w > width {
+						t.Errorf("line %d width %d exceeds terminal width %d: %q", i, w, width, line)
+					}
+				}
+				// The status is truncated, not dropped: its head survives.
+				head := string([]rune(tc.status)[:5])
+				if !strings.Contains(out, head) {
+					t.Errorf("status head %q missing from output", head)
+				}
+			})
+		}
 	}
 }
 
