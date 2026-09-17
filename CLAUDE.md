@@ -36,13 +36,13 @@ make golden-update  # update golden test fixtures
 make install        # go install ./cmd/pike
 ```
 
-Always run `make test` and `make lint` before committing. CI enforces both.
+Always run `make test` and `make lint` before committing. CI (race tests, golangci-lint, 30s fuzz) runs only when a `v*` tag is pushed — not on pushes to `main` or on PRs — and the Release workflow runs alongside it without waiting for it, so local runs are the only gate before a release ships.
 
 ## Branching and Merge Strategy
 
-**Small, self-contained changes** (bug fixes, config tweaks, docs, simple features touching 1-3 files): commit directly to `main` and push. CI runs on push.
+**Small, self-contained changes** (bug fixes, config tweaks, docs, simple features touching 1-3 files): commit directly to `main` and push.
 
-**Larger features or risky changes** (new subsystems, refactors touching many files, changes to the query DSL or parser, anything that could break existing behavior): create a feature branch, open a PR against `main`. CI runs on the PR. Merge after tests pass.
+**Larger features or risky changes** (new subsystems, refactors touching many files, changes to the query DSL or parser, anything that could break existing behavior): create a feature branch, open a PR against `main`. Merge after `make test` and `make lint` pass locally on the branch.
 
 **Rule of thumb:** if you'd want someone to review it before it ships, use a PR. If it's obviously correct, push to main.
 
@@ -70,6 +70,6 @@ Do not manually edit `flake.nix` version or hashes — the release workflow hand
 ## What Not to Do
 
 - Don't edit `flake.nix` manually for releases — the CI workflow handles version and hash updates.
-- Don't skip `make lint` — CI will catch it anyway and the push will be red.
+- Don't skip `make lint` — CI only runs on release tags, and the release publishes even if that CI run fails.
 - Don't add dependencies without justification. Check if the stdlib or existing deps can do it.
 - Don't change `ParseLine` or query DSL grammar without updating the fuzz tests and golden files.
