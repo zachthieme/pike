@@ -461,6 +461,48 @@ func TestSyncTitle_NoStateFile_NotesTitleWinsRecreates(t *testing.T) {
 	}
 }
 
+func TestSyncTitle_RecreateDeleteFails_CountedAndListedInSameRun(t *testing.T) {
+	now := time.Now()
+	task, notesDir, statePath := linkFixture(t,
+		"h1", "- [ ] Deploy it now @hey(h1)",
+		model.Task{Text: "Deploy it now @hey(h1)", State: model.Open, HasCheckbox: true,
+			Tags: []model.Tag{{Name: "hey", Value: "h1"}}},
+		&State{Links: map[string]Link{"h1": {Title: "Ship it", File: "notes.md", Line: 1}}},
+	)
+	client := &titleClient{
+		todos:     []hey.Todo{{ID: "h1", Title: "Ship it", WeekStart: now}},
+		week:      now,
+		deleteErr: errDeleteFailed,
+	}
+
+	rep, warnings, err := Push(context.Background(), Options{
+		Tasks: []model.Task{task}, Client: client, Query: "@today",
+		StatePath: statePath, NotesDir: notesDir, Now: now,
+	})
+	if err != nil {
+		t.Fatalf("Push: %v", err)
+	}
+	// The Re-create still counts as a Recreate — the Link already moved — but the
+	// failed delete of the replaced Todo is a per-item failure, counted once.
+	if rep.Recreated != 1 {
+		t.Errorf("Recreated=%d, want 1", rep.Recreated)
+	}
+	if rep.Failed != 1 {
+		t.Errorf("Failed=%d, want 1 (the failed delete of the replaced Todo)", rep.Failed)
+	}
+	if len(warnings) != 1 {
+		t.Fatalf("want one warning for the failed delete, got %v", warnings)
+	}
+	// The leaked old Todo is named in this same run's report.
+	if len(rep.PendingDeletes) != 1 || rep.PendingDeletes[0].ID != "h1" {
+		t.Fatalf("PendingDeletes=%+v, want one entry for h1", rep.PendingDeletes)
+	}
+	// Invariant: a non-empty pending-delete list implies a non-zero Failed count.
+	if rep.Failed == 0 && len(rep.PendingDeletes) != 0 {
+		t.Errorf("invariant violated: Failed==0 but PendingDeletes=%+v", rep.PendingDeletes)
+	}
+}
+
 func TestSyncTitle_RecreateDeleteFails_OldIdKeptSupersededRetriedNextSync(t *testing.T) {
 	now := time.Now()
 	task, notesDir, statePath := linkFixture(t,

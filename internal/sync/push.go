@@ -52,8 +52,12 @@ func Push(ctx context.Context, opts Options) (*Report, []model.Warning, error) {
 	warnings = append(warnings, classifyWarnings...)
 
 	// Orphan reconciliation runs against the state as loaded, before any push
-	// mutates it, so a Task pushed this run is never mistaken for an Orphan.
-	orphanDirty, orphanWarnings := reconcileOrphans(ctx, opts, linkedTasks, ambiguousIDs, todos, state, rep)
+	// mutates it, so a Task pushed this run is never mistaken for an Orphan. It
+	// records into cleared any pending delete it resolved this run, so the
+	// end-of-run pending-delete list omits those while still naming ones that later
+	// passes create.
+	cleared := make(map[string]bool)
+	orphanDirty, orphanWarnings := reconcileOrphans(ctx, opts, linkedTasks, ambiguousIDs, todos, state, rep, cleared)
 	warnings = append(warnings, orphanWarnings...)
 
 	pushDirty := false
@@ -87,6 +91,12 @@ func Push(ctx context.Context, opts Options) (*Report, []model.Warning, error) {
 
 	completionDirty, completionWarnings := reconcileCompletions(ctx, opts, linkedTasks, todos, state, rep)
 	warnings = append(warnings, completionWarnings...)
+
+	// Name every pending delete still outstanding once every pass has run, read
+	// from end-of-run state, so the push rollback and Re-create passes above — which
+	// run after the orphan pass — have their leaked Todos named this run, not only
+	// the next Sync's.
+	rep.PendingDeletes = collectPendingDeletes(state, todos, cleared, opts.DryRun)
 
 	if !opts.DryRun && (rep.Pushed > 0 || rep.Imported > 0 || pushDirty || titleDirty || weekDirty || completionDirty || orphanDirty) {
 		if err := SaveState(opts.StatePath, state); err != nil {

@@ -31,7 +31,11 @@ import (
 // only counts. It returns
 // whether state changed and any Warnings; a failed tag strip is a Warning that
 // does not stop the run.
-func reconcileOrphans(ctx context.Context, opts Options, linkedTasks map[string]*model.Task, ambiguousIDs map[string]bool, todos []hey.Todo, state *State, rep *Report) (bool, []model.Warning) {
+// cleared, when non-nil, collects the ids of pending deletes this run resolved
+// (dropped or successfully deleted) even though their state entry may linger a
+// run longer — so the end-of-run pending-delete list omits them. It is unused on
+// a dry run, which attempts no deletes.
+func reconcileOrphans(ctx context.Context, opts Options, linkedTasks map[string]*model.Task, ambiguousIDs map[string]bool, todos []hey.Todo, state *State, rep *Report, cleared map[string]bool) (bool, []model.Warning) {
 	byID := make(map[string]hey.Todo, len(todos))
 	for _, td := range todos {
 		byID[td.ID] = td
@@ -89,11 +93,13 @@ func reconcileOrphans(ctx context.Context, opts Options, linkedTasks map[string]
 				warnings = append(warnings, *w)
 				rep.Failed++
 			}
-			// Name the pending delete only if it is still outstanding once the run
-			// ends: a real run's retry that cleared the Todo (or found it already
-			// gone) is not named, even though its state entry lingers a run longer.
-			if outstanding {
-				rep.PendingDeletes = append(rep.PendingDeletes, Item{ID: id, Title: link.Title})
+			// A real run's retry that cleared the Todo (or found it already gone) is
+			// not outstanding, even though its state entry may linger a run longer;
+			// record it as cleared so the end-of-run list omits it. What is still
+			// outstanding is named from end-of-run state in collectPendingDeletes,
+			// which also picks up pending deletes created by later passes this run.
+			if !opts.DryRun && !outstanding {
+				cleared[id] = true
 			}
 			continue
 		}
@@ -136,12 +142,46 @@ func reconcileOrphans(ctx context.Context, opts Options, linkedTasks map[string]
 			dirty = true
 		}
 	}
-	// Both lists are collected by iterating state.Links, a map, so sort them by id
-	// to give the report a stable order — two runs over unchanged state then render
-	// byte-identically and diffing reports stays quiet.
+	// OrphanItems is collected by iterating state.Links, a map, so sort it by id to
+	// give the report a stable order — two runs over unchanged state then render
+	// byte-identically and diffing reports stays quiet. PendingDeletes is sorted
+	// where it is finally assembled, in collectPendingDeletes.
 	sortItems(rep.OrphanItems)
-	sortItems(rep.PendingDeletes)
 	return dirty, warnings
+}
+
+// collectPendingDeletes names every pending delete still outstanding when the
+// run ends, read from end-of-run state so entries created after the orphan pass
+// — a push rollback or a Re-create whose delete failed — are named too. On a real
+// run an entry is outstanding unless it is in cleared (retried and resolved this
+// run, though its state entry may linger). On a dry run nothing was attempted, so
+// an entry is outstanding exactly when its Todo is still live and open in HEY —
+// what a real run would leave un-cleared. The list is sorted by id so repeated
+// runs over unchanged state render byte-identically.
+func collectPendingDeletes(state *State, todos []hey.Todo, cleared map[string]bool, dryRun bool) []Item {
+	var byID map[string]hey.Todo
+	if dryRun {
+		byID = make(map[string]hey.Todo, len(todos))
+		for _, td := range todos {
+			byID[td.ID] = td
+		}
+	}
+	var items []Item
+	for id, link := range state.Links {
+		if !link.PendingDelete {
+			continue
+		}
+		if dryRun {
+			if td, inHey := byID[id]; !inHey || td.Completed != nil {
+				continue
+			}
+		} else if cleared[id] {
+			continue
+		}
+		items = append(items, Item{ID: id, Title: link.Title})
+	}
+	sortItems(items)
+	return items
 }
 
 // sortItems orders reported Items by id in place.

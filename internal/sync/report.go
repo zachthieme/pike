@@ -16,10 +16,14 @@ type Report struct {
 	ExistingLinks int  `json:"existing_links"`
 	// Pushed is populated by a real (non-dry-run) Sync: the number of Eligible
 	// Tasks turned into Todos. Failed is the number of per-item write failures
-	// across every reconciliation pass — a failed push, completion, reschedule,
-	// retitle, re-create, unlink, or pending-delete retry — each counted once. A
-	// non-zero count means at least one of those, a pending delete among them, was
-	// not cleared this run.
+	// across every reconciliation pass, each counted once: a failed push, import
+	// (Inbox append), completion, reschedule, retitle, re-create — including a
+	// failed delete of the Todo a re-create replaced — unlink, or pending-delete
+	// retry. In a real run the count backs an invariant: when Failed is zero,
+	// PendingDeletes is empty, because every pending delete this run leaves
+	// outstanding — one created by a rolled-back push or re-create, or one whose
+	// retry failed — is also a counted failure. A dry run counts no failures but
+	// still names what a real run would leave outstanding.
 	Pushed int `json:"pushed"`
 	Failed int `json:"failed"`
 	// Imported is populated by a real (non-dry-run) Sync: the number of unlinked
@@ -63,10 +67,13 @@ type Report struct {
 	// warn-once rule, so a later Sync that emits no Orphan Warning still lists
 	// them, in a dry run as in a real run.
 	OrphanItems []Item `json:"orphans_detail,omitempty"`
-	// PendingDeletes names every pending delete still outstanding after this
-	// Sync's retry — a Todo pike created or replaced but has not yet removed from
-	// HEY. Until it is gone the reset procedure would re-import it as a duplicate,
-	// so the report names it (id and Title) whether or not the retry warned.
+	// PendingDeletes names every pending delete still outstanding when the run ends
+	// — a Todo pike created or replaced but has not yet removed from HEY. It is read
+	// from end-of-run state, so it lists not only entries a retry left un-cleared but
+	// also ones this run created after the orphan pass: a rolled-back push add or a
+	// re-create whose delete failed. Until it is gone the reset procedure would
+	// re-import it as a duplicate, so the report names it (id and Title) whether or
+	// not the retry warned, sorted by id.
 	PendingDeletes []Item `json:"pending_deletes,omitempty"`
 }
 

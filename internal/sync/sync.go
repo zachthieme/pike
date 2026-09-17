@@ -65,7 +65,10 @@ func Plan(ctx context.Context, opts Options) (*Report, []model.Warning, error) {
 		}
 	}
 
-	_, orphanWarnings := reconcileOrphans(ctx, opts, linkedTasks, ambiguousIDs, todos, state, rep)
+	// Plan never writes, so it resolves no pending deletes; cleared stays empty and
+	// the end-of-run list is filtered by what a real run would leave outstanding.
+	cleared := make(map[string]bool)
+	_, orphanWarnings := reconcileOrphans(ctx, opts, linkedTasks, ambiguousIDs, todos, state, rep, cleared)
 	warnings = append(warnings, orphanWarnings...)
 
 	origLinks := snapshotLinks(state)
@@ -78,6 +81,10 @@ func Plan(ctx context.Context, opts Options) (*Report, []model.Warning, error) {
 
 	_, completionWarnings := reconcileCompletions(ctx, opts, linkedTasks, todos, state, rep)
 	warnings = append(warnings, completionWarnings...)
+
+	// Name what a real run would leave outstanding, read from the (unchanged) state:
+	// every pending delete whose Todo is still live and open in HEY.
+	rep.PendingDeletes = collectPendingDeletes(state, todos, cleared, opts.DryRun)
 
 	return rep, warnings, nil
 }
