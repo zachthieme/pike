@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/mattn/go-runewidth"
 )
 
 // fixtureRunner returns a runner that yields the named testdata fixture on
@@ -250,6 +252,107 @@ func TestExecList_StderrFallbackIsOneLineAndBounded(t *testing.T) {
 	if !strings.Contains(err.Error(), "panic: boom") {
 		t.Errorf("fallback should keep the head of the diagnostic, got: %v", err)
 	}
+}
+
+func TestOneLine_BoundedByDisplayWidth(t *testing.T) {
+	// The fallback detail is bounded by display width, not rune count, so the
+	// bound means the same thing for every script: 200 CJK runes are 400 display
+	// columns and must be trimmed just as a 400-column ASCII run would be.
+	for name, in := range map[string]string{
+		"ascii": strings.Repeat("x", 1000),
+		"cjk":   strings.Repeat("あ", 1000),
+	} {
+		t.Run(name, func(t *testing.T) {
+			got := oneLine([]byte(in))
+			if w := runewidth.StringWidth(got); w > maxStderrDetail {
+				t.Errorf("oneLine width = %d columns, want <= %d", w, maxStderrDetail)
+			}
+		})
+	}
+}
+
+func TestExecList_DeeplyNestedStderrReturnsQuickly(t *testing.T) {
+	// Deeply nested JSON on stderr must not stall a Sync: the per-brace decode
+	// retry is quadratic in nesting depth without a bound. 10,000-deep nesting
+	// (~60KB, under the 64KB scan cap) must resolve within a generous fixed
+	// budget rather than the seconds an unbounded scan takes, and still yield a
+	// sensible fallback error since it carries no genuine envelope.
+	const depth = 10000
+	var b strings.Builder
+	for i := 0; i < depth; i++ {
+		b.WriteString(`{"a":`)
+	}
+	b.WriteString("null")
+	for i := 0; i < depth; i++ {
+		b.WriteString("}")
+	}
+	stderr := []byte(b.String())
+	run := func(_ context.Context, _ []string) ([]byte, error) {
+		return nil, &execError{exitCode: 2, stderr: stderr}
+	}
+	c := &ExecClient{command: "hey", run: run}
+
+	done := make(chan error, 1)
+	go func() {
+		_, err := c.List(context.Background())
+		done <- err
+	}()
+	select {
+	case err := <-done:
+		if err == nil {
+			t.Fatal("expected an error from a non-zero exit")
+		}
+		if !strings.Contains(err.Error(), "hey") {
+			t.Errorf("expected a hey fallback error, got: %v", err)
+		}
+	case <-time.After(100 * time.Millisecond):
+		t.Fatal("List did not return within 100ms; nested-JSON scan is not bounded")
+	}
+}
+
+func TestExecList_ScanCapBoundary(t *testing.T) {
+	// The 64KB envelope-scan cap is deliberate: an envelope buried past that much
+	// warning noise is dropped. Pin the boundary on both sides so a future change
+	// to the cap or the scan cannot silently move it, and make the drop legible
+	// rather than a seemingly clean failure.
+	envelope := `{"ok":false,"error":"session expired","code":"auth","hint":"run: hey login"}`
+
+	t.Run("just inside the cap parses", func(t *testing.T) {
+		pad := maxEnvelopeScan - len(envelope) // envelope ends exactly at the cap
+		stderr := append([]byte(strings.Repeat("x", pad)), envelope...)
+		run := func(_ context.Context, _ []string) ([]byte, error) {
+			return nil, &execError{exitCode: 2, stderr: stderr}
+		}
+		c := &ExecClient{command: "hey", run: run}
+
+		_, err := c.List(context.Background())
+		if !errors.Is(err, ErrUnauthenticated) {
+			t.Errorf("an envelope within the cap should parse to unauth, got: %v", err)
+		}
+		if !strings.Contains(err.Error(), "session expired") {
+			t.Errorf("error should carry HEY's message, got: %v", err)
+		}
+	})
+
+	t.Run("just past the cap is dropped and says so", func(t *testing.T) {
+		pad := maxEnvelopeScan - len(envelope) + 1 // last byte pushed one past the cap
+		stderr := append([]byte(strings.Repeat("x", pad)), envelope...)
+		run := func(_ context.Context, _ []string) ([]byte, error) {
+			return nil, &execError{exitCode: 2, stderr: stderr}
+		}
+		c := &ExecClient{command: "hey", run: run}
+
+		_, err := c.List(context.Background())
+		if err == nil {
+			t.Fatal("expected an error from a non-zero exit")
+		}
+		if errors.Is(err, ErrUnauthenticated) {
+			t.Errorf("an envelope past the cap must be dropped, not surface as auth: %v", err)
+		}
+		if !strings.Contains(err.Error(), "too large to scan") {
+			t.Errorf("error should say the stderr was too large to scan, got: %v", err)
+		}
+	})
 }
 
 func TestExecList_OkTrueObjectDoesNotShadowError(t *testing.T) {

@@ -9,7 +9,8 @@ import (
 	"os/exec"
 	"strings"
 	"time"
-	"unicode/utf8"
+
+	"github.com/mattn/go-runewidth"
 )
 
 // weekDateLayout is HEY's date format for the --date flag.
@@ -183,6 +184,12 @@ func mapRunError(err error) error {
 	if trimmed := oneLine(ee.stderr); trimmed != "" {
 		detail = fmt.Sprintf("%s: %s", ee.Error(), trimmed)
 	}
+	// An envelope can sit past the scan cap and be dropped. Say so, so the
+	// failure does not read as a clean no-envelope error when it is really a
+	// truncated scan — the real diagnostic may be beyond what we looked at.
+	if len(ee.stderr) > maxEnvelopeScan {
+		detail += " (stderr too large to scan for an error envelope)"
+	}
 	if ee.exitCode == 3 {
 		return fmt.Errorf("%w: %s", ErrUnauthenticated, detail)
 	}
@@ -195,21 +202,27 @@ func mapRunError(err error) error {
 // nested JSON — from turning the per-brace decode into quadratic work.
 const maxEnvelopeScan = 64 << 10
 
-// maxStderrDetail bounds, in runes, the stderr text folded into a fallback
-// error. It is generous enough for a real one-line hey diagnostic yet keeps a
-// backtrace or a runaway stderr from overflowing the TUI status line.
+// maxEnvelopeDepth bounds the JSON nesting parseErrorEnvelope will decode at any
+// one brace. A genuine hey envelope is a flat object of scalar fields (depth 1)
+// and warning noise is shallow, so this is generous; its purpose is to keep a
+// pathologically nested stderr from turning the per-brace retry into work
+// quadratic in nesting depth, which would stall a Sync.
+const maxEnvelopeDepth = 32
+
+// maxStderrDetail bounds, in display columns, the stderr text folded into a
+// fallback error. Measuring by display width (East Asian wide characters count
+// as two columns) rather than rune count means the bound holds a real one-line
+// hey diagnostic yet keeps a backtrace or a runaway stderr from overflowing the
+// TUI's fixed-height status line for any script, ASCII or CJK.
 const maxStderrDetail = 200
 
 // oneLine collapses stderr into a single bounded line: leading/trailing space is
 // dropped and every internal whitespace run (including newlines) becomes one
 // space, then the result is truncated with an ellipsis past maxStderrDetail
-// runes. The empty string means stderr held nothing printable.
+// display columns. The empty string means stderr held nothing printable.
 func oneLine(stderr []byte) string {
 	s := strings.Join(strings.Fields(string(stderr)), " ")
-	if utf8.RuneCountInString(s) > maxStderrDetail {
-		s = string([]rune(s)[:maxStderrDetail]) + "…"
-	}
-	return s
+	return runewidth.Truncate(s, maxStderrDetail, "…")
 }
 
 // parseErrorEnvelope finds HEY's JSON error envelope anywhere in stderr, which
@@ -229,6 +242,12 @@ func parseErrorEnvelope(stderr []byte) (errorEnvelope, bool) {
 		if stderr[i] != '{' {
 			continue
 		}
+		// Skip a value that nests deeper than a real envelope ever would before
+		// handing it to Decode: the guard is O(maxEnvelopeDepth) per brace, so
+		// the whole scan stays linear even against deeply nested JSON.
+		if exceedsDepth(stderr[i:], maxEnvelopeDepth) {
+			continue
+		}
 		var env errorEnvelope
 		if err := json.NewDecoder(bytes.NewReader(stderr[i:])).Decode(&env); err != nil {
 			continue
@@ -238,6 +257,44 @@ func parseErrorEnvelope(stderr []byte) (errorEnvelope, bool) {
 		}
 	}
 	return errorEnvelope{}, false
+}
+
+// exceedsDepth reports whether the JSON value beginning at data opens more than
+// limit nested objects/arrays before closing. It scans only far enough to reach
+// that point (or the first value's close), ignoring braces inside strings, so it
+// is a cheap guard rather than a full parse.
+func exceedsDepth(data []byte, limit int) bool {
+	depth := 0
+	inStr := false
+	esc := false
+	for _, c := range data {
+		if inStr {
+			switch {
+			case esc:
+				esc = false
+			case c == '\\':
+				esc = true
+			case c == '"':
+				inStr = false
+			}
+			continue
+		}
+		switch c {
+		case '"':
+			inStr = true
+		case '{', '[':
+			depth++
+			if depth > limit {
+				return true
+			}
+		case '}', ']':
+			depth--
+			if depth <= 0 {
+				return false // first value closed within the limit
+			}
+		}
+	}
+	return false
 }
 
 // rawTodo mirrors HEY's JSON todo object. Only the fields pike needs are kept.
