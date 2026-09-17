@@ -12,6 +12,8 @@
 - [user] `pike --sync --dry-run` no longer lists an orphan whose Todo has already been deleted or completed in HEY — a real run would drop it, so the dry run reports only what would still be outstanding, and still writes nothing (#35).
 - [user] The `s` summary overlay now lists the new-task and collapse actions with their configured keys (including after a rebind); both were bound but absent from the overlay (#36).
 - [user] `sync` and `toggle_collapse` are now accepted as keybinding overrides in the config; both were documented as remappable but rejected at load with "unknown keybinding action" (#36).
+- [user] The sync report now names a pending delete created late in the run — a push whose rollback delete failed, or a re-create whose delete of the replaced Todo failed — in that same run's pending-delete list, read from end-of-run state, so the reset procedure no longer misses a leaked Todo the run left in HEY (#37).
+- [user] A re-create whose new Todo succeeds but whose delete of the old Todo fails now counts as one failure in the sync report, so `Failed == 0` reliably means nothing was left outstanding rather than silently leaking the old Todo (#37).
 
 **Documentation:**
 - [user] README's TUI Actions table now lists the collapse key (`z`), the config pike writes on first run names `sync` among its remappable actions, the line-ending note is scoped to LF and CRLF files (pike has no CR-only mode), and the `@`-encoding note describes how a zero-width space already sitting after an `@` is escaped so an imported `Pay @<U+200B>rent` is stored with two breaks (#36).
