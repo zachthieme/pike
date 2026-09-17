@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"sort"
 
 	"github.com/zachthieme/pike/internal/hey"
 	"github.com/zachthieme/pike/internal/model"
@@ -80,7 +81,7 @@ func reconcileOrphans(ctx context.Context, opts Options, linkedTasks map[string]
 		// ambiguous line. Otherwise the skip would strand the leaked Todo in HEY
 		// forever and leave its state entry unreachable.
 		if link.PendingDelete {
-			dropped, w := retryPendingDelete(ctx, opts, id, td, inHey, link, state)
+			dropped, outstanding, w := retryPendingDelete(ctx, opts, id, td, inHey, link, state)
 			if dropped {
 				dirty = true
 			}
@@ -88,11 +89,10 @@ func reconcileOrphans(ctx context.Context, opts Options, linkedTasks map[string]
 				warnings = append(warnings, *w)
 				rep.Failed++
 			}
-			// Name the pending delete while its Todo is still live in HEY — the
-			// same condition, dry run or real, under which the entry is not
-			// dropped. This is independent of whether the retry warned, so the
-			// report always lists what is still outstanding.
-			if inHey && td.Completed == nil {
+			// Name the pending delete only if it is still outstanding once the run
+			// ends: a real run's retry that cleared the Todo (or found it already
+			// gone) is not named, even though its state entry lingers a run longer.
+			if outstanding {
 				rep.PendingDeletes = append(rep.PendingDeletes, Item{ID: id, Title: link.Title})
 			}
 			continue
@@ -106,8 +106,15 @@ func reconcileOrphans(ctx context.Context, opts Options, linkedTasks map[string]
 			continue
 		}
 
-		if orphanDropped(opts, id, td, inHey, state) {
-			dirty = true
+		if orphanCleared(td, inHey) {
+			// The surviving Todo is gone from HEY or completed there: a real Sync
+			// drops the entry and stops warning, and a dry run reports what that run
+			// would leave — nothing outstanding for this id. So it is neither counted,
+			// named, nor warned, in a dry run as in a real run.
+			if !opts.DryRun {
+				delete(state.Links, id)
+				dirty = true
+			}
 			continue
 		}
 		if opts.DryRun {
@@ -129,7 +136,17 @@ func reconcileOrphans(ctx context.Context, opts Options, linkedTasks map[string]
 			dirty = true
 		}
 	}
+	// Both lists are collected by iterating state.Links, a map, so sort them by id
+	// to give the report a stable order — two runs over unchanged state then render
+	// byte-identically and diffing reports stays quiet.
+	sortItems(rep.OrphanItems)
+	sortItems(rep.PendingDeletes)
 	return dirty, warnings
+}
+
+// sortItems orders reported Items by id in place.
+func sortItems(items []Item) {
+	sort.Slice(items, func(i, j int) bool { return items[i].ID < items[j].ID })
 }
 
 // retryPendingDelete re-attempts the delete of a Todo pike created or replaced
@@ -142,22 +159,29 @@ func reconcileOrphans(ctx context.Context, opts Options, linkedTasks map[string]
 // stop the run, but unlike the warn-once Orphan case it is not silent: it
 // returns a Warning naming the id so the user is not misled into thinking the
 // leaked Todo is gone (#32). It reports whether it dropped the entry (state
-// changed) and, when the retried delete failed, a Warning to surface.
-func retryPendingDelete(ctx context.Context, opts Options, id string, td hey.Todo, inHey bool, link Link, state *State) (bool, *model.Warning) {
+// changed), whether the delete is still outstanding once the run ends (so the
+// report can name only what a real run leaves un-cleared), and, when the retried
+// delete failed, a Warning to surface.
+func retryPendingDelete(ctx context.Context, opts Options, id string, td hey.Todo, inHey bool, link Link, state *State) (dropped, outstanding bool, w *model.Warning) {
 	if opts.DryRun {
-		return false, nil
+		// Nothing is attempted; report what a real run would leave outstanding — a
+		// Todo still live in HEY and open, the same case whose entry a real run
+		// keeps for a retry.
+		return false, inHey && td.Completed == nil, nil
 	}
 	if !inHey || td.Completed != nil {
 		delete(state.Links, id)
-		return true, nil
+		return true, false, nil
 	}
 	// The entry stays until a later List confirms the Todo is gone. A failure
-	// just means the next Sync retries — but it is surfaced, not swallowed.
+	// just means the next Sync retries — but it is surfaced, not swallowed, and
+	// the leak is still outstanding. A success clears the Todo from HEY now, so it
+	// is no longer outstanding even though the entry lingers one more run.
 	if err := opts.Client.Delete(ctx, id); err != nil {
-		w := pendingDeleteWarning(id, link, err)
-		return false, &w
+		pw := pendingDeleteWarning(id, link, err)
+		return false, true, &pw
 	}
-	return false, nil
+	return false, false, nil
 }
 
 // pendingDeleteWarning wraps a failed retry of a pending delete: pike could not
@@ -172,18 +196,11 @@ func pendingDeleteWarning(id string, link Link, err error) model.Warning {
 	}
 }
 
-// orphanDropped drops an Orphan's state entry once its surviving Todo is gone
-// from HEY or completed, so the Orphan Warning stops. It reports whether it
-// dropped the entry. A dry run never mutates state, so it drops nothing.
-func orphanDropped(opts Options, id string, td hey.Todo, inHey bool, state *State) bool {
-	if inHey && td.Completed == nil {
-		return false
-	}
-	if opts.DryRun {
-		return false
-	}
-	delete(state.Links, id)
-	return true
+// orphanCleared reports whether an Orphan's surviving Todo is gone from HEY or
+// completed there — the condition under which a real Sync drops the entry and
+// stops warning, and a dry run treats the id as no longer outstanding.
+func orphanCleared(td hey.Todo, inHey bool) bool {
+	return !inHey || td.Completed != nil
 }
 
 // orphanWarning is the Warning reported for an Orphan: a Link whose Task line is
