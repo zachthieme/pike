@@ -115,12 +115,18 @@ func reconcileTitles(ctx context.Context, opts Options, linkedTasks map[string]*
 				rep.WouldRecreate++
 				continue
 			}
-			w, changed, changedState := applyRecreate(ctx, opts, id, t, notesTitle, state, linkedTasks)
+			w, changed, changedState, deleteFailed := applyRecreate(ctx, opts, id, t, notesTitle, state, linkedTasks)
 			if w != nil {
 				warnings = append(warnings, *w)
 			}
 			if changed {
 				rep.Recreated++
+				// The Re-create succeeded but the delete of the replaced Todo failed:
+				// count that leaked Todo as one per-item failure so a non-zero Failed
+				// still covers every pending delete this run leaves outstanding.
+				if deleteFailed {
+					rep.Failed++
+				}
 			} else {
 				rep.Failed++
 			}

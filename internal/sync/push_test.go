@@ -383,6 +383,12 @@ func TestPush_TagWriteFails_RollbackDeleteAlsoFails_RetriedNextSync(t *testing.T
 	if rep3.Imported != 0 {
 		t.Errorf("third Sync Imported=%d, want 0", rep3.Imported)
 	}
+	// The retry cleared the Todo this run, so it is no longer outstanding: it is
+	// absent from the report and nothing failed, even though its state entry
+	// lingers one more run.
+	if rep3.Failed != 0 || len(rep3.PendingDeletes) != 0 {
+		t.Errorf("third Sync Failed=%d PendingDeletes=%+v, want 0 and empty (retry cleared it)", rep3.Failed, rep3.PendingDeletes)
+	}
 	if got := lastN(client.mutations, 1); len(got) == 0 || got[0] != "delete:h_new1" {
 		t.Errorf("expected a retried delete of h_new1; mutations=%v", client.mutations)
 	}
@@ -405,6 +411,83 @@ func TestPush_TagWriteFails_RollbackDeleteAlsoFails_RetriedNextSync(t *testing.T
 	st, _ = LoadState(statePath)
 	if _, ok := st.Links["h_new1"]; ok {
 		t.Errorf("pending-delete entry should be dropped once the Todo is gone; state=%+v", st.Links)
+	}
+}
+
+func TestPush_TagWriteFails_RollbackDeleteFails_ListedInSameRun(t *testing.T) {
+	now := time.Now()
+	task, notesDir, statePath := pushFixture(t, "Buy milk @today", model.Tag{Name: "today"})
+	if err := os.WriteFile(filepath.Join(notesDir, "notes.md"), []byte("- [ ] Totally different wording\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// Both the tag write (stale line) and the rollback delete fail this run, so a
+	// pending delete is created after the orphan pass has already run.
+	client := &recordingClient{week: now, deleteErr: errDeleteFailed}
+
+	rep, warnings, err := Push(context.Background(), Options{
+		Tasks: []model.Task{task}, Client: client, Query: "@due or @today",
+		StatePath: statePath, NotesDir: notesDir, Now: now,
+	})
+	if err != nil {
+		t.Fatalf("Push: %v", err)
+	}
+	if rep.Failed != 1 || len(warnings) != 1 {
+		t.Errorf("Failed=%d warnings=%d, want 1/1", rep.Failed, len(warnings))
+	}
+	// The pending delete created by the rollback this run is named in this run's
+	// report, not only the next Sync's.
+	if len(rep.PendingDeletes) != 1 || rep.PendingDeletes[0].ID != "h_new1" {
+		t.Fatalf("PendingDeletes=%+v, want one entry for h_new1", rep.PendingDeletes)
+	}
+	if rep.PendingDeletes[0].Title != "Buy milk" {
+		t.Errorf("pending delete title=%q, want %q", rep.PendingDeletes[0].Title, "Buy milk")
+	}
+	// Invariant: a non-empty pending-delete list implies a non-zero Failed count.
+	if rep.Failed == 0 && len(rep.PendingDeletes) != 0 {
+		t.Errorf("invariant violated: Failed==0 but PendingDeletes=%+v", rep.PendingDeletes)
+	}
+}
+
+func TestPush_PendingDeletesFromRetryAndLateCreation_SortedById(t *testing.T) {
+	now := time.Now()
+	task, notesDir, statePath := pushFixture(t, "Buy milk @today", model.Tag{Name: "today"})
+	if err := os.WriteFile(filepath.Join(notesDir, "notes.md"), []byte("- [ ] Totally different wording\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// A pending delete carried over from a previous run whose Todo is still in HEY;
+	// its id sorts before the id the push rollback will mint (h_new1).
+	prior := &State{Links: map[string]Link{"h_aaa": {PendingDelete: true, Title: "Carried over", File: "notes.md", Line: 1}}}
+	if err := SaveState(statePath, prior); err != nil {
+		t.Fatal(err)
+	}
+	// Delete fails for both the carried-over retry and the push rollback this run.
+	client := &recordingClient{week: now, deleteErr: errDeleteFailed, todos: []hey.Todo{openTodo("h_aaa", "Carried over")}}
+
+	rep, warnings, err := Push(context.Background(), Options{
+		Tasks: []model.Task{task}, Client: client, Query: "@due or @today",
+		StatePath: statePath, NotesDir: notesDir, Now: now,
+	})
+	if err != nil {
+		t.Fatalf("Push: %v", err)
+	}
+	// One failure for the carried-over retry, one for the push linking failure.
+	if rep.Failed != 2 {
+		t.Errorf("Failed=%d, want 2", rep.Failed)
+	}
+	if len(warnings) != 2 {
+		t.Errorf("warnings=%d, want 2", len(warnings))
+	}
+	// The retry-outstanding entry and the late-created one are listed together,
+	// sorted by id — retry first, late-created second.
+	gotIDs := []string{}
+	for _, it := range rep.PendingDeletes {
+		gotIDs = append(gotIDs, it.ID)
+	}
+	if want := []string{"h_aaa", "h_new1"}; !equalStrings(gotIDs, want) {
+		t.Errorf("PendingDeletes ids = %v, want %v (sorted, both origins)", gotIDs, want)
+	}
+	if rep.Failed == 0 && len(rep.PendingDeletes) != 0 {
+		t.Errorf("invariant violated: Failed==0 but PendingDeletes=%+v", rep.PendingDeletes)
 	}
 }
 

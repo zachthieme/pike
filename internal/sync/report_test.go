@@ -2,11 +2,88 @@ package sync
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/zachthieme/pike/internal/hey"
 )
+
+func TestReport_RepeatedDryRun_ByteIdenticalWithOrphansAndPendingDeletes(t *testing.T) {
+	now := time.Now()
+	notesDir := t.TempDir()
+	// No task lines, so every Linked state entry whose Todo survives in HEY is an
+	// Orphan; the notes file exists but holds nothing pike links to.
+	if err := os.WriteFile(filepath.Join(notesDir, "notes.md"), []byte("# notes\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	statePath := filepath.Join(notesDir, "hey-state.json")
+	state := &State{Links: map[string]Link{
+		"h_orphan_b": {Title: "Orphan B", File: "notes.md", Line: 1},
+		"h_orphan_a": {Title: "Orphan A", File: "notes.md", Line: 1},
+		"h_pd_c":     {PendingDelete: true, Title: "Pending C", File: "notes.md", Line: 1},
+		"h_pd_a":     {PendingDelete: true, Title: "Pending A", File: "notes.md", Line: 1},
+		"h_pd_b":     {PendingDelete: true, Title: "Pending B", File: "notes.md", Line: 1},
+	}}
+	if err := SaveState(statePath, state); err != nil {
+		t.Fatal(err)
+	}
+	stateBefore, _ := os.ReadFile(statePath)
+
+	// Every state Todo is still live and open in HEY, so the orphans stay orphaned
+	// and the pending deletes stay outstanding across runs.
+	todos := []hey.Todo{
+		openTodo("h_orphan_a", "Orphan A"), openTodo("h_orphan_b", "Orphan B"),
+		openTodo("h_pd_a", "Pending A"), openTodo("h_pd_b", "Pending B"), openTodo("h_pd_c", "Pending C"),
+	}
+
+	render := func() (string, string) {
+		t.Helper()
+		client := &recordingClient{week: now, todos: append([]hey.Todo(nil), todos...)}
+		rep, _, err := Plan(context.Background(), Options{
+			Client: client, Query: "@today", StatePath: statePath, NotesDir: notesDir, Now: now, DryRun: true,
+		})
+		if err != nil {
+			t.Fatalf("Plan: %v", err)
+		}
+		var text, jsonBuf bytes.Buffer
+		if err := rep.WriteText(&text); err != nil {
+			t.Fatalf("WriteText: %v", err)
+		}
+		if err := rep.WriteJSON(&jsonBuf); err != nil {
+			t.Fatalf("WriteJSON: %v", err)
+		}
+		return text.String(), jsonBuf.String()
+	}
+
+	text1, json1 := render()
+	text2, json2 := render()
+	if text1 != text2 {
+		t.Errorf("dry-run text not byte-identical across runs:\n--- run 1 ---\n%s\n--- run 2 ---\n%s", text1, text2)
+	}
+	if json1 != json2 {
+		t.Errorf("dry-run JSON not byte-identical across runs:\n--- run 1 ---\n%s\n--- run 2 ---\n%s", json1, json2)
+	}
+	// Every orphan and pending delete must be named, in sorted order.
+	for _, want := range []string{"h_orphan_a", "h_orphan_b", "h_pd_a", "h_pd_b", "h_pd_c"} {
+		if !strings.Contains(text1, want) {
+			t.Errorf("text report missing %q:\n%s", want, text1)
+		}
+	}
+	if i, j := strings.Index(text1, "h_pd_a"), strings.Index(text1, "h_pd_c"); i < 0 || j < 0 || i > j {
+		t.Errorf("pending deletes not sorted by id in text:\n%s", text1)
+	}
+	// A dry run writes nothing to the state file.
+	stateAfter, _ := os.ReadFile(statePath)
+	if !bytes.Equal(stateBefore, stateAfter) {
+		t.Error("dry run modified the state file")
+	}
+}
 
 func TestReportWriteText_ShowsCountsAndDryRun(t *testing.T) {
 	rep := &Report{DryRun: true, WouldPush: 2, WouldImport: 3, ExistingLinks: 4}

@@ -19,14 +19,16 @@ import (
 
 // applyRecreate replaces the Todo id is Linked to with a fresh one carrying
 // newTitle, moving the Link. It returns a Warning when a step fails, whether the
-// Re-create succeeded (the Link now points at the new Todo), and whether the
-// state changed (so it must be saved). A successful Re-create drops the old id
-// from linkedTasks so the completion pass does not also act on the Todo being
-// replaced this Sync.
-func applyRecreate(ctx context.Context, opts Options, id string, t *model.Task, newTitle string, state *State, linkedTasks map[string]*model.Task) (*model.Warning, bool, bool) {
+// Re-create succeeded (the Link now points at the new Todo), whether the state
+// changed (so it must be saved), and whether the delete of the replaced Todo
+// failed after an otherwise-successful Re-create (a per-item failure the caller
+// counts, distinct from the Re-create itself succeeding). A successful Re-create
+// drops the old id from linkedTasks so the completion pass does not also act on
+// the Todo being replaced this Sync.
+func applyRecreate(ctx context.Context, opts Options, id string, t *model.Task, newTitle string, state *State, linkedTasks map[string]*model.Task) (w *model.Warning, recreated, changedState, deleteFailed bool) {
 	newTodo, err := opts.Client.Add(ctx, newTitle, t.Due)
 	if err != nil {
-		return &model.Warning{File: t.File, Line: t.Line, Message: fmt.Sprintf("re-creating %q in HEY: %v", newTitle, err)}, false, false
+		return &model.Warning{File: t.File, Line: t.Line, Message: fmt.Sprintf("re-creating %q in HEY: %v", newTitle, err)}, false, false, false
 	}
 
 	// Move the Link before deleting the old Todo, so a failure here leaves the
@@ -42,7 +44,7 @@ func applyRecreate(ctx context.Context, opts Options, id string, t *model.Task, 
 		// if that delete also fails so the next Sync retries it and it is never
 		// imported. The old id's Link and state entry are left untouched.
 		dirty := rollBackAdd(ctx, opts, newTodo.ID, newTitle, t, state)
-		return &model.Warning{File: t.File, Line: t.Line, Message: msg}, false, dirty
+		return &model.Warning{File: t.File, Line: t.Line, Message: msg}, false, dirty, false
 	}
 
 	// The Link now points at the new Todo: record it and forget the old one.
@@ -65,7 +67,7 @@ func applyRecreate(ctx context.Context, opts Options, id string, t *model.Task, 
 	// Sync retries the delete.
 	if err := opts.Client.Delete(ctx, id); err != nil {
 		state.Links[id] = Link{PendingDelete: true, Title: newTitle, File: t.File, Line: t.Line}
-		return &model.Warning{File: t.File, Line: t.Line, Message: fmt.Sprintf("deleting replaced HEY todo %s: %v; left in place", id, err)}, true, true
+		return &model.Warning{File: t.File, Line: t.Line, Message: fmt.Sprintf("deleting replaced HEY todo %s: %v; left in place", id, err)}, true, true, true
 	}
-	return nil, true, true
+	return nil, true, true, false
 }
