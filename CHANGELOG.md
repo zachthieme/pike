@@ -1,5 +1,22 @@
 # Changelog
 
+### Collected changes — September 17, 2026
+
+**Bug fixes:**
+- [user] A HEY sync error now occupies exactly one row of the TUI status line at any terminal width: the message is truncated by display width (East Asian wide characters counted as two columns) with an ellipsis, instead of wrapping and pushing content out of the viewport (#34).
+- [user] The stderr detail folded into a HEY fallback error is now bounded by display width rather than rune count, so the bound holds the same for a CJK diagnostic as for an ASCII one (#34).
+- [user] Deeply nested JSON printed on `hey`'s stderr no longer stalls a Sync for seconds: the envelope scan now skips over pathologically nested values instead of retrying a full decode at every brace (#34).
+- [user] When a HEY error envelope sits past the 64KB stderr scan cap and is dropped, the resulting error now says the stderr was too large to scan rather than reading as a clean no-envelope failure (#34).
+- [user] The sync report's orphaned-todo and pending-delete lists are now sorted by id in both text and `--json`, so two runs over unchanged state produce byte-identical output and diffing two reports stays quiet (#35).
+- [user] The sync report no longer names a pending delete whose retry cleared its Todo from HEY this run: only a pending delete still outstanding (its retry failed, matching the failure count) is listed, so the reset procedure no longer sends you looking in HEY for something pike already removed (#35).
+- [user] `pike --sync --dry-run` no longer lists an orphan whose Todo has already been deleted or completed in HEY — a real run would drop it, so the dry run reports only what would still be outstanding, and still writes nothing (#35).
+- [user] The `s` summary overlay now lists the new-task and collapse actions with their configured keys (including after a rebind); both were bound but absent from the overlay (#36).
+- [user] `sync` and `toggle_collapse` are now accepted as keybinding overrides in the config; both were documented as remappable but rejected at load with "unknown keybinding action" (#36).
+
+**Documentation:**
+- [user] README's TUI Actions table now lists the collapse key (`z`), the config pike writes on first run names `sync` among its remappable actions, the line-ending note is scoped to LF and CRLF files (pike has no CR-only mode), and the `@`-encoding note describes how a zero-width space already sitting after an `@` is escaped so an imported `Pay @<U+200B>rent` is stored with two breaks (#36).
+- [user] Corrected the #28 changelog entry to no longer claim classic CR-only files are handled correctly: appending rewrites the final line's ending to LF, though scanner-visible content is preserved (#36).
+
 ### Collected changes — September 16, 2026
 
 **Bug fixes:**
