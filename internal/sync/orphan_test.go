@@ -637,6 +637,10 @@ func TestPendingDelete_FailedRetryWarnsAndCountsFailure(t *testing.T) {
 	if link, ok := st.Links["h_leak"]; !ok || !link.PendingDelete {
 		t.Errorf("pending-delete entry should be kept for retry; state=%+v", st.Links)
 	}
+	// The still-leaked Todo is named as outstanding, matching the one failure.
+	if want := []Item{{ID: "h_leak", Title: "Leaked todo"}}; !reflect.DeepEqual(rep.PendingDeletes, want) {
+		t.Errorf("PendingDeletes=%+v, want %+v — a failed retry is still outstanding", rep.PendingDeletes, want)
+	}
 }
 
 // TestPendingDelete_SuccessfulRetryIsSilent covers a pending-delete retry whose
@@ -671,9 +675,10 @@ func TestPendingDelete_SuccessfulRetryIsSilent(t *testing.T) {
 	if want := []string{"delete:h_leak"}; !equalStrings(client.mutations, want) {
 		t.Errorf("mutations=%v, want %v", client.mutations, want)
 	}
-	// A silent retry still names the outstanding pending delete in the report.
-	if want := []Item{{ID: "h_leak", Title: "Leaked todo"}}; !reflect.DeepEqual(rep.PendingDeletes, want) {
-		t.Errorf("PendingDeletes=%+v, want %+v (named without a Warning)", rep.PendingDeletes, want)
+	// The retry cleared the Todo from HEY this run, so it is no longer outstanding:
+	// the report must not name it (it self-clears the state entry next run).
+	if len(rep.PendingDeletes) != 0 {
+		t.Errorf("PendingDeletes=%+v, want empty — a cleared pending delete is not outstanding", rep.PendingDeletes)
 	}
 }
 
@@ -760,6 +765,85 @@ func TestReport_NamesOrphansAndPendingDeletes_AcrossSyncsAndRenders(t *testing.T
 	assertNamed(t, "second Sync", rep2)
 }
 
+// TestReport_DeterministicOrderAcrossRuns covers acceptance A: with several
+// Orphans and several outstanding pending deletes, two Syncs over unchanged state
+// name them in the same id-sorted order, so the rendered text and JSON are
+// byte-identical between runs and diffing two reports is quiet.
+func TestReport_DeterministicOrderAcrossRuns(t *testing.T) {
+	now := time.Now()
+	notesDir := t.TempDir()
+	// No Task line for any id: the h_o* ids are Orphans, the h_p* ids pending
+	// deletes. The Orphans are pre-marked so no state changes between runs.
+	if err := os.WriteFile(filepath.Join(notesDir, "notes.md"), []byte("- [ ] Something else\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	statePath := filepath.Join(notesDir, "hey-state.json")
+	links := map[string]Link{}
+	var todos []hey.Todo
+	// Insert in an order that is not the sorted order.
+	for _, id := range []string{"h_o3", "h_o1", "h_o4", "h_o2"} {
+		links[id] = Link{Title: "orphan " + id, File: "notes.md", Line: 9, Orphaned: true}
+		todos = append(todos, openTodo(id, "orphan "+id))
+	}
+	for _, id := range []string{"h_p2", "h_p4", "h_p1", "h_p3"} {
+		links[id] = Link{PendingDelete: true, Title: "pending " + id, File: "notes.md", Line: 1}
+		todos = append(todos, openTodo(id, "pending "+id))
+	}
+	if err := SaveState(statePath, &State{Links: links}); err != nil {
+		t.Fatal(err)
+	}
+	// The pending deletes keep failing so they stay outstanding across both runs.
+	client := &recordingClient{week: now, deleteErr: errDeleteFailed, todos: todos}
+	opts := Options{Tasks: nil, Client: client, Query: "@today",
+		StatePath: statePath, NotesDir: notesDir, Now: now}
+
+	wantOrphans := []Item{
+		{ID: "h_o1", Title: "orphan h_o1"}, {ID: "h_o2", Title: "orphan h_o2"},
+		{ID: "h_o3", Title: "orphan h_o3"}, {ID: "h_o4", Title: "orphan h_o4"},
+	}
+	wantPending := []Item{
+		{ID: "h_p1", Title: "pending h_p1"}, {ID: "h_p2", Title: "pending h_p2"},
+		{ID: "h_p3", Title: "pending h_p3"}, {ID: "h_p4", Title: "pending h_p4"},
+	}
+
+	render := func(t *testing.T, rep *Report) (string, string) {
+		t.Helper()
+		if !reflect.DeepEqual(rep.OrphanItems, wantOrphans) {
+			t.Errorf("OrphanItems=%+v, want id-sorted %+v", rep.OrphanItems, wantOrphans)
+		}
+		if !reflect.DeepEqual(rep.PendingDeletes, wantPending) {
+			t.Errorf("PendingDeletes=%+v, want id-sorted %+v", rep.PendingDeletes, wantPending)
+		}
+		var text, js bytes.Buffer
+		if err := rep.WriteText(&text); err != nil {
+			t.Fatalf("WriteText: %v", err)
+		}
+		if err := rep.WriteJSON(&js); err != nil {
+			t.Fatalf("WriteJSON: %v", err)
+		}
+		return text.String(), js.String()
+	}
+
+	rep1, _, err := Push(context.Background(), opts)
+	if err != nil {
+		t.Fatalf("first Push: %v", err)
+	}
+	text1, js1 := render(t, rep1)
+
+	rep2, _, err := Push(context.Background(), opts)
+	if err != nil {
+		t.Fatalf("second Push: %v", err)
+	}
+	text2, js2 := render(t, rep2)
+
+	if text1 != text2 {
+		t.Errorf("text output differs between runs:\n run1:\n%s\n run2:\n%s", text1, text2)
+	}
+	if js1 != js2 {
+		t.Errorf("JSON output differs between runs:\n run1:\n%s\n run2:\n%s", js1, js2)
+	}
+}
+
 // TestReport_DryRunNamesSameItemsWritesNothing covers acceptance B for a dry run:
 // it names the same Orphan and pending delete as a real Sync yet writes nothing
 // on either side or to the state file — so `pike --sync --dry-run --json` always
@@ -796,6 +880,61 @@ func TestReport_DryRunNamesSameItemsWritesNothing(t *testing.T) {
 	}
 	if want := []Item{{ID: "h_leak", Title: "Leaked todo"}}; !reflect.DeepEqual(rep.PendingDeletes, want) {
 		t.Errorf("PendingDeletes=%+v, want %+v", rep.PendingDeletes, want)
+	}
+	// Nothing written: notes and state are byte-for-byte unchanged.
+	if got, _ := os.ReadFile(filepath.Join(notesDir, "notes.md")); string(got) != notes {
+		t.Errorf("dry run modified notes:\n%s", string(got))
+	}
+	if got, _ := os.ReadFile(statePath); string(got) != string(stateBefore) {
+		t.Errorf("dry run modified state:\n%s", string(got))
+	}
+}
+
+// TestReport_DryRunOmitsOrphansAlreadyGoneFromHey covers acceptance C: a dry run
+// must report what a real run would leave outstanding. An Orphan whose Todo has
+// been deleted from HEY, or completed there, is one a real Sync would drop, so it
+// is neither counted nor named; only the genuinely outstanding Orphan is. The dry
+// run still writes nothing to HEY, the notes, or the state file.
+func TestReport_DryRunOmitsOrphansAlreadyGoneFromHey(t *testing.T) {
+	now := time.Now()
+	notesDir := t.TempDir()
+	notes := "- [ ] Something else\n"
+	if err := os.WriteFile(filepath.Join(notesDir, "notes.md"), []byte(notes), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	statePath := filepath.Join(notesDir, "hey-state.json")
+	// Three state entries with no Task line: h_here is a live Orphan; h_done was
+	// completed in HEY; h_gone has left HEY entirely. Only h_here is outstanding.
+	if err := SaveState(statePath, &State{Links: map[string]Link{
+		"h_here": {Title: "Still here", File: "notes.md", Line: 9},
+		"h_done": {Title: "Finished", File: "notes.md", Line: 9},
+		"h_gone": {Title: "Vanished", File: "notes.md", Line: 9},
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	stateBefore, _ := os.ReadFile(statePath)
+	completedAt := now
+	client := &dryFakeClient{t: t, todos: []hey.Todo{
+		openTodo("h_here", "Still here"),
+		{ID: "h_done", Title: "Finished", WeekStart: now, WeekEnd: now, Completed: &completedAt},
+	}}
+	rep, warnings, err := Plan(context.Background(), Options{
+		Tasks: nil, Client: client, Query: "@today",
+		StatePath: statePath, NotesDir: notesDir, Now: now, DryRun: true,
+	})
+	if err != nil {
+		t.Fatalf("Plan: %v", err)
+	}
+	// Only the genuinely outstanding Orphan is counted and named.
+	if rep.WouldOrphan != 1 {
+		t.Errorf("WouldOrphan=%d, want 1 — gone/completed Orphans are not outstanding", rep.WouldOrphan)
+	}
+	if want := []Item{{ID: "h_here", Title: "Still here"}}; !reflect.DeepEqual(rep.OrphanItems, want) {
+		t.Errorf("OrphanItems=%+v, want %+v", rep.OrphanItems, want)
+	}
+	// Only h_here draws a Warning; the resolved entries are silent.
+	if len(warnings) != 1 || !strings.Contains(warnings[0].Message, "h_here") {
+		t.Fatalf("want exactly 1 Warning naming h_here, got %d: %v", len(warnings), warnings)
 	}
 	// Nothing written: notes and state are byte-for-byte unchanged.
 	if got, _ := os.ReadFile(filepath.Join(notesDir, "notes.md")); string(got) != notes {

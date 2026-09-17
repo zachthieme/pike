@@ -17,7 +17,9 @@ type Report struct {
 	// Pushed is populated by a real (non-dry-run) Sync: the number of Eligible
 	// Tasks turned into Todos. Failed is the number of per-item write failures
 	// across every reconciliation pass — a failed push, completion, reschedule,
-	// retitle, re-create, or unlink — each counted once.
+	// retitle, re-create, unlink, or pending-delete retry — each counted once. A
+	// non-zero count means at least one of those, a pending delete among them, was
+	// not cleared this run.
 	Pushed int `json:"pushed"`
 	Failed int `json:"failed"`
 	// Imported is populated by a real (non-dry-run) Sync: the number of unlinked
