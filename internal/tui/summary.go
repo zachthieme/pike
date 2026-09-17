@@ -60,7 +60,7 @@ func RenderSummary(version string, width int, keys KeyMap, custom []config.Custo
 
 	// Actions
 	var actionEntries []entry
-	for _, b := range []key.Binding{keys.Enter, keys.Toggle, keys.ToggleHiddenTag, keys.Refresh, keys.Sync, keys.Quit} {
+	for _, b := range []key.Binding{keys.Enter, keys.Toggle, keys.CreateTask, keys.ToggleCollapse, keys.ToggleHiddenTag, keys.Refresh, keys.Sync, keys.Quit} {
 		if e, ok := bindingEntry(b); ok {
 			actionEntries = append(actionEntries, e)
 		}

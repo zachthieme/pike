@@ -178,7 +178,7 @@ var knownActions = map[string]bool{
 	"query": true, "escape": true, "refresh": true, "all_tasks": true,
 	"tag_search": true, "toggle_hidden": true, "toggle": true,
 	"toggle_hidden_tag": true, "recently_completed": true,
-	"create_task": true,
+	"create_task": true, "toggle_collapse": true, "sync": true,
 }
 
 func parseKeybindings(raw *rawKeybindings) (map[string][]string, []CustomBinding, error) {
@@ -512,7 +512,7 @@ tag_colors:
 # Action names: up, down, top, bottom, page_down, page_up, next_section,
 #   prev_section, enter, quit, summary, filter, query, escape, refresh,
 #   all_tasks, tag_search, toggle_hidden, toggle, toggle_hidden_tag,
-#   recently_completed, create_task, toggle_collapse
+#   recently_completed, create_task, toggle_collapse, sync
 # keybindings:
 #   toggle: ["space", "x"]       # override: list ALL keys you want
 #   quit: ["q", "ctrl+c"]

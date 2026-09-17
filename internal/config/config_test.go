@@ -941,10 +941,28 @@ func TestDefaultConfigHasCommentedHeyKeys(t *testing.T) {
 // bindable actions that were missing from it, so a user reading the shipped
 // config sees the full set of remappable action names.
 func TestDefaultConfigListsRemappableActions(t *testing.T) {
-	for _, want := range []string{"create_task", "toggle_collapse"} {
+	// The full set of remappable action names. Every action pike accepts as a
+	// keybinding override must be named in the shipped config's comment and must
+	// actually parse, so a user reading the config sees an accurate list.
+	remappable := []string{
+		"up", "down", "top", "bottom", "page_down", "page_up",
+		"next_section", "prev_section", "enter", "quit", "summary",
+		"filter", "query", "escape", "refresh", "all_tasks", "tag_search",
+		"toggle_hidden", "toggle", "toggle_hidden_tag", "recently_completed",
+		"create_task", "toggle_collapse", "sync",
+	}
+	for _, want := range remappable {
 		if !strings.Contains(defaultConfigYAML, want) {
 			t.Errorf("default config action-name comment missing %q", want)
 		}
+		if !knownActions[want] {
+			t.Errorf("action %q is listed as remappable but not accepted by knownActions", want)
+		}
+	}
+	// "sync" appears elsewhere in the config (HEY sync), so pin it to the
+	// action-name comment's own list to prove it is named as remappable there.
+	if !strings.Contains(defaultConfigYAML, "toggle_collapse, sync") {
+		t.Error("action-name comment should name sync in the remappable-actions list")
 	}
 }
 
